@@ -1,0 +1,35 @@
+{
+  "name": "dineflow-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0 --port 3000",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.9.0",
+    "@vueuse/core": "^12.5.0",
+    "@vueuse/nuxt": "^12.5.0",
+    "chart.js": "^4.5.1",
+    "nuxt": "^4.0.0",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-chartjs": "^5.3.4",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@nuxt/test-utils": "^3.15.4",
+    "@nuxtjs/tailwindcss": "^6.13.1",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^16.6.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4",
+    "vue-tsc": "^2.2.0"
+  }
+}
