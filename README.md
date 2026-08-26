@@ -23,4 +23,13 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Setup instructions and features will be added as development progresses.
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| Health check | http://localhost:8000/api/v1/health |
+| OpenAPI docs | http://localhost:8000/docs |
+
+## Project status
+
+**Phase 1 — Foundation** in progress: monorepo scaffold, FastAPI health endpoint, and Nuxt landing page.

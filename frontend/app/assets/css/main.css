@@ -1,0 +1,45 @@
+:root {
+  --color-brand-50: #f0f7f4;
+  --color-brand-100: #dceee5;
+  --color-brand-200: #b8dccb;
+  --color-brand-300: #8bc4a9;
+  --color-brand-400: #5aa784;
+  --color-brand-500: #3a8b68;
+  --color-brand-600: #2c6f53;
+  --color-brand-700: #255944;
+  --color-brand-800: #1f4738;
+  --color-brand-900: #1a3b2f;
+
+  --color-surface: #f7f5f1;
+  --color-surface-muted: #efebe4;
+  --color-surface-elevated: #ffffff;
+
+  --color-ink: #1a1f1c;
+  --color-ink-muted: #4a524d;
+  --color-ink-subtle: #7a847e;
+
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: Fraunces, Georgia, serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-surface);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
