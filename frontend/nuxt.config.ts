@@ -11,6 +11,10 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
   ],
 
+  components: [
+    { path: '~/components/ui', pathPrefix: false },
+  ],
+
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {

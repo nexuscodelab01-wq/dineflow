@@ -7,6 +7,18 @@
         </NuxtLink>
         <nav class="flex items-center gap-4 text-sm font-medium text-ink-muted">
           <NuxtLink to="/" class="hover:text-brand-700">Home</NuxtLink>
+          <template v-if="auth.isAuthenticated">
+            <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
+          </template>
+          <template v-else>
+            <NuxtLink to="/login" class="hover:text-brand-700">Sign in</NuxtLink>
+            <NuxtLink
+              to="/register"
+              class="rounded-lg bg-brand-700 px-3 py-1.5 text-white hover:bg-brand-800"
+            >
+              Register
+            </NuxtLink>
+          </template>
         </nav>
       </div>
     </header>
@@ -23,4 +35,5 @@
 
 <script setup lang="ts">
 const year = new Date().getFullYear()
+const auth = useAuthStore()
 </script>

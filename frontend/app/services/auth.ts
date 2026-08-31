@@ -1,0 +1,74 @@
+import type {
+  LoginPayload,
+  RegisterPayload,
+  TokenResponse,
+  User,
+} from '~/types/auth'
+import { apiFetch, getApiBaseUrl } from '~/services/http'
+
+export { apiFetch, getApiBaseUrl }
+
+const ACCESS_TOKEN_KEY = 'dineflow_access_token'
+const REFRESH_TOKEN_KEY = 'dineflow_refresh_token'
+
+export function getStoredAccessToken(): string | null {
+  if (import.meta.server) return null
+  return localStorage.getItem(ACCESS_TOKEN_KEY)
+}
+
+export function getStoredRefreshToken(): string | null {
+  if (import.meta.server) return null
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
+}
+
+export function storeTokens(tokens: TokenResponse): void {
+  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token)
+  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
+}
+
+export function clearStoredTokens(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+}
+
+export async function login(payload: LoginPayload): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>('/api/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  })
+}
+
+export async function register(payload: RegisterPayload): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>('/api/v1/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  })
+}
+
+export async function refreshTokens(): Promise<TokenResponse> {
+  const refreshToken = getStoredRefreshToken()
+  if (!refreshToken) throw new Error('No refresh token')
+
+  return apiFetch<TokenResponse>('/api/v1/auth/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+    auth: false,
+  })
+}
+
+export async function logoutRequest(): Promise<void> {
+  const refreshToken = getStoredRefreshToken()
+  if (!refreshToken) return
+
+  await apiFetch('/api/v1/auth/logout', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+    auth: false,
+  })
+}
+
+export async function fetchCurrentUser(): Promise<User> {
+  return apiFetch<User>('/api/v1/auth/me')
+}
