@@ -7,6 +7,7 @@
         </NuxtLink>
         <nav class="flex items-center gap-4 text-sm font-medium text-ink-muted">
           <NuxtLink to="/" class="hover:text-brand-700">Home</NuxtLink>
+          <NuxtLink to="/menu" class="hover:text-brand-700">Menu</NuxtLink>
           <template v-if="auth.isAuthenticated">
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
           </template>

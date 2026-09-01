@@ -12,18 +12,16 @@
         DineFlow
       </h1>
       <p class="max-w-xl text-lg leading-relaxed text-ink-muted">
-        Ordering and restaurant management platform. Foundation is live —
-        authentication and menu features come next.
+        Ordering and restaurant management platform. Browse the demo menu with search,
+        category filters, and detailed item pages.
       </p>
       <div class="flex flex-wrap items-center gap-3 pt-2">
-        <a
-          :href="docsUrl"
-          target="_blank"
-          rel="noopener noreferrer"
+        <NuxtLink
+          to="/menu"
           class="inline-flex items-center justify-center rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
         >
-          API docs
-        </a>
+          Browse menu
+        </NuxtLink>
         <span
           class="inline-flex items-center rounded-lg border border-brand-200 bg-surface-elevated px-4 py-2.5 text-sm text-ink-muted"
         >
@@ -43,7 +41,6 @@
 <script setup lang="ts">
 const config = useRuntimeConfig()
 const apiUrl = config.public.apiUrl as string
-const docsUrl = `${apiUrl}/docs`
 
 const healthOk = ref(false)
 const healthLabel = ref('checking…')
