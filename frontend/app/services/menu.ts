@@ -1,4 +1,4 @@
-import type { Category, MenuFilters, MenuItemDetail, MenuListResponse, Restaurant } from '~/types/menu'
+import type { Category, MenuFilters, MenuItemDetail, MenuListResponse, Restaurant, RestaurantTable } from '~/types/menu'
 import { apiFetch } from '~/services/http'
 
 export function fetchRestaurants() {
@@ -30,4 +30,9 @@ export function fetchMenu(restaurantId: number, filters: MenuFilters = {}) {
 
 export function fetchMenuItem(itemId: number) {
   return apiFetch<MenuItemDetail>(`/api/v1/menu/${itemId}`, { auth: false })
+}
+
+export function fetchRestaurantTables(identifier: string, availableOnly = true) {
+  const params = availableOnly ? '?available_only=true' : '?available_only=false'
+  return apiFetch<RestaurantTable[]>(`/api/v1/restaurants/${identifier}/tables${params}`, { auth: false })
 }

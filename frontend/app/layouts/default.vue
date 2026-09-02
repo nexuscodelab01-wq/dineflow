@@ -8,7 +8,17 @@
         <nav class="flex items-center gap-4 text-sm font-medium text-ink-muted">
           <NuxtLink to="/" class="hover:text-brand-700">Home</NuxtLink>
           <NuxtLink to="/menu" class="hover:text-brand-700">Menu</NuxtLink>
+          <NuxtLink to="/cart" class="relative hover:text-brand-700">
+            Cart
+            <span
+              v-if="cart.itemCount"
+              class="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-700 px-1 text-[10px] font-bold text-white"
+            >
+              {{ cart.itemCount }}
+            </span>
+          </NuxtLink>
           <template v-if="auth.isAuthenticated">
+            <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
           </template>
           <template v-else>
@@ -37,4 +47,5 @@
 <script setup lang="ts">
 const year = new Date().getFullYear()
 const auth = useAuthStore()
+const cart = useCartStore()
 </script>

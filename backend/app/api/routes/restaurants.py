@@ -2,11 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
+from app.models.restaurant_table import RestaurantTable
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.restaurant import RestaurantRead
 
@@ -25,3 +27,31 @@ def get_restaurant(identifier: str, db: Annotated[Session, Depends(get_db)]) -> 
     if restaurant is None or not restaurant.is_active:
         raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
     return RestaurantRead.model_validate(restaurant)
+
+
+@router.get("/{identifier}/tables")
+def list_tables(
+    identifier: str,
+    db: Annotated[Session, Depends(get_db)],
+    available_only: bool = Query(default=True),
+) -> list[dict]:
+    restaurant = RestaurantRepository(db).get_by_id_or_slug(identifier)
+    if restaurant is None:
+        raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
+
+    stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant.id)
+    if available_only:
+        from app.models.enums import TableStatus
+
+        stmt = stmt.where(RestaurantTable.status == TableStatus.AVAILABLE)
+    stmt = stmt.order_by(RestaurantTable.table_number)
+    tables = db.scalars(stmt).all()
+    return [
+        {
+            "id": table.id,
+            "table_number": table.table_number,
+            "capacity": table.capacity,
+            "status": table.status.value if hasattr(table.status, "value") else str(table.status),
+        }
+        for table in tables
+    ]
