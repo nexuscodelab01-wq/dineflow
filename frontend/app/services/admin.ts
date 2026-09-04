@@ -1,5 +1,5 @@
-import type { DashboardStats } from '~/types/admin'
-import type { Category, MenuItemDetail, MenuModifier } from '~/types/menu'
+import type { DashboardStats, CustomerSummary, KitchenBoard } from '~/types/admin'
+import type { Category, MenuItemDetail, MenuModifier, Restaurant, RestaurantTable } from '~/types/menu'
 import type { Order, OrderListResponse, OrderStatus } from '~/types/order'
 import { apiFetch } from '~/services/http'
 
@@ -39,6 +39,42 @@ export function updateOrderStatus(restaurantId: number, orderId: number, status:
   return apiFetch<Order>(q(restaurantId, `/orders/${orderId}/status`), {
     method: 'PATCH',
     body: JSON.stringify({ status, notes }),
+  })
+}
+
+export function fetchKitchenBoard(restaurantId: number) {
+  return apiFetch<KitchenBoard>(q(restaurantId, '/kitchen'))
+}
+
+export function fetchAdminTables(restaurantId: number) {
+  return apiFetch<RestaurantTable[]>(q(restaurantId, '/tables'))
+}
+
+export function updateTableStatus(restaurantId: number, tableId: number, status: string) {
+  return apiFetch(q(restaurantId, `/tables/${tableId}/status`), {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export function fetchAdminCustomers(restaurantId: number) {
+  return apiFetch<CustomerSummary[]>(q(restaurantId, '/customers'))
+}
+
+export function fetchAdminCustomer(restaurantId: number, userId: number) {
+  return apiFetch<{ user_id: number; total_orders: number; total_spending: string; orders: Order[] }>(
+    q(restaurantId, `/customers/${userId}`),
+  )
+}
+
+export function fetchAdminSettings(restaurantId: number) {
+  return apiFetch<Restaurant>(q(restaurantId, '/settings'))
+}
+
+export function updateAdminSettings(restaurantId: number, payload: Partial<Restaurant>) {
+  return apiFetch<Restaurant>(q(restaurantId, '/settings'), {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   })
 }
 

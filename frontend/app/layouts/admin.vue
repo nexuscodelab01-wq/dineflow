@@ -7,6 +7,10 @@ const nav = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/menu', label: 'Menu' },
   { to: '/admin/orders', label: 'Orders' },
+  { to: '/admin/kitchen', label: 'Kitchen' },
+  { to: '/admin/tables', label: 'Tables' },
+  { to: '/admin/customers', label: 'Customers' },
+  { to: '/admin/settings', label: 'Settings' },
 ]
 </script>
 

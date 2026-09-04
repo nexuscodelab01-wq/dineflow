@@ -9,11 +9,14 @@ from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_erro
 from app.db.session import get_db
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType
+from app.models.user import User
 from app.schemas.admin import (
     CategoryCreate,
     CategoryReorder,
     CategoryUpdate,
+    CustomerSummary,
     DashboardStats,
+    KitchenBoard,
     MenuItemCreate,
     MenuItemUpdate,
     MenuModifierCreate,
@@ -21,9 +24,14 @@ from app.schemas.admin import (
     ModifierOptionCreate,
     ModifierOptionUpdate,
     OrderStatusUpdate,
+    RestaurantSettingsUpdate,
+    TableCreate,
+    TableStatusUpdate,
+    TableUpdate,
 )
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
+from app.schemas.restaurant import RestaurantRead
 from app.services.admin_service import AdminService
 
 router = APIRouter(prefix="/admin")
@@ -31,6 +39,8 @@ router = APIRouter(prefix="/admin")
 
 def get_admin_service(db: Annotated[Session, Depends(get_db)]) -> AdminService:
     return AdminService(db)
+
+
 
 
 def _handle(exc: Exception):
@@ -46,6 +56,7 @@ def dashboard(
     service: Annotated[AdminService, Depends(get_admin_service)],
 ) -> DashboardStats:
     return service.dashboard_stats(restaurant_id)
+
 
 
 @router.get("/categories", response_model=list[CategoryRead])
@@ -297,6 +308,133 @@ def update_order_status(
     try:
         return service.update_order_status(order_id, data, restaurant_id, user)
     except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/kitchen", response_model=KitchenBoard)
+def kitchen_board(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> KitchenBoard:
+    return service.kitchen_board(restaurant_id)
+
+
+@router.get("/tables")
+def list_tables(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+):
+    tables = service.list_tables(restaurant_id)
+    return [
+        {
+            "id": t.id,
+            "table_number": t.table_number,
+            "capacity": t.capacity,
+            "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+        }
+        for t in tables
+    ]
+
+
+@router.post("/tables", status_code=status.HTTP_201_CREATED)
+def create_table(
+    data: TableCreate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+):
+    if data.restaurant_id != restaurant_id:
+        raise raise_http_for_app_error(AppError("Restaurant mismatch"))
+    table = service.create_table(data)
+    return {"id": table.id, "table_number": table.table_number, "capacity": table.capacity, "status": table.status.value}
+
+
+@router.put("/tables/{table_id}")
+def update_table(
+    table_id: int,
+    data: TableUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+):
+    try:
+        table = service.update_table(table_id, data, restaurant_id)
+        return {"id": table.id, "table_number": table.table_number, "capacity": table.capacity, "status": table.status.value}
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/tables/{table_id}/status")
+def update_table_status(
+    table_id: int,
+    data: TableStatusUpdate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+):
+    try:
+        table = service.update_table_status(table_id, data, restaurant_id)
+        return {"id": table.id, "status": table.status.value}
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_table(
+    table_id: int,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> None:
+    try:
+        service.delete_table(table_id, restaurant_id)
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/customers", response_model=list[CustomerSummary])
+def list_customers(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> list[CustomerSummary]:
+    return service.list_customers(restaurant_id)
+
+
+@router.get("/customers/{user_id}")
+def get_customer(
+    user_id: int,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+):
+    try:
+        return service.get_customer_detail(restaurant_id, user_id)
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/settings", response_model=RestaurantRead)
+def get_settings(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> RestaurantRead:
+    return service.get_settings(restaurant_id)
+
+
+@router.patch("/settings", response_model=RestaurantRead)
+def update_settings(
+    data: RestaurantSettingsUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> RestaurantRead:
+    try:
+        return service.update_settings(restaurant_id, data)
+    except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc
 
 
