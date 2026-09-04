@@ -20,6 +20,7 @@
           <template v-if="auth.isAuthenticated">
             <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
+            <NuxtLink v-if="auth.isStaff" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="hover:text-brand-700">Sign in</NuxtLink>
