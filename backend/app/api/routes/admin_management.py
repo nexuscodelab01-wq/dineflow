@@ -1,5 +1,6 @@
 """Admin API routes."""
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -29,10 +30,13 @@ from app.schemas.admin import (
     TableStatusUpdate,
     TableUpdate,
 )
+from app.schemas.analytics import AnalyticsResponse
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.restaurant import RestaurantRead
 from app.services.admin_service import AdminService
+from app.services.analytics_service import AnalyticsService
+from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
 
@@ -41,6 +45,8 @@ def get_admin_service(db: Annotated[Session, Depends(get_db)]) -> AdminService:
     return AdminService(db)
 
 
+def get_analytics_service(db: Annotated[Session, Depends(get_db)]) -> AnalyticsService:
+    return AnalyticsService(db)
 
 
 def _handle(exc: Exception):
@@ -57,6 +63,25 @@ def dashboard(
 ) -> DashboardStats:
     return service.dashboard_stats(restaurant_id)
 
+
+@router.get("/analytics", response_model=AnalyticsResponse)
+def analytics(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AnalyticsService, Depends(get_analytics_service)],
+    preset: DateRangePreset = Query(default=DateRangePreset.LAST_7_DAYS, alias="range"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+) -> AnalyticsResponse:
+    try:
+        return service.get_analytics(
+            restaurant_id,
+            preset,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.get("/categories", response_model=list[CategoryRead])
