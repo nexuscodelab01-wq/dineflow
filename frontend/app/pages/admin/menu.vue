@@ -7,6 +7,7 @@ definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
 const auth = useAuthStore()
 const admin = useAdminStore()
+const ui = useUiStore()
 const items = ref<MenuItemDetail[]>([])
 const categories = ref<Category[]>([])
 const loading = ref(true)
@@ -14,7 +15,6 @@ const search = ref('')
 const showForm = ref(false)
 const editing = ref<MenuItemDetail | null>(null)
 const error = ref('')
-const notice = ref('')
 
 const form = reactive({
   name: '',
@@ -74,35 +74,41 @@ function openEdit(item: MenuItemDetail) {
 async function saveItem() {
   if (!admin.restaurantId) return
   error.value = ''
-  notice.value = ''
   try {
     const payload = { ...form, price: Number(form.price) }
+    const wasEditing = Boolean(editing.value)
     if (editing.value) {
       await updateMenuItem(admin.restaurantId, editing.value.id, payload)
-      notice.value = 'Menu item updated'
     }
     else if (auth.isAdmin) {
       await createMenuItem(admin.restaurantId, payload)
-      notice.value = 'Menu item created'
     }
     showForm.value = false
     await load()
+    ui.success(wasEditing ? 'Menu item updated' : 'Menu item created')
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : 'Save failed'
+    ui.error(error.value)
   }
 }
 
 async function removeItem(item: MenuItemDetail) {
   if (!admin.restaurantId || !auth.isAdmin) return
-  if (!window.confirm(`Remove "${item.name}" from the menu? This cannot be undone.`)) return
+  const confirmed = await ui.confirm({
+    title: 'Delete menu item',
+    message: `Remove "${item.name}" from the menu? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    destructive: true,
+  })
+  if (!confirmed) return
   try {
     await deleteMenuItem(admin.restaurantId, item.id)
-    notice.value = 'Menu item deleted'
     await load()
+    ui.success('Menu item deleted')
   }
   catch (err) {
-    error.value = err instanceof Error ? err.message : 'Delete failed'
+    ui.error(err instanceof Error ? err.message : 'Delete failed')
   }
 }
 </script>
@@ -118,18 +124,15 @@ async function removeItem(item: MenuItemDetail) {
     </div>
 
     <input v-model="search" type="search" placeholder="Search menu…" class="mt-4 w-full max-w-md rounded-lg border border-brand-200 px-3 py-2 text-sm">
-    <p v-if="notice" class="mt-3 text-sm text-brand-700">{{ notice }}</p>
-    <p v-if="error && !showForm" class="mt-3 text-sm text-red-600">{{ error }}</p>
 
-    <div v-if="loading" class="mt-6 h-40 animate-pulse rounded-2xl bg-brand-100/60" />
+    <LoadingState v-if="loading" class="mt-6" :rows="1" />
 
-    <div
+    <EmptyState
       v-else-if="!filtered.length"
-      class="mt-6 rounded-xl border border-brand-100 bg-surface-elevated p-8 text-center"
-    >
-      <h2 class="font-semibold text-ink">No menu items found</h2>
-      <p class="mt-2 text-sm text-ink-muted">Try a different search or add a new item.</p>
-    </div>
+      class="mt-6"
+      title="No menu items found"
+      description="Try a different search or add a new item."
+    />
 
     <div v-else class="mt-6 overflow-x-auto rounded-2xl border border-brand-100 bg-surface-elevated">
       <table class="min-w-full text-left text-sm">

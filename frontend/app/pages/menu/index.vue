@@ -128,22 +128,15 @@ function goToItem(id: number) {
       <label class="flex items-center gap-2"><input v-model="filters.is_popular" type="checkbox" :true-value="true" :false-value="undefined"> Popular</label>
     </div>
 
-    <div v-if="error" class="mb-6 rounded-xl bg-red-50 p-4 text-red-700">
-      {{ error }}
-      <button type="button" class="ml-2 font-medium underline" @click="loadMenu">Retry</button>
-    </div>
+    <ErrorState v-if="error" :message="error" @retry="loadMenu" />
 
-    <div v-else-if="loading" class="space-y-3">
-      <div v-for="n in 3" :key="n" class="h-64 animate-pulse rounded-2xl bg-brand-100/60" />
-    </div>
+    <LoadingState v-else-if="loading" :rows="3" height-class="h-64" />
 
-    <div
+    <EmptyState
       v-else-if="!items.length"
-      class="rounded-xl border border-brand-100 bg-surface-elevated p-8 text-center"
-    >
-      <h2 class="font-semibold text-ink">No items match your filters</h2>
-      <p class="mt-2 text-sm text-ink-muted">Try clearing filters or searching for something else.</p>
-    </div>
+      title="No items match your filters"
+      description="Try clearing filters or searching for something else."
+    />
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <MenuItemCard

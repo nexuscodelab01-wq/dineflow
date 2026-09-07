@@ -32,12 +32,6 @@ async function load() {
 
 onMounted(load)
 watch(statusFilter, load)
-
-function statusClass(status: string) {
-  if (status === 'CANCELLED') return 'bg-red-100 text-red-800'
-  if (status === 'COMPLETED' || status === 'DELIVERED') return 'bg-green-100 text-green-800'
-  return 'bg-brand-100 text-brand-800'
-}
 </script>
 
 <template>
@@ -57,19 +51,16 @@ function statusClass(status: string) {
       </select>
     </div>
 
-    <div v-if="loading" class="mt-6 h-40 animate-pulse rounded-2xl bg-brand-100/60" />
+    <LoadingState v-if="loading" class="mt-6" :rows="1" />
 
-    <p v-else-if="error" class="mt-6 text-sm text-red-600">
-      {{ error }}
-      <button type="button" class="ml-2 font-medium underline" @click="load">Retry</button>
-    </p>
+    <ErrorState v-else-if="error" class="mt-6" :message="error" @retry="load" />
 
-    <div
+    <EmptyState
       v-else-if="!orders.length"
-      class="mt-6 rounded-xl border border-dashed border-brand-200 py-12 text-center text-ink-muted"
-    >
-      No orders yet.
-    </div>
+      class="mt-6"
+      title="No orders yet"
+      description="Orders matching your filters will appear here."
+    />
 
     <div v-else class="mt-6 overflow-x-auto rounded-2xl border border-brand-100 bg-surface-elevated">
       <table class="min-w-full text-left text-sm">
@@ -93,11 +84,7 @@ function statusClass(status: string) {
             <td class="px-4 py-3">{{ order.customer_name }}</td>
             <td class="px-4 py-3">{{ order.order_type.replace('_', ' ') }}</td>
             <td class="px-4 py-3">{{ formatCurrency(Number(order.total)) }}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass(order.status)">
-                {{ order.status.replace('_', ' ') }}
-              </span>
-            </td>
+            <td class="px-4 py-3"><StatusBadge :status="order.status" /></td>
             <td class="px-4 py-3 text-ink-muted">{{ new Date(order.created_at).toLocaleString() }}</td>
           </tr>
         </tbody>

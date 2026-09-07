@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -38,6 +39,22 @@ app = FastAPI(
 @app.exception_handler(AppError)
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    _request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    errors = []
+    for err in exc.errors():
+        loc = err.get("loc", ())
+        field = ".".join(str(part) for part in loc if part != "body")
+        errors.append({"field": field or "body", "message": err.get("msg", "Invalid value")})
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation failed", "errors": errors},
+    )
 
 
 app.add_middleware(
