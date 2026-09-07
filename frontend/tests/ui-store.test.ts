@@ -15,4 +15,15 @@ describe('useUiStore', () => {
     ui.dismissToast(ui.toasts[0]!.id)
     expect(ui.toasts).toHaveLength(0)
   })
+
+  it('resolves confirm dialog answers', async () => {
+    const ui = useUiStore()
+    const answer = ui.confirm({
+      title: 'Delete item',
+      message: 'Are you sure?',
+    })
+    expect(ui.confirmDialog?.title).toBe('Delete item')
+    ui.answerConfirm(true)
+    await expect(answer).resolves.toBe(true)
+  })
 })

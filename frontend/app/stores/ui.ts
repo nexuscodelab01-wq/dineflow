@@ -25,7 +25,7 @@ let toastId = 0
 export const useUiStore = defineStore('ui', {
   state: () => ({
     toasts: [] as Toast[],
-    confirm: null as PendingConfirm | null,
+    confirmDialog: null as PendingConfirm | null,
   }),
 
   actions: {
@@ -51,14 +51,14 @@ export const useUiStore = defineStore('ui', {
 
     confirm(options: ConfirmOptions): Promise<boolean> {
       return new Promise((resolve) => {
-        this.confirm = { ...options, resolve }
+        this.confirmDialog = { ...options, resolve }
       })
     },
 
     answerConfirm(confirmed: boolean) {
-      if (!this.confirm) return
-      this.confirm.resolve(confirmed)
-      this.confirm = null
+      if (!this.confirmDialog) return
+      this.confirmDialog.resolve(confirmed)
+      this.confirmDialog = null
     },
   },
 })
