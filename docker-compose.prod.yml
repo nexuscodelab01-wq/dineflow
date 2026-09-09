@@ -1,0 +1,71 @@
+# Production Docker Compose stack for DineFlow.
+# Usage:
+#   cp .env.example .env
+#   # Set strong JWT secrets and production URLs in .env
+#   docker compose -f docker-compose.prod.yml up --build -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dineflow-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dineflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-dineflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dineflow} -d ${POSTGRES_DB:-dineflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - dineflow
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: dineflow-backend-prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}
+      ENVIRONMENT: production
+      RUN_SEED: ${RUN_SEED:-false}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dineflow
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:-http://localhost:8000}
+        NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG: ${NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG:-bella-vista-kitchen}
+    container_name: dineflow-frontend-prod
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - dineflow
+
+volumes:
+  postgres_data:
+
+networks:
+  dineflow:
+    driver: bridge

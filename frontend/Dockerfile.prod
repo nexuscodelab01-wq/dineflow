@@ -1,0 +1,29 @@
+FROM node:22-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+ARG NUXT_PUBLIC_API_URL=http://localhost:8000
+ARG NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG=bella-vista-kitchen
+ENV NUXT_PUBLIC_API_URL=$NUXT_PUBLIC_API_URL
+ENV NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG=$NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG
+
+RUN npm run build
+
+FROM node:22-alpine AS production
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000
+
+COPY --from=build /app/.output ./.output
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]

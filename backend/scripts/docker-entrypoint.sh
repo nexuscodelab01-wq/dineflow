@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+echo "Running database migrations..."
+alembic upgrade head
+
+if [ "${RUN_SEED:-false}" = "true" ]; then
+  echo "Seeding database..."
+  python -m app.db.seed
+fi
+
+echo "Starting API server..."
+exec uvicorn app.main:app \
+  --host "${BACKEND_HOST:-0.0.0.0}" \
+  --port "${BACKEND_PORT:-8000}" \
+  --workers "${UVICORN_WORKERS:-2}"
