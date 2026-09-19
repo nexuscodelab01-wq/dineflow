@@ -23,7 +23,8 @@ def client() -> TestClient:
 def db() -> Session:
     connection = engine.connect()
     transaction = connection.begin()
-    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+    # autoflush=False mirrors production SessionLocal so tests catch missing flushes
+    session = Session(bind=connection, join_transaction_mode="create_savepoint", autoflush=False)
 
     RoleRepository(session).ensure_defaults()
     session.flush()
