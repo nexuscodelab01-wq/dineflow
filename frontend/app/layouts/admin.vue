@@ -14,6 +14,7 @@ const nav = [
   { to: '/admin/orders', label: 'Orders' },
   { to: '/admin/kitchen', label: 'Kitchen' },
   { to: '/admin/tables', label: 'Tables' },
+  { to: '/admin/reservations', label: 'Reservations' },
   { to: '/admin/customers', label: 'Customers' },
   { to: '/admin/settings', label: 'Settings' },
 ]

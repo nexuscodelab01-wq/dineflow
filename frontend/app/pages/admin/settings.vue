@@ -23,6 +23,7 @@ const form = reactive({
   dine_in_enabled: true,
   tax_rate: '',
   delivery_fee: '',
+  reservation_buffer_minutes: 15,
 })
 
 onMounted(async () => {
@@ -42,6 +43,7 @@ onMounted(async () => {
       dine_in_enabled: settings.value.dine_in_enabled,
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
+      reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
     })
   }
   loading.value = false
@@ -100,6 +102,25 @@ async function save() {
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">Reservations</h2>
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">Reset gap between bookings (minutes)</span>
+          <input
+            v-model.number="form.reservation_buffer_minutes"
+            type="number"
+            min="0"
+            max="60"
+            step="5"
+            class="w-40 rounded-lg border px-3 py-2 text-sm"
+          >
+          <span class="mt-1 block text-xs text-ink-subtle">
+            A table is held free this long after each booking — time to clear it, and slack for guests who run over.
+            0 allows back-to-back bookings.
+          </span>
+        </label>
       </section>
 
       <p v-if="message" class="text-sm" :class="message === 'Settings saved' ? 'text-brand-700' : 'text-red-600'">{{ message }}</p>

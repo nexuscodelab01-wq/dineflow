@@ -14,6 +14,9 @@ const styles: Record<string, string> = {
   OCCUPIED: 'bg-red-100 text-red-900',
   RESERVED: 'bg-amber-100 text-amber-900',
   CLEANING: 'bg-slate-100 text-slate-900',
+  HELD: 'bg-amber-100 text-amber-900',
+  SEATED: 'bg-violet-100 text-violet-900',
+  EXPIRED: 'bg-gray-100 text-gray-700',
 }
 
 const label = computed(() => props.status.replace(/_/g, ' '))

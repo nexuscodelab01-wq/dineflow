@@ -68,10 +68,18 @@ export function fetchAdminTables(restaurantId: number) {
   return apiFetch<RestaurantTable[]>(q(restaurantId, '/tables'))
 }
 
-export function updateTableStatus(restaurantId: number, tableId: number, status: string) {
-  return apiFetch(q(restaurantId, `/tables/${tableId}/status`), {
+export type TableStatusResult = {
+  id: number
+  status: string
+  cancelled_reservations: number
+  completed_reservations: number
+}
+
+/** `force` confirms releasing/cleaning a table that still has an active or imminent booking. */
+export function updateTableStatus(restaurantId: number, tableId: number, status: string, force = false) {
+  return apiFetch<TableStatusResult>(q(restaurantId, `/tables/${tableId}/status`), {
     method: 'PATCH',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, force }),
   })
 }
 

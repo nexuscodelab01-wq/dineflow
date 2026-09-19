@@ -14,6 +14,8 @@ export type Restaurant = {
   dine_in_enabled: boolean
   tax_rate: string
   delivery_fee: string
+  /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */
+  reservation_buffer_minutes?: number
   is_active: boolean
 }
 
@@ -91,4 +93,6 @@ export type RestaurantTable = {
   table_number: string
   capacity: number
   status: string
+  /** Live and upcoming (next 24h) bookings — only returned by the admin tables endpoint. */
+  reservations?: import('~/types/reservation').TableReservationBrief[]
 }
