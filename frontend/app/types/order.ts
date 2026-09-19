@@ -88,6 +88,7 @@ export type CreateOrderPayload = {
   customer_email: string
   customer_phone?: string
   table_id?: number
+  reservation_id?: number
   delivery_address?: DeliveryAddressInput
   delivery_instructions?: string
   notes?: string

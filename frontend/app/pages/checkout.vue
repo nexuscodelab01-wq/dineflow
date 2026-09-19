@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { OrderType } from '~/types/order'
-import type { RestaurantTable } from '~/types/menu'
+import type { Reservation } from '~/types/reservation'
 import { createOrder } from '~/services/orders'
-import { fetchRestaurantTables } from '~/services/menu'
+import { fetchMyReservations } from '~/services/reservations'
 import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ middleware: ['auth'] })
@@ -19,8 +19,8 @@ if (cart.isEmpty) {
 await restaurant.load()
 
 const orderType = ref<OrderType>('PICKUP')
-const tables = ref<RestaurantTable[]>([])
-const tableId = ref<number | undefined>()
+const reservations = ref<Reservation[]>([])
+const reservationId = ref<number | undefined>()
 const error = ref('')
 const submitting = ref(false)
 
@@ -35,16 +35,26 @@ const form = reactive({
   notes: '',
 })
 
-watch(orderType, async (type) => {
-  if (type === 'DINE_IN' && restaurant.current) {
-    tables.value = await fetchRestaurantTables(restaurant.current.slug)
+async function loadReservations() {
+  if (!restaurant.current) return
+  try {
+    const all = await fetchMyReservations(restaurant.current.id)
+    reservations.value = all.filter(r => r.status === 'CONFIRMED' || r.status === 'HELD' || r.status === 'SEATED')
+    if (reservations.value.length && !reservationId.value) {
+      reservationId.value = reservations.value[0]?.id
+    }
   }
+  catch {
+    reservations.value = []
+  }
+}
+
+watch(orderType, async (type) => {
+  if (type === 'DINE_IN') await loadReservations()
 })
 
 onMounted(async () => {
-  if (orderType.value === 'DINE_IN' && restaurant.current) {
-    tables.value = await fetchRestaurantTables(restaurant.current.slug)
-  }
+  if (orderType.value === 'DINE_IN') await loadReservations()
 })
 
 const totals = computed(() => {
@@ -52,9 +62,23 @@ const totals = computed(() => {
   return cart.computeTotals(restaurant.current, orderType.value)
 })
 
+function formatWhen(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 async function submitOrder() {
   if (!restaurant.current || !totals.value) return
   error.value = ''
+  if (orderType.value === 'DINE_IN' && !reservationId.value) {
+    error.value = 'Select a reservation, or book a table first. Walk-ins are seated by staff.'
+    return
+  }
   submitting.value = true
   try {
     const order = await createOrder({
@@ -64,7 +88,7 @@ async function submitOrder() {
       customer_name: form.customer_name,
       customer_email: form.customer_email,
       customer_phone: form.customer_phone || undefined,
-      table_id: orderType.value === 'DINE_IN' ? tableId.value : undefined,
+      reservation_id: orderType.value === 'DINE_IN' ? reservationId.value : undefined,
       delivery_address: orderType.value === 'DELIVERY'
         ? {
             street: form.street,
@@ -131,13 +155,22 @@ async function submitOrder() {
         </section>
 
         <section v-if="orderType === 'DINE_IN'" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
-          <h2 class="font-semibold text-ink">Table</h2>
-          <select v-model="tableId" required class="mt-3 w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
-            <option :value="undefined" disabled>Select a table</option>
-            <option v-for="table in tables" :key="table.id" :value="table.id">
-              Table {{ table.table_number }} (seats {{ table.capacity }})
-            </option>
-          </select>
+          <h2 class="font-semibold text-ink">Reservation</h2>
+          <p class="mt-1 text-sm text-ink-muted">
+            Dine-in orders need a booked table. Walk-ins are seated by staff at the restaurant.
+          </p>
+          <div v-if="reservations.length" class="mt-3">
+            <select v-model.number="reservationId" required class="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
+              <option v-for="r in reservations" :key="r.id" :value="r.id">
+                Table {{ r.table_number }} · {{ formatWhen(r.starts_at) }} · {{ r.party_size }} guests ({{ r.status }})
+              </option>
+            </select>
+          </div>
+          <div v-else class="mt-3 rounded-lg bg-brand-50 px-3 py-3 text-sm text-brand-900">
+            No active reservations found.
+            <NuxtLink to="/reserve" class="font-medium underline">Book a table</NuxtLink>
+            first, then return to checkout.
+          </div>
         </section>
 
         <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">

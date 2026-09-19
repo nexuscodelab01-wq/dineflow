@@ -21,6 +21,7 @@
         <nav class="hidden items-center gap-4 text-sm font-medium text-ink-muted md:flex">
           <NuxtLink to="/" class="hover:text-brand-700">Home</NuxtLink>
           <NuxtLink to="/menu" class="hover:text-brand-700">Menu</NuxtLink>
+          <NuxtLink to="/reserve" class="hover:text-brand-700">Reserve</NuxtLink>
           <NuxtLink to="/cart" class="relative hover:text-brand-700">
             Cart
             <span
@@ -54,6 +55,7 @@
         <div class="flex flex-col gap-2 text-sm font-medium text-ink-muted">
           <NuxtLink to="/" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Home</NuxtLink>
           <NuxtLink to="/menu" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Menu</NuxtLink>
+          <NuxtLink to="/reserve" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Reserve</NuxtLink>
           <NuxtLink to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">
             Cart<span v-if="cart.itemCount"> ({{ cart.itemCount }})</span>
           </NuxtLink>
