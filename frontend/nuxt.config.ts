@@ -20,7 +20,10 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
+    // Server-only: used for SSR fetches inside Docker (e.g. http://backend:8000)
+    apiUrl: process.env.NUXT_API_URL || process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8000',
     public: {
+      // Browser-facing API URL (e.g. http://localhost:8000)
       apiUrl: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8000',
       defaultRestaurantSlug: process.env.NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG || 'bella-vista-kitchen',
     },

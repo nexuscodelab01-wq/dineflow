@@ -53,7 +53,10 @@ services:
     env_file:
       - .env
     environment:
+      # Browser calls the API via host-mapped port
       NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:-http://localhost:8000}
+      # SSR inside the frontend container must use the Docker service name
+      NUXT_API_URL: ${NUXT_API_URL:-http://backend:8000}
       HOST: 0.0.0.0
       PORT: 3000
     ports:

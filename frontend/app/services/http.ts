@@ -4,6 +4,10 @@ const ACCESS_TOKEN_KEY = 'dineflow_access_token'
 
 export function getApiBaseUrl(): string {
   const config = useRuntimeConfig()
+  // During SSR in Docker, call the backend service hostname — not localhost.
+  if (import.meta.server) {
+    return (config.apiUrl as string) || (config.public.apiUrl as string)
+  }
   return config.public.apiUrl as string
 }
 
