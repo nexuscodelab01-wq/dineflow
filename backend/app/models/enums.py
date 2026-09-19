@@ -34,6 +34,15 @@ class TableStatus(str, enum.Enum):
     CLEANING = "CLEANING"
 
 
+class ReservationStatus(str, enum.Enum):
+    HELD = "HELD"
+    CONFIRMED = "CONFIRMED"
+    SEATED = "SEATED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+
+
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"

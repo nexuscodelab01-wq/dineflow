@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.order_item import OrderItem
     from app.models.order_status_history import OrderStatusHistory
     from app.models.payment import Payment
+    from app.models.reservation import Reservation
     from app.models.restaurant import Restaurant
     from app.models.restaurant_table import RestaurantTable
     from app.models.user import User
@@ -64,4 +65,10 @@ class Order(TimestampMixin, Base):
     )
     status_history: Mapped[list["OrderStatusHistory"]] = relationship(
         "OrderStatusHistory", back_populates="order", cascade="all, delete-orphan"
+    )
+    reservation: Mapped["Reservation | None"] = relationship(
+        "Reservation",
+        back_populates="order",
+        uselist=False,
+        foreign_keys="Reservation.order_id",
     )

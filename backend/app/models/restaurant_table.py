@@ -11,6 +11,7 @@ from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.order import Order
+    from app.models.reservation import Reservation
     from app.models.restaurant import Restaurant
 
 
@@ -32,3 +33,4 @@ class RestaurantTable(TimestampMixin, Base):
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="tables")
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="table")
+    reservations: Mapped[list["Reservation"]] = relationship("Reservation", back_populates="table")

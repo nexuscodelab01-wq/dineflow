@@ -3,14 +3,16 @@
 import logging
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AppError, NotFoundError
+from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.models.category import Category
-from app.models.enums import OrderStatus
+from app.models.enums import OrderStatus, TableStatus
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
+from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
 from app.repositories.admin_order import AdminOrderRepository, CustomerRepository, TableRepository
@@ -34,6 +36,7 @@ from app.schemas.admin import (
     OrderStatusUpdate,
     RestaurantSettingsUpdate,
     TableCreate,
+    TableRead,
     TableStatusUpdate,
     TableUpdate,
 )
@@ -41,6 +44,7 @@ from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.restaurant import RestaurantRead
 from app.services.menu_service import MenuService
+from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +69,7 @@ class AdminService:
         self.customers = CustomerRepository(db)
         self.restaurants = RestaurantRepository(db)
         self.menu_reader = MenuService(db)
+        self.reservations = ReservationService(db)
 
     def dashboard_stats(self, restaurant_id: int) -> DashboardStats:
         data = self.dashboard.stats(restaurant_id)
@@ -255,30 +260,54 @@ class AdminService:
         )
 
     # Tables
-    def list_tables(self, restaurant_id: int):
-        return self.tables.list_for_restaurant(restaurant_id)
+    def list_tables(self, restaurant_id: int) -> list[TableRead]:
+        return [
+            TableRead(
+                id=table.id,
+                table_number=table.table_number,
+                capacity=table.capacity,
+                status=table.status,
+                reservations=reservations,
+            )
+            for table, reservations in self.reservations.table_overview(restaurant_id)
+        ]
 
-    def create_table(self, data: TableCreate):
+    def create_table(self, data: TableCreate) -> TableRead:
+        self._ensure_table_number_free(data.restaurant_id, data.table_number)
         table = RestaurantTable(**data.model_dump())
         self.tables.create(table)
         self.db.commit()
-        return table
+        return TableRead.model_validate(table, from_attributes=True)
 
-    def update_table(self, table_id: int, data: TableUpdate, restaurant_id: int):
+    def update_table(self, table_id: int, data: TableUpdate, restaurant_id: int) -> TableRead:
         table = self._get_table(table_id, restaurant_id)
-        for key, value in data.model_dump(exclude_unset=True).items():
+        payload = data.model_dump(exclude_unset=True)
+        if "table_number" in payload and payload["table_number"] != table.table_number:
+            self._ensure_table_number_free(restaurant_id, payload["table_number"])
+        for key, value in payload.items():
             setattr(table, key, value)
         self.db.commit()
-        return table
+        return TableRead.model_validate(table, from_attributes=True)
 
-    def update_table_status(self, table_id: int, data: TableStatusUpdate, restaurant_id: int):
+    def update_table_status(
+        self, table_id: int, data: TableStatusUpdate, restaurant_id: int
+    ) -> tuple[RestaurantTable, int, int]:
+        """Returns (table, cancelled_reservations, completed_reservations)."""
         table = self._get_table(table_id, restaurant_id)
-        table.status = data.status
+        cancelled = completed = 0
+        if data.status in (TableStatus.AVAILABLE, TableStatus.CLEANING):
+            cancelled, completed = self.reservations.release_table(table, data.status, force=data.force)
+        elif data.status == TableStatus.RESERVED:
+            raise AppError("Reserved is set automatically from bookings — create a reservation instead")
+        else:
+            table.status = data.status
         self.db.commit()
-        return table
+        return table, cancelled, completed
 
     def delete_table(self, table_id: int, restaurant_id: int) -> None:
         table = self._get_table(table_id, restaurant_id)
+        if self.db.scalar(select(Reservation.id).where(Reservation.table_id == table.id).limit(1)) is not None:
+            raise ConflictError("This table has reservations on record and can't be deleted")
         self.tables.delete(table)
         self.db.commit()
 
@@ -339,6 +368,16 @@ class AdminService:
         if table is None or table.restaurant_id != restaurant_id:
             raise NotFoundError("Table not found")
         return table
+
+    def _ensure_table_number_free(self, restaurant_id: int, table_number: str) -> None:
+        taken = self.db.scalar(
+            select(RestaurantTable.id).where(
+                RestaurantTable.restaurant_id == restaurant_id,
+                RestaurantTable.table_number == table_number,
+            )
+        )
+        if taken is not None:
+            raise ConflictError(f"Table {table_number} already exists")
 
     def _validate_modifiers(self, restaurant_id: int, modifier_ids: list[int]) -> None:
         for modifier_id in modifier_ids:

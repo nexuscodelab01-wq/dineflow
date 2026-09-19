@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.enums import OrderStatus, OrderType, TableStatus
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderRead
+from app.schemas.reservation import TableReservationBrief
 from app.schemas.restaurant import RestaurantRead
 
 
@@ -133,11 +134,20 @@ class TableCreate(BaseModel):
 class TableUpdate(BaseModel):
     table_number: str | None = Field(default=None, min_length=1, max_length=20)
     capacity: int | None = Field(default=None, ge=1, le=20)
-    status: TableStatus | None = None
 
 
 class TableStatusUpdate(BaseModel):
     status: TableStatus
+    # Must be true to release/clean a table that still has an active or imminent reservation.
+    force: bool = False
+
+
+class TableRead(BaseModel):
+    id: int
+    table_number: str
+    capacity: int
+    status: TableStatus
+    reservations: list[TableReservationBrief] = Field(default_factory=list)
 
 
 class RestaurantSettingsUpdate(BaseModel):
@@ -155,6 +165,7 @@ class RestaurantSettingsUpdate(BaseModel):
     dine_in_enabled: bool | None = None
     tax_rate: Decimal | None = Field(default=None, ge=0, le=1)
     delivery_fee: Decimal | None = Field(default=None, ge=0)
+    reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
 
 
 class CustomerSummary(BaseModel):

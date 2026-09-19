@@ -25,4 +25,5 @@ class RestaurantRead(BaseModel):
     dine_in_enabled: bool
     tax_rate: Decimal
     delivery_fee: Decimal
+    reservation_buffer_minutes: int = 15
     is_active: bool

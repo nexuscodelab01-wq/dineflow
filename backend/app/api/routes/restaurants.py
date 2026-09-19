@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.restaurant_table import RestaurantTable
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.restaurant import RestaurantRead
+from app.services.reservation_service import ReservationService
 
 router = APIRouter(prefix="/restaurants")
 
@@ -39,6 +40,7 @@ def list_tables(
     if restaurant is None:
         raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
 
+    ReservationService(db).refresh_floor_status(restaurant.id)
     stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant.id)
     if available_only:
         from app.models.enums import TableStatus

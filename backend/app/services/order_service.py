@@ -24,6 +24,7 @@ from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.payment_service import PaymentService
+from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,15 @@ class OrderService:
         self.restaurants = RestaurantRepository(db)
         self.menu = MenuRepository(db)
         self.payments = PaymentService()
+        self.reservations = ReservationService(db)
 
     def create_order(self, data: OrderCreate, user: User) -> OrderRead:
         restaurant = self.restaurants.get_by_id(data.restaurant_id)
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
+
+        table_id = data.table_id
+        reservation = None
 
         if data.order_type == OrderType.DELIVERY:
             if not restaurant.delivery_enabled:
@@ -52,8 +57,15 @@ class OrderService:
         elif data.order_type == OrderType.DINE_IN:
             if not restaurant.dine_in_enabled:
                 raise AppError("Dine-in is not available for this restaurant")
-            if data.table_id is None:
-                raise AppError("Table is required for dine-in orders")
+            if data.reservation_id is None:
+                raise AppError(
+                    "A table reservation is required for dine-in. "
+                    "Book a table first, or ask staff to seat you for walk-ins."
+                )
+            reservation = self.reservations.get_reservation(data.reservation_id, restaurant.id)
+            if reservation.user_id is not None and reservation.user_id != user.id:
+                raise AppError("Reservation does not belong to this customer")
+            table_id = reservation.table_id
 
         item_ids = [line.menu_item_id for line in data.items]
         menu_items = self.menu.get_items_by_ids(item_ids, restaurant.id)
@@ -79,7 +91,7 @@ class OrderService:
             customer_phone=data.customer_phone,
             delivery_instructions=data.delivery_instructions,
             notes=data.notes,
-            table_id=data.table_id,
+            table_id=table_id,
         )
 
         if data.order_type == OrderType.DELIVERY and data.delivery_address:
@@ -169,6 +181,9 @@ class OrderService:
                 notes="Payment confirmed (mock)",
             )
         )
+
+        if reservation is not None:
+            self.reservations.attach_to_order(reservation.id, order.id, user.id, restaurant.id)
 
         self.db.commit()
         logger.info("Order created: order_number=%s user_id=%s", order.order_number, user.id)

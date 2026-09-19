@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.address import Address
     from app.models.order import Order
     from app.models.refresh_token import RefreshToken
+    from app.models.reservation import Reservation
     from app.models.restaurant_user import RestaurantUser
     from app.models.role import Role
 
@@ -33,6 +34,7 @@ class User(TimestampMixin, Base):
         "RestaurantUser", back_populates="user", cascade="all, delete-orphan"
     )
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")
+    reservations: Mapped[list["Reservation"]] = relationship("Reservation", back_populates="user")
     addresses: Mapped[list["Address"]] = relationship(
         "Address", back_populates="user", cascade="all, delete-orphan"
     )

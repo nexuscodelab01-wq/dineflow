@@ -30,6 +30,7 @@ class OrderCreate(BaseModel):
     customer_email: EmailStr
     customer_phone: str | None = Field(default=None, max_length=30)
     table_id: int | None = None
+    reservation_id: int | None = None
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=1000)

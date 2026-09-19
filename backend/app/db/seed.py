@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from app.models.enums import (
     OrderType,
     PaymentMethod,
     PaymentStatus,
+    ReservationStatus,
     RoleName,
     TableStatus,
 )
@@ -27,6 +29,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
+from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
@@ -37,6 +40,88 @@ logger = logging.getLogger(__name__)
 
 DEMO_PASSWORD = "Demo1234!"
 
+# Curated Unsplash food photos for demo menu items
+MENU_IMAGES: dict[str, str] = {
+    "Garlic Bread": "https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=800&h=600&fit=crop",
+    "Bruschetta Trio": "https://images.unsplash.com/photo-1572695157366-5e59ab6cf4c2?w=800&h=600&fit=crop",
+    "Calamari Fritti": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=800&h=600&fit=crop",
+    "Soup of the Day": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&h=600&fit=crop",
+    "Grilled Salmon": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&h=600&fit=crop",
+    "Herb Chicken": "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=800&h=600&fit=crop",
+    "Eggplant Parmigiana": "https://images.unsplash.com/photo-1625944230946-1e95e6c4c0e9?w=800&h=600&fit=crop",
+    "Ribeye Steak": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&h=600&fit=crop",
+    "Margherita Pizza": "https://images.unsplash.com/photo-1574071318508-1cdbab80d264?w=800&h=600&fit=crop",
+    "Pepperoni Pizza": "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&h=600&fit=crop",
+    "BBQ Chicken Pizza": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop",
+    "Veggie Supreme Pizza": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&fit=crop",
+    "Classic Smash Burger": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&fit=crop",
+    "Mushroom Swiss Burger": "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&h=600&fit=crop",
+    "Spicy Jalapeño Burger": "https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=800&h=600&fit=crop",
+    "Veggie Burger": "https://images.unsplash.com/photo-1520072959219-c595dc870360?w=800&h=600&fit=crop",
+    "Fettuccine Alfredo": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&h=600&fit=crop",
+    "Spaghetti Bolognese": "https://images.unsplash.com/photo-1622973536968-3ead9e780960?w=800&h=600&fit=crop",
+    "Pesto Penne": "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800&h=600&fit=crop",
+    "Caesar Salad": "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=800&h=600&fit=crop",
+    "Garden Salad": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=600&fit=crop",
+    "Truffle Fries": "https://images.unsplash.com/photo-1576107233122-c2d2d0e0e1f5?w=800&h=600&fit=crop",
+    "Onion Rings": "https://images.unsplash.com/photo-1639024471283-035266109961?w=800&h=600&fit=crop",
+    "Sparkling Water": "https://images.unsplash.com/photo-1523362628745-0c100150b504?w=800&h=600&fit=crop",
+    "Craft Lemonade": "https://images.unsplash.com/photo-1523677011785-c18980f1c4f7?w=800&h=600&fit=crop",
+    "House Red Wine": "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800&h=600&fit=crop",
+    "Espresso": "https://images.unsplash.com/photo-1510590337019-5ef8d3d32116?w=800&h=600&fit=crop",
+    "Tiramisu": "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=800&h=600&fit=crop",
+    "Chocolate Lava Cake": "https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=800&h=600&fit=crop",
+    "Panna Cotta": "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=800&h=600&fit=crop",
+    "Chef's Tasting Board": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&h=600&fit=crop",
+    "Seasonal Risotto": "https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=800&h=600&fit=crop",
+}
+
+
+def _backfill_menu_images(db) -> int:
+    """Fill missing image_url values for known demo items."""
+    updated = 0
+    items = db.scalars(select(MenuItem)).all()
+    for item in items:
+        if item.image_url:
+            continue
+        url = MENU_IMAGES.get(item.name)
+        if url:
+            item.image_url = url
+            updated += 1
+    return updated
+
+
+def _backfill_demo_reservation(db) -> bool:
+    """Ensure one upcoming demo reservation exists for customer1."""
+    if db.scalar(select(Reservation.id).limit(1)):
+        return False
+    restaurant = db.scalar(select(Restaurant).limit(1))
+    customer = db.scalar(select(User).where(User.email == "customer1@demo.com"))
+    table = db.scalar(
+        select(RestaurantTable).where(
+            RestaurantTable.status == TableStatus.AVAILABLE,
+            RestaurantTable.capacity >= 2,
+        ).limit(1)
+    )
+    if not restaurant or not customer or not table:
+        return False
+    starts = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(hours=3)
+    db.add(
+        Reservation(
+            restaurant_id=restaurant.id,
+            table_id=table.id,
+            user_id=customer.id,
+            party_size=2,
+            starts_at=starts,
+            ends_at=starts + timedelta(minutes=90),
+            status=ReservationStatus.CONFIRMED,
+            guest_name=f"{customer.first_name} {customer.last_name}",
+            guest_email=customer.email,
+            guest_phone=customer.phone,
+        )
+    )
+    return True
+
 
 def seed() -> None:
     db = SessionLocal()
@@ -46,7 +131,17 @@ def seed() -> None:
         db.commit()
 
         if db.scalar(select(Restaurant).limit(1)):
-            logger.info("Seed skipped — data already exists")
+            filled = _backfill_menu_images(db)
+            reserved = _backfill_demo_reservation(db)
+            if filled or reserved:
+                db.commit()
+                logger.info(
+                    "Seed backfill complete (images=%s reservation=%s)",
+                    filled,
+                    reserved,
+                )
+            else:
+                logger.info("Seed skipped — data already exists")
             return
 
         restaurant = Restaurant(
@@ -229,6 +324,7 @@ def seed() -> None:
                 name=name,
                 description=f"Freshly prepared {name.lower()}.",
                 price=Decimal(price),
+                image_url=MENU_IMAGES.get(name),
                 is_available=True,
                 preparation_time_minutes=prep,
                 is_vegetarian=veg,
@@ -258,7 +354,7 @@ def seed() -> None:
                 restaurant_id=restaurant.id,
                 table_number=number,
                 capacity=capacity,
-                status=TableStatus.AVAILABLE if number not in {"T3", "T6"} else TableStatus.OCCUPIED,
+                status=TableStatus.AVAILABLE,
             )
             db.add(table)
             db.flush()
@@ -368,7 +464,7 @@ def seed() -> None:
             items=[(item_by_name["Classic Smash Burger"], 2), (item_by_name["Truffle Fries"], 1)],
             order_no="BV-10002",
         )
-        create_order(
+        dine_in_order = create_order(
             customer=customers[2],
             order_type=OrderType.DINE_IN,
             status=OrderStatus.READY,
@@ -390,6 +486,45 @@ def seed() -> None:
             status=OrderStatus.CANCELLED,
             items=[(item_by_name["Spaghetti Bolognese"], 1)],
             order_no="BV-10005",
+        )
+
+        # Parties currently seated at T3 and T6 — table status is derived from these bookings.
+        seated_from = datetime.now(timezone.utc) - timedelta(minutes=30)
+        for table, guest, party, order in (
+            (tables[2], customers[2], 2, dine_in_order),
+            (tables[5], customers[1], 4, None),
+        ):
+            db.add(
+                Reservation(
+                    restaurant_id=restaurant.id,
+                    table_id=table.id,
+                    user_id=guest.id,
+                    order_id=order.id if order else None,
+                    party_size=party,
+                    starts_at=seated_from,
+                    ends_at=seated_from + timedelta(minutes=90),
+                    status=ReservationStatus.SEATED,
+                    guest_name=f"{guest.first_name} {guest.last_name}",
+                    guest_email=guest.email,
+                    guest_phone=guest.phone,
+                )
+            )
+            table.status = TableStatus.OCCUPIED
+
+        starts = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(hours=3)
+        db.add(
+            Reservation(
+                restaurant_id=restaurant.id,
+                table_id=tables[0].id,
+                user_id=customers[0].id,
+                party_size=2,
+                starts_at=starts,
+                ends_at=starts + timedelta(minutes=90),
+                status=ReservationStatus.CONFIRMED,
+                guest_name=f"{customers[0].first_name} {customers[0].last_name}",
+                guest_email=customers[0].email,
+                guest_phone=customers[0].phone,
+            )
         )
 
         db.commit()

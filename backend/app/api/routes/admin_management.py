@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
-from app.models.enums import OrderStatus, OrderType
-from app.models.user import User
+from app.models.enums import OrderStatus, OrderType, ReservationStatus
 from app.schemas.admin import (
     CategoryCreate,
     CategoryReorder,
@@ -29,15 +28,25 @@ from app.schemas.admin import (
     OrderStatusUpdate,
     RestaurantSettingsUpdate,
     TableCreate,
+    TableRead,
     TableStatusUpdate,
     TableUpdate,
 )
 from app.schemas.analytics import AnalyticsResponse
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
+from app.schemas.reservation import (
+    AdminAvailabilityResponse,
+    AdminReservationCreate,
+    ReservationExtend,
+    ReservationRead,
+    ReservationStatusUpdate,
+    ReservationUpdate,
+)
 from app.schemas.restaurant import RestaurantRead
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
+from app.services.reservation_service import ReservationService
 from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
@@ -53,6 +62,10 @@ def get_admin_service(db: Annotated[Session, Depends(get_db)]) -> AdminService:
 
 def get_analytics_service(db: Annotated[Session, Depends(get_db)]) -> AnalyticsService:
     return AnalyticsService(db)
+
+
+def get_reservation_service(db: Annotated[Session, Depends(get_db)]) -> ReservationService:
+    return ReservationService(db)
 
 
 def _handle(exc: Exception):
@@ -380,49 +393,41 @@ def kitchen_board(
     return service.kitchen_board(restaurant_id)
 
 
-@router.get("/tables")
+@router.get("/tables", response_model=list[TableRead])
 def list_tables(
     _: StaffUser,
     restaurant_id: RestaurantId,
     service: Annotated[AdminService, Depends(get_admin_service)],
-):
-    tables = service.list_tables(restaurant_id)
-    return [
-        {
-            "id": t.id,
-            "table_number": t.table_number,
-            "capacity": t.capacity,
-            "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-        }
-        for t in tables
-    ]
+) -> list[TableRead]:
+    return service.list_tables(restaurant_id)
 
 
-@router.post("/tables", status_code=status.HTTP_201_CREATED)
+@router.post("/tables", response_model=TableRead, status_code=status.HTTP_201_CREATED)
 def create_table(
     data: TableCreate,
     _: AdminUser,
     restaurant_id: RestaurantId,
     service: Annotated[AdminService, Depends(get_admin_service)],
-):
+) -> TableRead:
     if data.restaurant_id != restaurant_id:
         raise raise_http_for_app_error(AppError("Restaurant mismatch"))
-    table = service.create_table(data)
-    return {"id": table.id, "table_number": table.table_number, "capacity": table.capacity, "status": table.status.value}
+    try:
+        return service.create_table(data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
-@router.put("/tables/{table_id}")
+@router.put("/tables/{table_id}", response_model=TableRead)
 def update_table(
     table_id: int,
     data: TableUpdate,
     _: AdminUser,
     restaurant_id: RestaurantId,
     service: Annotated[AdminService, Depends(get_admin_service)],
-):
+) -> TableRead:
     try:
-        table = service.update_table(table_id, data, restaurant_id)
-        return {"id": table.id, "table_number": table.table_number, "capacity": table.capacity, "status": table.status.value}
-    except NotFoundError as exc:
+        return service.update_table(table_id, data, restaurant_id)
+    except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
 
@@ -435,10 +440,15 @@ def update_table_status(
     service: Annotated[AdminService, Depends(get_admin_service)],
 ):
     try:
-        table = service.update_table_status(table_id, data, restaurant_id)
-        return {"id": table.id, "status": table.status.value}
-    except NotFoundError as exc:
+        table, cancelled, completed = service.update_table_status(table_id, data, restaurant_id)
+    except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
+    return {
+        "id": table.id,
+        "status": table.status.value,
+        "cancelled_reservations": cancelled,
+        "completed_reservations": completed,
+    }
 
 
 @router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -450,7 +460,96 @@ def delete_table(
 ) -> None:
     try:
         service.delete_table(table_id, restaurant_id)
-    except NotFoundError as exc:
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/reservations/availability", response_model=AdminAvailabilityResponse)
+def admin_reservation_availability(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+    starts_at: datetime,
+    party_size: int = Query(default=1, ge=1, le=20),
+    duration_minutes: int = Query(default=90, ge=30, le=240),
+    exclude_reservation_id: int | None = Query(default=None, description="Ignore this booking (when editing it)"),
+) -> AdminAvailabilityResponse:
+    try:
+        return service.get_admin_availability(
+            restaurant_id,
+            starts_at=starts_at,
+            party_size=party_size,
+            duration_minutes=duration_minutes,
+            exclude_reservation_id=exclude_reservation_id,
+        )
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/reservations", response_model=list[ReservationRead])
+def list_reservations(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+    start: datetime | None = Query(default=None, description="Include bookings starting at/after this instant"),
+    end: datetime | None = Query(default=None, description="Include bookings starting before this instant"),
+    status_filter: ReservationStatus | None = Query(default=None, alias="status"),
+) -> list[ReservationRead]:
+    return service.list_restaurant_reservations(restaurant_id, start=start, end=end, status=status_filter)
+
+
+@router.post("/reservations", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
+def create_admin_reservation(
+    data: AdminReservationCreate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    try:
+        return service.create_admin_reservation(restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/reservations/{reservation_id}", response_model=ReservationRead)
+def update_admin_reservation(
+    reservation_id: int,
+    data: ReservationUpdate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    try:
+        return service.update_reservation(reservation_id, restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/reservations/{reservation_id}/extend", response_model=ReservationRead)
+def extend_reservation(
+    reservation_id: int,
+    data: ReservationExtend,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    try:
+        return service.extend_reservation(reservation_id, restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/reservations/{reservation_id}/status", response_model=ReservationRead)
+def update_reservation_status(
+    reservation_id: int,
+    data: ReservationStatusUpdate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    try:
+        return service.update_status(reservation_id, restaurant_id, data)
+    except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
 

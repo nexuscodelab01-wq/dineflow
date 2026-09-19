@@ -14,6 +14,7 @@ from app.models import (  # noqa: F401
     OrderStatusHistory,
     Payment,
     RefreshToken,
+    Reservation,
     Restaurant,
     RestaurantTable,
     RestaurantUser,

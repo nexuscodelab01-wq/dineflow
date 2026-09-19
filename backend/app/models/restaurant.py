@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Numeric, String, Text
+from sqlalchemy import Boolean, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.menu_item import MenuItem
     from app.models.menu_modifier import MenuModifier
     from app.models.order import Order
+    from app.models.reservation import Reservation
     from app.models.restaurant_table import RestaurantTable
     from app.models.restaurant_user import RestaurantUser
 
@@ -38,6 +39,9 @@ class Restaurant(TimestampMixin, Base):
     dine_in_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal("0.0825"), nullable=False)
     delivery_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("4.99"), nullable=False)
+    reservation_buffer_minutes: Mapped[int] = mapped_column(
+        Integer, default=15, server_default="15", nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(
@@ -56,3 +60,6 @@ class Restaurant(TimestampMixin, Base):
         "RestaurantTable", back_populates="restaurant", cascade="all, delete-orphan"
     )
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="restaurant")
+    reservations: Mapped[list["Reservation"]] = relationship(
+        "Reservation", back_populates="restaurant", cascade="all, delete-orphan"
+    )

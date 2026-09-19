@@ -12,6 +12,7 @@ from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
 from app.models.refresh_token import RefreshToken
+from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
@@ -31,6 +32,7 @@ __all__ = [
     "OrderStatusHistory",
     "Payment",
     "RefreshToken",
+    "Reservation",
     "Restaurant",
     "RestaurantTable",
     "RestaurantUser",
