@@ -1,9 +1,11 @@
 """Admin API routes."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
+import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
@@ -39,6 +41,10 @@ from app.services.analytics_service import AnalyticsService
 from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
+
+UPLOAD_DIR = Path(__file__).resolve().parents[3] / "uploads" / "menu"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def get_admin_service(db: Annotated[Session, Depends(get_db)]) -> AdminService:
@@ -194,6 +200,35 @@ def delete_menu_item(
         service.delete_menu_item(item_id, restaurant_id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/uploads/menu-image")
+async def upload_menu_image(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    file: UploadFile = File(...),
+) -> dict[str, str]:
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise raise_http_for_app_error(AppError("Only JPEG, PNG, WebP, or GIF images are allowed"))
+
+    data = await file.read()
+    if not data:
+        raise raise_http_for_app_error(AppError("Empty file"))
+    if len(data) > MAX_IMAGE_BYTES:
+        raise raise_http_for_app_error(AppError("Image must be 5MB or smaller"))
+
+    ext = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }[content_type]
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"r{restaurant_id}-{uuid.uuid4().hex}{ext}"
+    (UPLOAD_DIR / filename).write_bytes(data)
+    return {"url": f"/uploads/menu/{filename}"}
 
 
 @router.get("/modifiers", response_model=list[MenuModifierRead])

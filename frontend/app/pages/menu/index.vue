@@ -146,6 +146,7 @@ function goToItem(id: number) {
           name: item.name,
           description: item.description,
           price: item.price,
+          imageUrl: item.image_url,
           categoryName: item.category_name,
           isVegetarian: item.is_vegetarian,
           isSpicy: item.is_spicy,

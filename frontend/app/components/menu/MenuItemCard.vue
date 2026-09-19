@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { formatCurrency } from '~/utils/format'
+import { resolveMediaUrl } from '~/utils/media'
 
-defineProps<{
+const props = defineProps<{
   name: string
   description?: string | null
   price: string
+  imageUrl?: string | null
   categoryName?: string | null
   isVegetarian?: boolean
   isSpicy?: boolean
@@ -13,6 +15,8 @@ defineProps<{
 }>()
 
 defineEmits<{ click: [] }>()
+
+const resolvedImage = computed(() => resolveMediaUrl(props.imageUrl))
 </script>
 
 <template>
@@ -21,8 +25,17 @@ defineEmits<{ click: [] }>()
     :class="{ 'opacity-60': unavailable }"
     @click="$emit('click')"
   >
-    <div class="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-brand-50 to-brand-100">
-      <span class="font-display text-3xl text-brand-700/40">{{ name.charAt(0) }}</span>
+    <div class="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-50 to-brand-100">
+      <img
+        v-if="resolvedImage"
+        :src="resolvedImage"
+        :alt="name"
+        class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        loading="lazy"
+      >
+      <span v-else class="flex h-full items-center justify-center font-display text-3xl text-brand-700/40">
+        {{ name.charAt(0) }}
+      </span>
     </div>
     <div class="flex flex-1 flex-col p-4">
       <div class="mb-2 flex flex-wrap gap-1.5">

@@ -2,10 +2,11 @@
 import type { MenuItemDetail } from '~/types/menu'
 import { fetchMenuItem } from '~/services/menu'
 import { formatCurrency } from '~/utils/format'
+import { resolveMediaUrl } from '~/utils/media'
 
 const route = useRoute()
-const router = useRouter()
 const cart = useCartStore()
+const ui = useUiStore()
 
 const itemId = computed(() => Number(route.params.id))
 const item = ref<MenuItemDetail | null>(null)
@@ -15,6 +16,7 @@ const quantity = ref(1)
 const specialInstructions = ref('')
 const selectedOptions = ref<Record<number, number[]>>({})
 const added = ref(false)
+const heroImage = computed(() => resolveMediaUrl(item.value?.image_url))
 
 onMounted(async () => {
   try {
@@ -81,7 +83,11 @@ function addToCart() {
   const optionIds = Object.values(selectedOptions.value).flat()
   cart.addItem(item.value, optionIds, quantity.value, specialInstructions.value || undefined)
   added.value = true
-  setTimeout(() => router.push('/cart'), 600)
+  error.value = ''
+  ui.success('Added to cart')
+  setTimeout(() => {
+    added.value = false
+  }, 2500)
 }
 </script>
 
@@ -95,7 +101,19 @@ function addToCart() {
       {{ error }}
     </div>
 
-    <div v-else-if="item" class="mt-6 rounded-2xl border border-brand-100 bg-surface-elevated p-6 shadow-sm">
+    <div v-else-if="item" class="mt-6 overflow-hidden rounded-2xl border border-brand-100 bg-surface-elevated shadow-sm">
+      <div class="aspect-[16/9] bg-gradient-to-br from-brand-50 to-brand-100 sm:aspect-[21/9]">
+        <img
+          v-if="heroImage"
+          :src="heroImage"
+          :alt="item.name"
+          class="h-full w-full object-cover"
+        >
+        <div v-else class="flex h-full items-center justify-center font-display text-5xl text-brand-700/30">
+          {{ item.name.charAt(0) }}
+        </div>
+      </div>
+      <div class="p-6">
       <div class="flex flex-wrap gap-2">
         <span v-if="item.is_popular" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">Popular</span>
         <span v-if="item.is_vegetarian" class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Vegetarian</span>
@@ -144,11 +162,15 @@ function addToCart() {
       </div>
 
       <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
-      <p v-if="added" class="mt-4 text-sm text-brand-700">Added to cart!</p>
+      <p v-if="added" class="mt-4 text-sm text-brand-700">
+        Added to cart!
+        <NuxtLink to="/cart" class="ml-1 font-medium underline hover:text-brand-800">View cart</NuxtLink>
+      </p>
 
       <AppButton class="mt-6 w-full sm:w-auto" :disabled="!item.is_available" @click="addToCart">
         Add to cart — {{ formatCurrency(unitPrice * quantity) }}
       </AppButton>
+      </div>
     </div>
   </div>
 </template>

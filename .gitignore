@@ -66,3 +66,4 @@ docker-data/
 *.key
 coverage/
 .turbo/
+backend/uploads/

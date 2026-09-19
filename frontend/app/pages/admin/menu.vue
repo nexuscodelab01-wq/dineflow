@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import type { Category, MenuItemDetail } from '~/types/menu'
-import { createMenuItem, deleteMenuItem, fetchAdminCategories, fetchAdminMenu, updateMenuItem } from '~/services/admin'
+import {
+  createCategory,
+  createMenuItem,
+  deleteMenuItem,
+  fetchAdminCategories,
+  fetchAdminMenu,
+  updateMenuItem,
+  uploadMenuImage,
+} from '~/services/admin'
 import { formatCurrency } from '~/utils/format'
+import { resolveMediaUrl } from '~/utils/media'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -15,17 +24,24 @@ const search = ref('')
 const showForm = ref(false)
 const editing = ref<MenuItemDetail | null>(null)
 const error = ref('')
+const uploading = ref(false)
+const savingCategory = ref(false)
+const showNewCategory = ref(false)
+const newCategoryName = ref('')
 
 const form = reactive({
   name: '',
   description: '',
   price: '',
   category_id: 0,
+  image_url: '',
   is_available: true,
   is_vegetarian: false,
   is_spicy: false,
   is_popular: false,
 })
+
+const previewUrl = computed(() => resolveMediaUrl(form.image_url || null))
 
 async function load() {
   await admin.initialize()
@@ -50,9 +66,26 @@ const filtered = computed(() => {
   return items.value.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q))
 })
 
+function resetFormDefaults() {
+  Object.assign(form, {
+    name: '',
+    description: '',
+    price: '',
+    category_id: categories.value[0]?.id || 0,
+    image_url: '',
+    is_available: true,
+    is_vegetarian: false,
+    is_spicy: false,
+    is_popular: false,
+  })
+  showNewCategory.value = false
+  newCategoryName.value = ''
+  error.value = ''
+}
+
 function openCreate() {
   editing.value = null
-  Object.assign(form, { name: '', description: '', price: '', category_id: categories.value[0]?.id || 0, is_available: true, is_vegetarian: false, is_spicy: false, is_popular: false })
+  resetFormDefaults()
   showForm.value = true
 }
 
@@ -63,19 +96,98 @@ function openEdit(item: MenuItemDetail) {
     description: item.description || '',
     price: item.price,
     category_id: item.category_id,
+    image_url: item.image_url || '',
     is_available: item.is_available,
     is_vegetarian: item.is_vegetarian,
     is_spicy: item.is_spicy,
     is_popular: item.is_popular,
   })
+  showNewCategory.value = false
+  newCategoryName.value = ''
+  error.value = ''
   showForm.value = true
+}
+
+function slugify(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    || 'category'
+}
+
+async function addCategory() {
+  if (!admin.restaurantId || !auth.isAdmin) return
+  const name = newCategoryName.value.trim()
+  if (!name) {
+    error.value = 'Enter a category name'
+    return
+  }
+  savingCategory.value = true
+  error.value = ''
+  try {
+    const created = await createCategory(admin.restaurantId, {
+      name,
+      slug: slugify(name),
+      sort_order: categories.value.length,
+      is_active: true,
+    })
+    categories.value = [...categories.value, created]
+    form.category_id = created.id
+    newCategoryName.value = ''
+    showNewCategory.value = false
+    ui.success(`Category "${created.name}" added`)
+  }
+  catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not create category'
+    ui.error(error.value)
+  }
+  finally {
+    savingCategory.value = false
+  }
+}
+
+async function onImageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !admin.restaurantId) return
+  uploading.value = true
+  error.value = ''
+  try {
+    const result = await uploadMenuImage(admin.restaurantId, file)
+    form.image_url = result.url
+    ui.success('Image uploaded')
+  }
+  catch (err) {
+    error.value = err instanceof Error ? err.message : 'Upload failed'
+    ui.error(error.value)
+  }
+  finally {
+    uploading.value = false
+    input.value = ''
+  }
 }
 
 async function saveItem() {
   if (!admin.restaurantId) return
   error.value = ''
+  if (!form.category_id) {
+    error.value = 'Select or create a category'
+    return
+  }
   try {
-    const payload = { ...form, price: Number(form.price) }
+    const payload = {
+      name: form.name,
+      description: form.description || null,
+      price: Number(form.price),
+      category_id: Number(form.category_id),
+      image_url: form.image_url || null,
+      is_available: form.is_available,
+      is_vegetarian: form.is_vegetarian,
+      is_spicy: form.is_spicy,
+      is_popular: form.is_popular,
+    }
     const wasEditing = Boolean(editing.value)
     if (editing.value) {
       await updateMenuItem(admin.restaurantId, editing.value.id, payload)
@@ -118,7 +230,7 @@ async function removeItem(item: MenuItemDetail) {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="font-display text-2xl font-semibold text-brand-900">Menu</h1>
-        <p class="text-sm text-ink-muted">Manage menu items and availability</p>
+        <p class="text-sm text-ink-muted">Manage menu items, categories, and photos</p>
       </div>
       <AppButton v-if="auth.isAdmin" @click="openCreate">Add item</AppButton>
     </div>
@@ -147,7 +259,20 @@ async function removeItem(item: MenuItemDetail) {
         </thead>
         <tbody>
           <tr v-for="item in filtered" :key="item.id" class="border-b border-brand-50">
-            <td class="px-4 py-3 font-medium">{{ item.name }}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-3">
+                <div class="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-brand-50">
+                  <img
+                    v-if="resolveMediaUrl(item.image_url)"
+                    :src="resolveMediaUrl(item.image_url)!"
+                    :alt="item.name"
+                    class="h-full w-full object-cover"
+                  >
+                  <span v-else class="flex h-full items-center justify-center text-xs text-brand-700/40">{{ item.name.charAt(0) }}</span>
+                </div>
+                <span class="font-medium">{{ item.name }}</span>
+              </div>
+            </td>
             <td class="px-4 py-3 text-ink-muted">{{ item.category_name }}</td>
             <td class="px-4 py-3">{{ formatCurrency(Number(item.price)) }}</td>
             <td class="px-4 py-3">
@@ -165,17 +290,84 @@ async function removeItem(item: MenuItemDetail) {
     </div>
 
     <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <h2 class="text-lg font-semibold">{{ editing ? 'Edit item' : 'New item' }}</h2>
         <form class="mt-4 space-y-3" @submit.prevent="saveItem">
           <input v-model="form.name" required placeholder="Name" class="w-full rounded-lg border px-3 py-2 text-sm">
           <textarea v-model="form.description" placeholder="Description" class="w-full rounded-lg border px-3 py-2 text-sm" rows="2" />
           <div class="grid grid-cols-2 gap-3">
             <input v-model="form.price" required type="number" step="0.01" min="0" placeholder="Price" class="rounded-lg border px-3 py-2 text-sm">
-            <select v-model="form.category_id" class="rounded-lg border px-3 py-2 text-sm">
+            <select v-model.number="form.category_id" class="rounded-lg border px-3 py-2 text-sm">
+              <option :value="0" disabled>Select category</option>
               <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </div>
+
+          <div v-if="auth.isAdmin" class="rounded-lg border border-dashed border-brand-200 bg-brand-50/40 p-3">
+            <button
+              v-if="!showNewCategory"
+              type="button"
+              class="text-sm font-medium text-brand-700 hover:underline"
+              @click="showNewCategory = true"
+            >
+              + Add new category
+            </button>
+            <div v-else class="flex flex-wrap gap-2">
+              <input
+                v-model="newCategoryName"
+                type="text"
+                placeholder="Category name"
+                class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm"
+                @keydown.enter.prevent="addCategory"
+              >
+              <button
+                type="button"
+                class="rounded-lg bg-brand-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                :disabled="savingCategory"
+                @click="addCategory"
+              >
+                {{ savingCategory ? 'Saving…' : 'Create' }}
+              </button>
+              <button type="button" class="rounded-lg border px-3 py-2 text-sm" @click="showNewCategory = false; newCategoryName = ''">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-ink">Food photo</label>
+            <div v-if="previewUrl" class="overflow-hidden rounded-lg border border-brand-100">
+              <img :src="previewUrl" alt="Preview" class="h-36 w-full object-cover">
+            </div>
+            <input
+              v-model="form.image_url"
+              type="text"
+              placeholder="Image URL or uploaded path"
+              class="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+            <div class="flex items-center gap-2">
+              <label class="cursor-pointer rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50">
+                {{ uploading ? 'Uploading…' : 'Upload image' }}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  class="hidden"
+                  :disabled="uploading"
+                  @change="onImageSelected"
+                >
+              </label>
+              <button
+                v-if="form.image_url"
+                type="button"
+                class="text-sm text-red-600 hover:underline"
+                @click="form.image_url = ''"
+              >
+                Clear
+              </button>
+            </div>
+            <p class="text-xs text-ink-subtle">Paste a URL or upload JPEG/PNG/WebP/GIF (max 5MB).</p>
+          </div>
+
           <div class="flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-2"><input v-model="form.is_available" type="checkbox"> Available</label>
             <label class="flex items-center gap-2"><input v-model="form.is_popular" type="checkbox"> Popular</label>

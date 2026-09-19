@@ -124,3 +124,12 @@ export function createCategory(restaurantId: number, payload: Record<string, unk
 export function deleteCategory(restaurantId: number, categoryId: number) {
   return apiFetch<void>(q(restaurantId, `/categories/${categoryId}`), { method: 'DELETE' })
 }
+
+export function uploadMenuImage(restaurantId: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return apiFetch<{ url: string }>(q(restaurantId, '/uploads/menu-image'), {
+    method: 'POST',
+    body,
+  })
+}

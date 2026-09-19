@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from app.api.routes import api_router
 from app.core.config import settings
@@ -17,9 +19,13 @@ from app.core.logging import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+UPLOADS_ROOT = Path(__file__).resolve().parents[1] / "uploads"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
+    (UPLOADS_ROOT / "menu").mkdir(parents=True, exist_ok=True)
     logger.info("Starting DineFlow API (env=%s)", settings.ENVIRONMENT)
     yield
     logger.info("Shutting down DineFlow API")
@@ -65,4 +71,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT)), name="uploads")
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
