@@ -1,5 +1,8 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-surface text-ink">
+  <div
+    class="flex min-h-screen flex-col bg-surface text-ink"
+    :class="{ 'pb-24': showCartPad }"
+  >
     <header class="border-b border-brand-100/80 bg-surface-elevated/80 backdrop-blur-sm">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <NuxtLink to="/" class="font-display text-2xl font-semibold tracking-tight text-brand-800">
@@ -74,6 +77,8 @@
     <footer class="border-t border-brand-100/80 py-6 text-center text-sm text-ink-subtle">
       © {{ year }} DineFlow
     </footer>
+
+    <FloatingCartBar />
   </div>
 </template>
 
@@ -83,6 +88,14 @@ const auth = useAuthStore()
 const cart = useCartStore()
 const mobileOpen = ref(false)
 const route = useRoute()
+
+const hiddenCartBarRoutes = new Set(['/cart', '/checkout'])
+
+const showCartPad = computed(() => {
+  if (cart.isEmpty) return false
+  const path = route.path.replace(/\/$/, '') || '/'
+  return !hiddenCartBarRoutes.has(path)
+})
 
 watch(() => route.path, () => {
   mobileOpen.value = false

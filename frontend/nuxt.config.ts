@@ -15,6 +15,8 @@ export default defineNuxtConfig({
     { path: '~/components/ui', pathPrefix: false },
     { path: '~/components/orders', pathPrefix: false },
     { path: '~/components/admin', pathPrefix: false },
+    { path: '~/components/menu', pathPrefix: false },
+    { path: '~/components/cart', pathPrefix: false },
   ],
 
   css: ['~/assets/css/main.css'],
