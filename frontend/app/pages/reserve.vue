@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import type { AvailableTable, Reservation } from '~/types/reservation'
+import type { AvailableTable, FloorTable, Reservation } from '~/types/reservation'
+import type { PlanTable } from '~/utils/floorplan'
+import { UNASSIGNED_ZONE } from '~/utils/floorplan'
 import {
   cancelReservation,
   createReservation,
@@ -30,6 +32,9 @@ const startsLocal = ref('')
 const minStart = ref('')
 const selectedTableId = ref<number | null>(null)
 const available = ref<AvailableTable[]>([])
+const floor = ref<FloorTable[]>([])
+const view = ref<'plan' | 'list'>('plan')
+const zoneFilter = ref<string | null>(null)
 const suggestions = ref<string[]>([])
 const searched = ref(false)
 const searching = ref(false)
@@ -42,7 +47,23 @@ const guestPhone = ref('')
 const lastBooked = ref<Reservation | null>(null)
 
 const partyValid = computed(() => Number.isInteger(partySize.value) && partySize.value >= 1 && partySize.value <= 20)
-const selectedTable = computed(() => available.value.find(t => t.id === selectedTableId.value) ?? null)
+const selectedTable = computed(() => floor.value.find(t => t.id === selectedTableId.value) ?? null)
+
+const zoneOf = (t: { zone?: string | null }) => t.zone || UNASSIGNED_ZONE
+// Zone chips: how many free tables each seating area has for the searched time and party.
+const zoneChips = computed(() => {
+  const map = new Map<string, number>()
+  for (const t of floor.value) map.set(zoneOf(t), (map.get(zoneOf(t)) ?? 0) + (t.state === 'AVAILABLE' ? 1 : 0))
+  const named = [...map.entries()].filter(([z]) => z !== UNASSIGNED_ZONE).sort((a, b) => a[0].localeCompare(b[0]))
+  const rest = map.has(UNASSIGNED_ZONE) ? [[UNASSIGNED_ZONE, map.get(UNASSIGNED_ZONE)!] as [string, number]] : []
+  // A single zone (or none) isn't worth a filter.
+  return named.length + rest.length > 1 ? [...named, ...rest] : []
+})
+const freeCount = computed(() => floor.value.filter(t => t.state === 'AVAILABLE').length)
+const planTables = computed<PlanTable[]>(() => floor.value.map(t => ({ ...t, shape: t.shape })))
+const listTables = computed(() =>
+  available.value.filter(t => !zoneFilter.value || zoneOf(t) === zoneFilter.value),
+)
 const startsIso = computed(() => (startsLocal.value ? localInputToIso(startsLocal.value) : ''))
 const endsIso = computed(() =>
   startsLocal.value ? new Date(new Date(startsLocal.value).getTime() + durationMinutes.value * 60000).toISOString() : '',
@@ -60,6 +81,7 @@ watchEffect(() => {
 watch([startsLocal, partySize, durationMinutes], () => {
   if (!searched.value) return
   available.value = []
+  floor.value = []
   suggestions.value = []
   selectedTableId.value = null
   searched.value = false
@@ -104,6 +126,8 @@ async function searchTables() {
       duration_minutes: durationMinutes.value,
     })
     available.value = result.tables
+    floor.value = result.floor ?? []
+    if (zoneFilter.value && !floor.value.some(t => zoneOf(t) === zoneFilter.value)) zoneFilter.value = null
     suggestions.value = result.suggested_times ?? []
     searched.value = true
     if (!result.tables.length) {
@@ -114,6 +138,7 @@ async function searchTables() {
   }
   catch (err) {
     available.value = []
+    floor.value = []
     suggestions.value = []
     error.value = err instanceof Error ? err.message : 'Could not check availability'
   }
@@ -155,6 +180,7 @@ async function bookTable() {
     ui.success(`Table ${reservation.table_number} reserved`)
     selectedTableId.value = null
     available.value = []
+    floor.value = []
     suggestions.value = []
     searched.value = false
     await loadMine()
@@ -246,32 +272,79 @@ function canCancel(r: Reservation) {
       </form>
     </section>
 
-    <section v-if="available.length" class="mt-6 rounded-2xl border border-brand-100 bg-surface-elevated p-5">
-      <h2 class="font-semibold text-ink">Available tables</h2>
-      <p class="mt-1 text-sm text-ink-muted">
-        Free on {{ formatWhen(startsIso) }} for {{ durationMinutes / 60 }}h. Select a table that fits your party.
-      </p>
-      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+    <section v-if="searched && floor.length" class="mt-6 rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="font-semibold text-ink">Choose your table</h2>
+          <p class="mt-1 text-sm text-ink-muted">
+            {{ freeCount }} of {{ floor.length }} tables free on {{ formatWhen(startsIso) }} for {{ durationMinutes / 60 }}h.
+            <template v-if="freeCount">Tap a green table to select it.</template>
+          </p>
+        </div>
+        <div class="inline-flex overflow-hidden rounded-lg border border-brand-200 text-sm font-medium" role="group" aria-label="Table view">
+          <button type="button" class="px-3 py-1.5" :class="view === 'plan' ? 'bg-brand-700 text-white' : 'bg-white text-brand-800 hover:bg-brand-50'" :aria-pressed="view === 'plan'" @click="view = 'plan'">Seating plan</button>
+          <button type="button" class="px-3 py-1.5" :class="view === 'list' ? 'bg-brand-700 text-white' : 'bg-white text-brand-800 hover:bg-brand-50'" :aria-pressed="view === 'list'" @click="view = 'list'">List</button>
+        </div>
+      </div>
+
+      <div v-if="zoneChips.length" class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Seating area">
         <button
-          v-for="table in available"
-          :key="table.id"
           type="button"
-          class="rounded-xl border-2 px-3 py-4 text-center transition"
-          :class="selectedTableId === table.id
-            ? 'border-brand-700 bg-brand-50 shadow-sm'
-            : 'border-brand-100 bg-white hover:border-brand-300'"
-          :aria-pressed="selectedTableId === table.id"
-          @click="selectedTableId = table.id"
+          class="rounded-full px-3 py-1.5 text-sm font-medium transition"
+          :class="!zoneFilter ? 'bg-brand-700 text-white' : 'bg-brand-100 text-brand-800 hover:bg-brand-200'"
+          :aria-pressed="!zoneFilter"
+          @click="zoneFilter = null"
         >
-          <p class="font-display text-lg font-semibold text-brand-900">{{ table.table_number }}</p>
-          <p class="text-xs text-ink-subtle">Seats {{ table.capacity }}</p>
+          Anywhere
         </button>
+        <button
+          v-for="[zone, free] in zoneChips"
+          :key="zone"
+          type="button"
+          class="rounded-full px-3 py-1.5 text-sm font-medium transition"
+          :class="zoneFilter === zone ? 'bg-brand-700 text-white' : free ? 'bg-brand-100 text-brand-800 hover:bg-brand-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+          :aria-pressed="zoneFilter === zone"
+          @click="zoneFilter = zone"
+        >
+          {{ zone }} <span class="opacity-70">· {{ free }} free</span>
+        </button>
+      </div>
+
+      <div class="mt-4">
+        <FloorPlan
+          v-if="view === 'plan'"
+          :tables="planTables"
+          :selected-id="selectedTableId"
+          :zone-filter="zoneFilter"
+          @select="selectedTableId = $event"
+        />
+        <div v-else>
+          <p v-if="!listTables.length" class="text-sm text-ink-muted">No free tables{{ zoneFilter ? ` in ${zoneFilter}` : '' }} at that time.</p>
+          <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <button
+              v-for="table in listTables"
+              :key="table.id"
+              type="button"
+              class="rounded-xl border-2 px-3 py-4 text-center transition"
+              :class="selectedTableId === table.id
+                ? 'border-brand-700 bg-brand-50 shadow-sm'
+                : 'border-brand-100 bg-white hover:border-brand-300'"
+              :aria-pressed="selectedTableId === table.id"
+              @click="selectedTableId = table.id"
+            >
+              <p class="font-display text-lg font-semibold text-brand-900">{{ table.table_number }}</p>
+              <p class="text-xs text-ink-subtle">Seats {{ table.capacity }}<template v-if="table.zone"> · {{ table.zone }}</template></p>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div v-if="selectedTable" class="mt-5 space-y-3 border-t border-brand-100 pt-5">
         <template v-if="auth.isAuthenticated">
           <p class="text-sm text-ink-muted">
-            Table {{ selectedTable.table_number }} · {{ formatTimeRange(startsIso, endsIso) }}
+            <strong class="text-ink">Table {{ selectedTable.table_number }}</strong>
+            <template v-if="selectedTable.zone"> · {{ selectedTable.zone }}</template>
+            · seats {{ selectedTable.capacity }} · {{ formatTimeRange(startsIso, endsIso) }}
           </p>
           <input v-model="guestName" required placeholder="Name for reservation" class="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
           <input v-model="guestPhone" placeholder="Phone" class="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
