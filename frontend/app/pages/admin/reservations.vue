@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import type { AdminTableAvailability, Reservation, ReservationStatus, SlotStatus } from '~/types/reservation'
+import type { PlanTable } from '~/utils/floorplan'
 import {
   createAdminReservation,
   extendAdminReservation,
@@ -212,6 +213,36 @@ const formTitle = computed(() => ({
 }[mode.value]))
 
 const selectedTable = computed(() => availability.value.find(t => t.id === form.table_id))
+
+// Pick from a list of tiles or from the seating plan (remembered per browser).
+const tableView = ref<'list' | 'plan'>('list')
+onMounted(() => {
+  try {
+    if (localStorage.getItem('dineflow_booking_table_view') === 'plan') tableView.value = 'plan'
+  }
+  catch { /* storage unavailable — default view */ }
+})
+watch(tableView, (v) => {
+  try {
+    localStorage.setItem('dineflow_booking_table_view', v)
+  }
+  catch { /* ignore */ }
+})
+
+const planTables = computed<PlanTable[]>(() =>
+  availability.value.map(t => ({
+    id: t.id,
+    table_number: t.table_number,
+    capacity: t.capacity,
+    zone: t.zone,
+    shape: t.shape,
+    pos_x: t.pos_x,
+    pos_y: t.pos_y,
+    state: t.slot_status,
+    selectable: t.available,
+    note: t.conflicts[0] ? `${t.conflicts[0].guest_name} ${formatTimeRange(t.conflicts[0].starts_at, t.conflicts[0].ends_at)}` : undefined,
+  })),
+)
 
 let checkSeq = 0
 async function runCheck() {
@@ -619,10 +650,16 @@ onMounted(async () => {
           </section>
 
           <section v-if="!scheduleLocked" class="space-y-3">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <h3 class="text-sm font-semibold text-ink">Table</h3>
               <span v-if="checking" class="text-xs text-ink-subtle">Checking availability…</span>
-              <span v-else-if="selectedTable" class="text-xs text-brand-700">Selected: {{ selectedTable.table_number }}</span>
+              <span v-else-if="selectedTable" class="text-xs text-brand-700">
+                Selected: {{ selectedTable.table_number }}<template v-if="selectedTable.zone"> · {{ selectedTable.zone }}</template>
+              </span>
+              <div class="inline-flex overflow-hidden rounded-lg border border-brand-200 text-xs font-medium" role="group" aria-label="Table picker view">
+                <button type="button" class="px-2.5 py-1" :class="tableView === 'list' ? 'bg-brand-700 text-white' : 'bg-white hover:bg-brand-50'" :aria-pressed="tableView === 'list'" @click="tableView = 'list'">List</button>
+                <button type="button" class="px-2.5 py-1" :class="tableView === 'plan' ? 'bg-brand-700 text-white' : 'bg-white hover:bg-brand-50'" :aria-pressed="tableView === 'plan'" @click="tableView = 'plan'">Plan</button>
+              </div>
             </div>
             <p v-if="mode !== 'walkin'" class="text-xs text-ink-subtle">
               Status shown is for the chosen date, time and duration — not the table's status right now.
@@ -633,7 +670,14 @@ onMounted(async () => {
             <p v-if="tableHint" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{{ tableHint }}</p>
             <p v-if="availError" class="text-sm text-red-600">{{ availError }}</p>
 
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <FloorPlan
+              v-if="tableView === 'plan' && availability.length"
+              :tables="planTables"
+              :selected-id="form.table_id || null"
+              @select="id => { const t = availability.find(x => x.id === id); if (t) pickTable(t) }"
+            />
+
+            <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <button
                 v-for="t in availability"
                 :key="t.id"
@@ -646,7 +690,7 @@ onMounted(async () => {
               >
                 <div class="flex items-baseline justify-between gap-2">
                   <span class="font-display text-lg font-semibold text-brand-900">{{ t.table_number }}</span>
-                  <span class="text-xs text-ink-subtle">Seats {{ t.capacity }}</span>
+                  <span class="text-xs text-ink-subtle">Seats {{ t.capacity }}<template v-if="t.zone"> · {{ t.zone }}</template></span>
                 </div>
                 <p class="mt-1 text-xs font-semibold uppercase tracking-wide"
                    :class="t.available ? 'text-green-800' : 'text-ink-muted'">

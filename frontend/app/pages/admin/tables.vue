@@ -4,17 +4,34 @@ import type { RestaurantTable } from '~/types/menu'
 import type { TableReservationBrief } from '~/types/reservation'
 import { fetchAdminTables, updateTableStatus } from '~/services/admin'
 import { extendAdminReservation } from '~/services/reservations'
+import type { PlanTable } from '~/utils/floorplan'
 import { formatTimeRange } from '~/utils/datetime'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
 const admin = useAdminStore()
+const auth = useAuthStore()
 const ui = useUiStore()
 const tables = ref<RestaurantTable[]>([])
 const loading = ref(true)
 const error = ref('')
 const busyId = ref<number | null>(null)
 const filter = ref<string>('ALL')
+const view = ref<'cards' | 'plan'>('cards')
+const selectedId = ref<number | null>(null)
+
+onMounted(() => {
+  try {
+    if (localStorage.getItem('dineflow_tables_view') === 'plan') view.value = 'plan'
+  }
+  catch { /* storage unavailable — default view */ }
+})
+watch(view, (v) => {
+  try {
+    localStorage.setItem('dineflow_tables_view', v)
+  }
+  catch { /* ignore */ }
+})
 
 async function load(silent = false) {
   await admin.initialize()
@@ -45,6 +62,25 @@ const counts = computed(() => {
 
 const shown = computed(() =>
   filter.value === 'ALL' ? tables.value : tables.value.filter(t => t.status === filter.value),
+)
+
+// The plan always shows every table (colour = live status); the status chips filter the cards.
+const planTables = computed<PlanTable[]>(() =>
+  tables.value.map(t => ({
+    id: t.id,
+    table_number: t.table_number,
+    capacity: t.capacity,
+    zone: t.zone,
+    shape: t.shape,
+    pos_x: t.pos_x,
+    pos_y: t.pos_y,
+    state: t.status,
+    selectable: true,
+    note: (t.reservations ?? []).find(r => r.blocking)?.guest_name,
+  })),
+)
+const cardTables = computed(() =>
+  view.value === 'plan' ? tables.value.filter(t => t.id === selectedId.value) : shown.value,
 )
 
 function blocking(table: RestaurantTable): TableReservationBrief[] {
@@ -144,12 +180,34 @@ async function setStatus(table: RestaurantTable, status: 'AVAILABLE' | 'CLEANING
         <h1 class="font-display text-2xl font-semibold text-brand-900">Tables</h1>
         <p class="text-sm text-ink-muted">Live floor view — reserved and occupied follow your bookings</p>
       </div>
-      <NuxtLink
-        to="/admin/reservations"
-        class="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
-      >
-        Manage reservations
-      </NuxtLink>
+      <div class="flex flex-wrap gap-2">
+        <div class="inline-flex overflow-hidden rounded-lg border border-brand-200 text-sm font-medium" role="group" aria-label="View">
+          <button
+            v-for="v in (['cards', 'plan'] as const)"
+            :key="v"
+            type="button"
+            class="px-3 py-2 capitalize"
+            :class="view === v ? 'bg-brand-700 text-white' : 'bg-white text-brand-800 hover:bg-brand-50'"
+            :aria-pressed="view === v"
+            @click="view = v"
+          >
+            {{ v === 'plan' ? 'Floor plan' : 'Cards' }}
+          </button>
+        </div>
+        <NuxtLink
+          v-if="auth.isAdmin"
+          to="/admin/floor-plan"
+          class="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+        >
+          Edit tables &amp; layout
+        </NuxtLink>
+        <NuxtLink
+          to="/admin/reservations"
+          class="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+        >
+          Manage reservations
+        </NuxtLink>
+      </div>
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2">
@@ -177,11 +235,25 @@ async function setStatus(table: RestaurantTable, status: 'AVAILABLE' | 'CLEANING
 
     <div v-else-if="loading" class="mt-6 h-40 animate-pulse rounded-2xl bg-brand-100/60" />
 
-    <EmptyState v-else-if="!shown.length" class="mt-6" title="No tables here" description="Try another filter." />
+    <EmptyState
+      v-else-if="!tables.length"
+      class="mt-6"
+      title="No tables yet"
+      description="Add your tables and arrange them on the floor plan."
+    >
+      <NuxtLink v-if="auth.isAdmin" to="/admin/floor-plan" class="font-semibold text-brand-700 hover:underline">Set up tables</NuxtLink>
+    </EmptyState>
 
-    <div v-else class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div v-else-if="view === 'plan'" class="mt-6">
+      <FloorPlan :tables="planTables" :selected-id="selectedId" @select="selectedId = $event" />
+      <p v-if="!selectedId" class="mt-3 text-sm text-ink-muted">Select a table to see its bookings and actions.</p>
+    </div>
+
+    <EmptyState v-if="view === 'cards' && tables.length && !shown.length" class="mt-6" title="No tables here" description="Try another filter." />
+
+    <div v-if="cardTables.length" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <article
-        v-for="table in shown"
+        v-for="table in cardTables"
         :key="table.id"
         class="flex flex-col rounded-2xl border-2 p-5"
         :class="statusColor(table.status)"
@@ -190,7 +262,9 @@ async function setStatus(table: RestaurantTable, status: 'AVAILABLE' | 'CLEANING
           <p class="text-2xl font-bold">Table {{ table.table_number }}</p>
           <span class="text-sm">Seats {{ table.capacity }}</span>
         </div>
-        <p class="mt-1 text-xs font-semibold uppercase tracking-wide">{{ table.status }}</p>
+        <p class="mt-1 text-xs font-semibold uppercase tracking-wide">
+          {{ table.status }}<template v-if="table.zone"> · {{ table.zone }}</template>
+        </p>
 
         <div class="mt-3 flex-1 space-y-2 text-sm">
           <div v-for="r in blocking(table)" :key="r.id" class="rounded-lg bg-white/70 px-3 py-2">

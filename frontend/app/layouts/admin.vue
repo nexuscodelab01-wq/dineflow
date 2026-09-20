@@ -8,16 +8,19 @@ const mobileOpen = ref(false)
 const route = useRoute()
 const loggingOut = ref(false)
 
-const nav = [
+const allNav = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/menu', label: 'Menu' },
   { to: '/admin/orders', label: 'Orders' },
   { to: '/admin/kitchen', label: 'Kitchen' },
   { to: '/admin/tables', label: 'Tables' },
+  { to: '/admin/floor-plan', label: 'Floor plan', adminOnly: true },
   { to: '/admin/reservations', label: 'Reservations' },
   { to: '/admin/customers', label: 'Customers' },
-  { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin/settings', label: 'Settings', adminOnly: true },
 ]
+// Staff can run the floor; menu edits, tables and settings need an admin.
+const nav = computed(() => allNav.filter(item => !item.adminOnly || auth.isAdmin))
 
 watch(() => route.path, () => {
   mobileOpen.value = false

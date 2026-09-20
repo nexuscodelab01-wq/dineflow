@@ -64,8 +64,44 @@ export function fetchKitchenBoard(restaurantId: number) {
   return apiFetch<KitchenBoard>(q(restaurantId, '/kitchen'))
 }
 
-export function fetchAdminTables(restaurantId: number) {
-  return apiFetch<RestaurantTable[]>(q(restaurantId, '/tables'))
+export function fetchAdminTables(restaurantId: number, includeInactive = false) {
+  return apiFetch<RestaurantTable[]>(q(restaurantId, `/tables${includeInactive ? '?include_inactive=true' : ''}`))
+}
+
+export type TablePayload = {
+  table_number: string
+  capacity: number
+  zone?: string | null
+  shape?: 'ROUND' | 'SQUARE' | 'RECT'
+  pos_x?: number | null
+  pos_y?: number | null
+}
+
+export function createTable(restaurantId: number, payload: TablePayload) {
+  return apiFetch<RestaurantTable>(q(restaurantId, '/tables'), {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, restaurant_id: restaurantId }),
+  })
+}
+
+/** Only the fields you pass change; send `zone: null` to clear the zone. */
+export function updateTable(restaurantId: number, tableId: number, payload: Partial<TablePayload> & { is_active?: boolean }) {
+  return apiFetch<RestaurantTable>(q(restaurantId, `/tables/${tableId}`), {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteTable(restaurantId: number, tableId: number) {
+  return apiFetch<void>(q(restaurantId, `/tables/${tableId}`), { method: 'DELETE' })
+}
+
+/** Save floor-plan positions for several tables at once. */
+export function saveTableLayout(restaurantId: number, items: { id: number, pos_x: number, pos_y: number }[]) {
+  return apiFetch<RestaurantTable[]>(q(restaurantId, '/tables/layout'), {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  })
 }
 
 export type TableStatusResult = {
