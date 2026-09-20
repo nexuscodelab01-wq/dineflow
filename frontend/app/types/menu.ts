@@ -93,6 +93,14 @@ export type RestaurantTable = {
   table_number: string
   capacity: number
   status: string
+  /** Seating area, e.g. "Window", "Bar", "Patio". */
+  zone?: string | null
+  shape?: 'ROUND' | 'SQUARE' | 'RECT'
+  /** Floor-plan position as a percentage of the plan's width/height; null = not placed yet. */
+  pos_x?: number | null
+  pos_y?: number | null
+  /** False = out of service (hidden from bookings, history kept). */
+  is_active?: boolean
   /** Live and upcoming (next 24h) bookings — only returned by the admin tables endpoint. */
   reservations?: import('~/types/reservation').TableReservationBrief[]
 }

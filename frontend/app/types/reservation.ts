@@ -34,7 +34,21 @@ export type AvailableTable = {
   id: number
   table_number: string
   capacity: number
+  zone?: string | null
   status: string
+}
+
+/** A table on the customer seating plan, with its state for the searched time. */
+export type FloorTable = {
+  id: number
+  table_number: string
+  capacity: number
+  zone?: string | null
+  shape?: 'ROUND' | 'SQUARE' | 'RECT'
+  pos_x?: number | null
+  pos_y?: number | null
+  /** AVAILABLE, UNAVAILABLE (taken at that time) or TOO_SMALL (for the party). */
+  state: 'AVAILABLE' | 'UNAVAILABLE' | 'TOO_SMALL'
 }
 
 export type AvailabilityResponse = {
@@ -42,6 +56,8 @@ export type AvailabilityResponse = {
   ends_at: string
   party_size: number
   tables: AvailableTable[]
+  /** Every active table with its state, for drawing the seating plan. */
+  floor: FloorTable[]
   /** Nearby start times with a free table; only present when `tables` is empty. */
   suggested_times: string[]
 }
@@ -62,6 +78,10 @@ export type AdminTableAvailability = {
   id: number
   table_number: string
   capacity: number
+  zone?: string | null
+  shape?: 'ROUND' | 'SQUARE' | 'RECT'
+  pos_x?: number | null
+  pos_y?: number | null
   floor_status: string
   slot_status: SlotStatus
   available: boolean
