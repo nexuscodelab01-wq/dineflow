@@ -123,6 +123,53 @@ def _backfill_demo_reservation(db) -> bool:
     return True
 
 
+# Demo floor plan: table -> (zone, shape, x%, y%). Coordinates are percentages of the plan's
+# width/height (top-left origin), laid out like a small dining room.
+DEMO_LAYOUT: dict[str, tuple[str, str, float, float]] = {
+    "T1": ("Window", "SQUARE", 10, 16),
+    "T2": ("Window", "SQUARE", 27, 16),
+    "T3": ("Window", "SQUARE", 44, 16),
+    "T4": ("Center", "ROUND", 24, 46),
+    "T5": ("Center", "ROUND", 44, 46),
+    "T6": ("Center", "RECT", 34, 74),
+    "T7": ("Booth", "RECT", 74, 16),
+    "T8": ("Booth", "RECT", 74, 40),
+    "P1": ("Patio", "ROUND", 62, 70),
+    "P2": ("Patio", "ROUND", 80, 70),
+    "B1": ("Bar", "RECT", 90, 90),
+}
+
+
+def _backfill_table_layout(db) -> int:
+    """Give tables that were created before floor plans existed a zone, shape and position.
+
+    Only touches tables that have never been placed (pos_x is NULL); anything staff have
+    arranged is left alone. Known demo tables get the demo layout, others are gridded.
+    """
+    updated = 0
+    unplaced = list(
+        db.scalars(
+            select(RestaurantTable)
+            .where(RestaurantTable.pos_x.is_(None))
+            .order_by(RestaurantTable.restaurant_id, RestaurantTable.table_number)
+        ).all()
+    )
+    extra_index: dict[int, int] = {}
+    for table in unplaced:
+        layout = DEMO_LAYOUT.get(table.table_number)
+        if layout:
+            zone, shape, x, y = layout
+            table.zone = table.zone or zone
+            table.shape = shape
+            table.pos_x, table.pos_y = x, y
+        else:
+            i = extra_index.get(table.restaurant_id, 0)
+            extra_index[table.restaurant_id] = i + 1
+            table.pos_x, table.pos_y = 8 + (i % 6) * 15, 92 - (i // 6) * 12
+        updated += 1
+    return updated
+
+
 def seed() -> None:
     db = SessionLocal()
     try:
@@ -133,12 +180,14 @@ def seed() -> None:
         if db.scalar(select(Restaurant).limit(1)):
             filled = _backfill_menu_images(db)
             reserved = _backfill_demo_reservation(db)
-            if filled or reserved:
+            laid_out = _backfill_table_layout(db)
+            if filled or reserved or laid_out:
                 db.commit()
                 logger.info(
-                    "Seed backfill complete (images=%s reservation=%s)",
+                    "Seed backfill complete (images=%s reservation=%s tables=%s)",
                     filled,
                     reserved,
+                    laid_out,
                 )
             else:
                 logger.info("Seed skipped — data already exists")
@@ -350,11 +399,16 @@ def seed() -> None:
             ("T1", 2), ("T2", 2), ("T3", 4), ("T4", 4), ("T5", 4),
             ("T6", 6), ("T7", 6), ("T8", 8), ("P1", 2), ("P2", 4), ("B1", 10),
         ]:
+            zone, shape, x, y = DEMO_LAYOUT[number]
             table = RestaurantTable(
                 restaurant_id=restaurant.id,
                 table_number=number,
                 capacity=capacity,
                 status=TableStatus.AVAILABLE,
+                zone=zone,
+                shape=shape,
+                pos_x=x,
+                pos_y=y,
             )
             db.add(table)
             db.flush()

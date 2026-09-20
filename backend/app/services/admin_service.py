@@ -36,6 +36,7 @@ from app.schemas.admin import (
     OrderStatusUpdate,
     RestaurantSettingsUpdate,
     TableCreate,
+    TableLayoutUpdate,
     TableRead,
     TableStatusUpdate,
     TableUpdate,
@@ -260,21 +261,28 @@ class AdminService:
         )
 
     # Tables
-    def list_tables(self, restaurant_id: int) -> list[TableRead]:
+    def list_tables(self, restaurant_id: int, include_inactive: bool = False) -> list[TableRead]:
         return [
             TableRead(
                 id=table.id,
                 table_number=table.table_number,
                 capacity=table.capacity,
                 status=table.status,
+                zone=table.zone,
+                shape=table.shape,
+                pos_x=table.pos_x,
+                pos_y=table.pos_y,
+                is_active=table.is_active,
                 reservations=reservations,
             )
-            for table, reservations in self.reservations.table_overview(restaurant_id)
+            for table, reservations in self.reservations.table_overview(
+                restaurant_id, include_inactive=include_inactive
+            )
         ]
 
     def create_table(self, data: TableCreate) -> TableRead:
         self._ensure_table_number_free(data.restaurant_id, data.table_number)
-        table = RestaurantTable(**data.model_dump())
+        table = RestaurantTable(**{**data.model_dump(), "shape": data.shape.value})
         self.tables.create(table)
         self.db.commit()
         return TableRead.model_validate(table, from_attributes=True)
@@ -282,12 +290,51 @@ class AdminService:
     def update_table(self, table_id: int, data: TableUpdate, restaurant_id: int) -> TableRead:
         table = self._get_table(table_id, restaurant_id)
         payload = data.model_dump(exclude_unset=True)
+        for required in ("table_number", "capacity", "shape", "is_active"):
+            if required in payload and payload[required] is None:
+                raise AppError(f"{required.replace('_', ' ').capitalize()} can't be empty")
+        if "shape" in payload:
+            payload["shape"] = payload["shape"].value
         if "table_number" in payload and payload["table_number"] != table.table_number:
             self._ensure_table_number_free(restaurant_id, payload["table_number"])
+
+        # Don't pull the rug from under guests who are booked or seated.
+        if "capacity" in payload and payload["capacity"] < table.capacity:
+            too_big = self.reservations.has_upcoming_bookings(table.id, min_party_size=payload["capacity"])
+            if too_big:
+                names = ", ".join(f"{r.guest_name} (party of {r.party_size})" for r in too_big)
+                raise ConflictError(
+                    f"Table {table.table_number} can't seat fewer than its booked guests: {names}. "
+                    "Move or change those bookings first."
+                )
+        if payload.get("is_active") is False and table.is_active:
+            live = self.reservations.has_upcoming_bookings(table.id)
+            if live:
+                names = ", ".join(r.guest_name for r in live)
+                raise ConflictError(
+                    f"Table {table.table_number} still has active bookings ({names}). "
+                    "Move or cancel them before taking the table out of service."
+                )
         for key, value in payload.items():
             setattr(table, key, value)
         self.db.commit()
         return TableRead.model_validate(table, from_attributes=True)
+
+    def update_table_layout(self, restaurant_id: int, data: TableLayoutUpdate) -> list[TableRead]:
+        """Save floor-plan positions for many tables in one go (all-or-nothing)."""
+        wanted = {item.id: item for item in data.items}
+        rows = self.db.scalars(
+            select(RestaurantTable).where(
+                RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.id.in_(wanted)
+            )
+        ).all()
+        if len(rows) != len(wanted):
+            raise NotFoundError("Table not found")
+        for table in rows:
+            table.pos_x = wanted[table.id].pos_x
+            table.pos_y = wanted[table.id].pos_y
+        self.db.commit()
+        return [TableRead.model_validate(t, from_attributes=True) for t in rows]
 
     def update_table_status(
         self, table_id: int, data: TableStatusUpdate, restaurant_id: int
@@ -307,7 +354,10 @@ class AdminService:
     def delete_table(self, table_id: int, restaurant_id: int) -> None:
         table = self._get_table(table_id, restaurant_id)
         if self.db.scalar(select(Reservation.id).where(Reservation.table_id == table.id).limit(1)) is not None:
-            raise ConflictError("This table has reservations on record and can't be deleted")
+            raise ConflictError(
+                f"Table {table.table_number} has reservations on record, so it can't be deleted. "
+                "Take it out of service instead — its history is kept."
+            )
         self.tables.delete(table)
         self.db.commit()
 

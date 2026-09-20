@@ -78,6 +78,7 @@ class AvailableTableRead(BaseModel):
     id: int
     table_number: str
     capacity: int
+    zone: str | None = None
     status: str
 
 
@@ -109,6 +110,10 @@ class AdminTableAvailability(BaseModel):
     id: int
     table_number: str
     capacity: int
+    zone: str | None = None
+    shape: str = "SQUARE"
+    pos_x: float | None = None
+    pos_y: float | None = None
     floor_status: str
     # AVAILABLE | RESERVED | OCCUPIED | CLEANING | TOO_SMALL — for the requested slot, not "now".
     slot_status: str
@@ -116,11 +121,27 @@ class AdminTableAvailability(BaseModel):
     conflicts: list[ReservationConflict] = Field(default_factory=list)
 
 
+class FloorTableRead(BaseModel):
+    """A table on the customer-facing floor plan, with its state for the searched slot."""
+
+    id: int
+    table_number: str
+    capacity: int
+    zone: str | None = None
+    shape: str = "SQUARE"
+    pos_x: float | None = None
+    pos_y: float | None = None
+    # AVAILABLE | UNAVAILABLE (taken at that time) | TOO_SMALL (for the party)
+    state: str
+
+
 class AvailabilityResponse(BaseModel):
     starts_at: datetime
     ends_at: datetime
     party_size: int
     tables: list[AvailableTableRead]
+    # Every active table with its state, so the client can draw the seating plan.
+    floor: list[FloorTableRead] = Field(default_factory=list)
     # Nearby start times that do have a free table (only filled when `tables` is empty).
     suggested_times: list[datetime] = Field(default_factory=list)
 

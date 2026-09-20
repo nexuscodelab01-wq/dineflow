@@ -28,6 +28,7 @@ from app.schemas.admin import (
     OrderStatusUpdate,
     RestaurantSettingsUpdate,
     TableCreate,
+    TableLayoutUpdate,
     TableRead,
     TableStatusUpdate,
     TableUpdate,
@@ -398,8 +399,22 @@ def list_tables(
     _: StaffUser,
     restaurant_id: RestaurantId,
     service: Annotated[AdminService, Depends(get_admin_service)],
+    include_inactive: bool = Query(default=False, description="Also return tables taken out of service"),
 ) -> list[TableRead]:
-    return service.list_tables(restaurant_id)
+    return service.list_tables(restaurant_id, include_inactive=include_inactive)
+
+
+@router.put("/tables/layout", response_model=list[TableRead])
+def update_table_layout(
+    data: TableLayoutUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> list[TableRead]:
+    try:
+        return service.update_table_layout(restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.post("/tables", response_model=TableRead, status_code=status.HTTP_201_CREATED)

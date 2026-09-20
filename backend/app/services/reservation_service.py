@@ -27,6 +27,7 @@ from app.schemas.reservation import (
     AdminTableAvailability,
     AvailabilityResponse,
     AvailableTableRead,
+    FloorTableRead,
     ReservationConflict,
     ReservationCreate,
     ReservationExtend,
@@ -148,6 +149,7 @@ class ReservationService:
         tables = self.db.scalars(
             select(RestaurantTable).where(
                 RestaurantTable.restaurant_id == restaurant_id,
+                RestaurantTable.is_active.is_(True),
                 RestaurantTable.status.in_([TableStatus.AVAILABLE, TableStatus.RESERVED]),
             )
         ).all()
@@ -174,6 +176,24 @@ class ReservationService:
         ends_at = starts_at + timedelta(minutes=duration_minutes)
 
         tables = self._available_tables(restaurant_id, starts_at, ends_at, party_size)
+        available_ids = {t.id for t in tables}
+        floor = [
+            FloorTableRead(
+                id=t.id,
+                table_number=t.table_number,
+                capacity=t.capacity,
+                zone=t.zone,
+                shape=t.shape,
+                pos_x=t.pos_x,
+                pos_y=t.pos_y,
+                state=(
+                    "TOO_SMALL"
+                    if t.capacity < party_size
+                    else "AVAILABLE" if t.id in available_ids else "UNAVAILABLE"
+                ),
+            )
+            for t in self._active_tables(restaurant_id)
+        ]
         suggestions = (
             [] if tables else self._suggest_times(restaurant_id, starts_at, party_size, duration_minutes)
         )
@@ -186,10 +206,12 @@ class ReservationService:
                     id=table.id,
                     table_number=table.table_number,
                     capacity=table.capacity,
+                    zone=table.zone,
                     status=TableStatus.AVAILABLE.value,
                 )
                 for table in tables
             ],
+            floor=floor,
             suggested_times=suggestions,
         )
 
@@ -208,11 +230,7 @@ class ReservationService:
         starts_at = self._ensure_aware(starts_at)
         ends_at = starts_at + timedelta(minutes=duration_minutes)
         buffer = self._buffer(restaurant_id)
-        tables = self.db.scalars(
-            select(RestaurantTable)
-            .where(RestaurantTable.restaurant_id == restaurant_id)
-            .order_by(RestaurantTable.table_number)
-        ).all()
+        tables = self._active_tables(restaurant_id)
 
         results: list[AdminTableAvailability] = []
         for table in tables:
@@ -243,6 +261,10 @@ class ReservationService:
                     id=table.id,
                     table_number=table.table_number,
                     capacity=table.capacity,
+                    zone=table.zone,
+                    shape=table.shape,
+                    pos_x=table.pos_x,
+                    pos_y=table.pos_y,
                     floor_status=_status_value(table.status),
                     slot_status=slot_status,
                     available=slot_status == TableStatus.AVAILABLE.value,
@@ -284,6 +306,8 @@ class ReservationService:
         table = self.db.get(RestaurantTable, data.table_id)
         if table is None or table.restaurant_id != restaurant_id:
             raise AppError("Invalid table for this restaurant")
+        if not table.is_active:
+            raise AppError(f"Table {table.table_number} is not in service")
         if table.capacity < data.party_size:
             raise AppError("Table capacity is too small for this party")
 
@@ -541,6 +565,8 @@ class ReservationService:
             table = self.db.get(RestaurantTable, table_id)
             if table is None or table.restaurant_id != restaurant_id:
                 raise AppError("Invalid table for this restaurant")
+            if not table.is_active and table.id != reservation.table_id:
+                raise AppError(f"Table {table.table_number} is not in service")
             if table.capacity < party_size:
                 raise AppError("Table capacity is too small for this party")
             if starts_at != reservation.starts_at:
@@ -645,18 +671,14 @@ class ReservationService:
         table.status = target
         return cancelled, completed
 
-    def table_overview(self, restaurant_id: int) -> list[tuple[RestaurantTable, list[TableReservationBrief]]]:
+    def table_overview(
+        self, restaurant_id: int, include_inactive: bool = False
+    ) -> list[tuple[RestaurantTable, list[TableReservationBrief]]]:
         """Tables plus their live/upcoming (next 24h) reservations, for the floor dashboard."""
         self.refresh_floor_status(restaurant_id)
         now = _utcnow()
         horizon = now + timedelta(minutes=NEAR_TERM_MINUTES)
-        tables = list(
-            self.db.scalars(
-                select(RestaurantTable)
-                .where(RestaurantTable.restaurant_id == restaurant_id)
-                .order_by(RestaurantTable.table_number)
-            ).all()
-        )
+        tables = self._active_tables(restaurant_id, include_inactive=include_inactive)
         rows = self.db.scalars(
             select(Reservation)
             .where(
@@ -812,6 +834,7 @@ class ReservationService:
             select(RestaurantTable)
             .where(
                 RestaurantTable.restaurant_id == restaurant_id,
+                RestaurantTable.is_active.is_(True),
                 RestaurantTable.capacity >= party_size,
             )
             .order_by(RestaurantTable.capacity, RestaurantTable.table_number)
@@ -909,6 +932,19 @@ class ReservationService:
     def _buffer(self, restaurant_id: int) -> timedelta:
         restaurant = self.restaurants.get_by_id(restaurant_id)
         return timedelta(minutes=restaurant.reservation_buffer_minutes if restaurant else 0)
+
+    def _active_tables(self, restaurant_id: int, include_inactive: bool = False) -> list[RestaurantTable]:
+        stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id)
+        if not include_inactive:
+            stmt = stmt.where(RestaurantTable.is_active.is_(True))
+        return list(self.db.scalars(stmt.order_by(RestaurantTable.table_number)).all())
+
+    def has_upcoming_bookings(self, table_id: int, min_party_size: int | None = None) -> list[Reservation]:
+        """Active bookings (not yet finished) on a table, optionally only those needing more seats."""
+        rows = self._active_for_table(table_id)
+        if min_party_size is not None:
+            rows = [r for r in rows if r.party_size > min_party_size]
+        return rows
 
     def _seated_on(self, table_id: int) -> list[Reservation]:
         return list(

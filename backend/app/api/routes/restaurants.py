@@ -41,7 +41,9 @@ def list_tables(
         raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
 
     ReservationService(db).refresh_floor_status(restaurant.id)
-    stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant.id)
+    stmt = select(RestaurantTable).where(
+        RestaurantTable.restaurant_id == restaurant.id, RestaurantTable.is_active.is_(True)
+    )
     if available_only:
         from app.models.enums import TableStatus
 
@@ -53,6 +55,10 @@ def list_tables(
             "id": table.id,
             "table_number": table.table_number,
             "capacity": table.capacity,
+            "zone": table.zone,
+            "shape": table.shape,
+            "pos_x": table.pos_x,
+            "pos_y": table.pos_y,
             "status": table.status.value if hasattr(table.status, "value") else str(table.status),
         }
         for table in tables

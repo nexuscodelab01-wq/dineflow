@@ -3,9 +3,9 @@
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import OrderStatus, OrderType, TableStatus
+from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderRead
 from app.schemas.reservation import TableReservationBrief
@@ -124,16 +124,69 @@ class AdminOrderFilters(BaseModel):
     page_size: int = 20
 
 
+def _clean_zone(value: str | None) -> str | None:
+    value = (value or "").strip()
+    return value or None
+
+
 class TableCreate(BaseModel):
     restaurant_id: int
     table_number: str = Field(min_length=1, max_length=20)
     capacity: int = Field(ge=1, le=20)
-    status: TableStatus = TableStatus.AVAILABLE
+    zone: str | None = Field(default=None, max_length=50)
+    shape: TableShape = TableShape.SQUARE
+    pos_x: float | None = Field(default=None, ge=0, le=100)
+    pos_y: float | None = Field(default=None, ge=0, le=100)
+
+    @field_validator("table_number")
+    @classmethod
+    def _strip_number(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Table name can't be blank")
+        return value
+
+    @field_validator("zone")
+    @classmethod
+    def _strip_zone(cls, value: str | None) -> str | None:
+        return _clean_zone(value)
 
 
 class TableUpdate(BaseModel):
     table_number: str | None = Field(default=None, min_length=1, max_length=20)
     capacity: int | None = Field(default=None, ge=1, le=20)
+    zone: str | None = Field(default=None, max_length=50)  # send null to clear
+    shape: TableShape | None = None
+    pos_x: float | None = Field(default=None, ge=0, le=100)
+    pos_y: float | None = Field(default=None, ge=0, le=100)
+    is_active: bool | None = None
+
+    @field_validator("table_number")
+    @classmethod
+    def _strip_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Table name can't be blank")
+        return value
+
+    @field_validator("zone")
+    @classmethod
+    def _strip_zone(cls, value: str | None) -> str | None:
+        return _clean_zone(value)
+
+
+class TableLayoutItem(BaseModel):
+    id: int
+    pos_x: float = Field(ge=0, le=100)
+    pos_y: float = Field(ge=0, le=100)
+
+
+class TableLayoutUpdate(BaseModel):
+    """Positions for many tables at once (saving a floor-plan drag session)."""
+
+    items: list[TableLayoutItem] = Field(min_length=1)
 
 
 class TableStatusUpdate(BaseModel):
@@ -143,10 +196,17 @@ class TableStatusUpdate(BaseModel):
 
 
 class TableRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     table_number: str
     capacity: int
     status: TableStatus
+    zone: str | None = None
+    shape: str = "SQUARE"
+    pos_x: float | None = None
+    pos_y: float | None = None
+    is_active: bool = True
     reservations: list[TableReservationBrief] = Field(default_factory=list)
 
 

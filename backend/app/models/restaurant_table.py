@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -30,6 +30,15 @@ class RestaurantTable(TimestampMixin, Base):
     status: Mapped[TableStatus] = mapped_column(
         Enum(TableStatus, name="table_status"), default=TableStatus.AVAILABLE, nullable=False
     )
+    # Seating area ("Window", "Bar", "Patio"…), free text so each restaurant names its own.
+    zone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # ROUND | SQUARE | RECT — how the table is drawn on the floor plan.
+    shape: Mapped[str] = mapped_column(String(10), default="SQUARE", server_default="SQUARE", nullable=False)
+    # Floor-plan position as a percentage of the plan's width/height; NULL = not placed yet.
+    pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Retired tables are hidden and can't be booked, but keep their reservation history.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="tables")
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="table")

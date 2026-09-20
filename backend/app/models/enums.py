@@ -34,6 +34,12 @@ class TableStatus(str, enum.Enum):
     CLEANING = "CLEANING"
 
 
+class TableShape(str, enum.Enum):
+    ROUND = "ROUND"
+    SQUARE = "SQUARE"
+    RECT = "RECT"
+
+
 class ReservationStatus(str, enum.Enum):
     HELD = "HELD"
     CONFIRMED = "CONFIRMED"
