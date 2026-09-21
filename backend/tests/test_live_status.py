@@ -25,11 +25,11 @@ class FakeRequest:
 @pytest.fixture
 def announced(monkeypatch):
     """Every event published during the test, as (topic, type, data)."""
-    from app.services import admin_service, order_service, table_session_service
+    from app.services import admin_service, kitchen_service, order_service, table_session_service
 
     calls = []
     spy = lambda db, topic, event_type, data=None: calls.append((topic, event_type, data or {}))  # noqa: E731
-    for module in (rt, admin_service, order_service, table_session_service):   # each imports publish by name
+    for module in (rt, admin_service, kitchen_service, order_service, table_session_service):   # each imports publish by name
         monkeypatch.setattr(module, "publish", spy)
     return calls
 
