@@ -25,6 +25,11 @@ export type OrderItem = {
   unit_price: string
   line_total: string
   special_instructions?: string | null
+  /** KITCHEN, BAR or DESSERT: the screen that makes it. */
+  station?: string
+  /** NEW until its station bumps it, then READY. */
+  status?: 'NEW' | 'READY'
+  ready_at?: string | null
   modifiers: OrderItemModifier[]
 }
 

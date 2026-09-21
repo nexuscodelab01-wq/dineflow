@@ -64,6 +64,8 @@ export type MenuItem = {
   is_vegetarian: boolean
   is_spicy: boolean
   is_popular: boolean
+  /** Which kitchen screen makes it: KITCHEN, BAR or DESSERT. */
+  station?: string
 }
 
 export type MenuItemDetail = MenuItem & {

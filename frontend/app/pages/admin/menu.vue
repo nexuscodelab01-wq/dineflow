@@ -9,6 +9,7 @@ import {
   updateMenuItem,
   uploadMenuImage,
 } from '~/services/admin'
+import { STATIONS } from '~/utils/kitchen'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
 
@@ -35,6 +36,7 @@ const form = reactive({
   price: '',
   category_id: 0,
   image_url: '',
+  station: 'KITCHEN',
   is_available: true,
   is_vegetarian: false,
   is_spicy: false,
@@ -73,6 +75,7 @@ function resetFormDefaults() {
     price: '',
     category_id: categories.value[0]?.id || 0,
     image_url: '',
+    station: 'KITCHEN',
     is_available: true,
     is_vegetarian: false,
     is_spicy: false,
@@ -97,6 +100,7 @@ function openEdit(item: MenuItemDetail) {
     price: item.price,
     category_id: item.category_id,
     image_url: item.image_url || '',
+    station: item.station || 'KITCHEN',
     is_available: item.is_available,
     is_vegetarian: item.is_vegetarian,
     is_spicy: item.is_spicy,
@@ -183,6 +187,7 @@ async function saveItem() {
       price: Number(form.price),
       category_id: Number(form.category_id),
       image_url: form.image_url || null,
+      station: form.station,
       is_available: form.is_available,
       is_vegetarian: form.is_vegetarian,
       is_spicy: form.is_spicy,
@@ -367,6 +372,13 @@ async function removeItem(item: MenuItemDetail) {
             </div>
             <p class="text-xs text-ink-subtle">Paste a URL or upload JPEG/PNG/WebP/GIF (max 5MB).</p>
           </div>
+
+          <label class="block text-sm font-medium">Made at
+            <select v-model="form.station" class="mt-1 w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
+              <option v-for="s in STATIONS" :key="s.key" :value="s.key">{{ s.label }}</option>
+            </select>
+            <span class="mt-1 block text-xs font-normal text-ink-subtle">Which kitchen screen shows this dish.</span>
+          </label>
 
           <div class="flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-2"><input v-model="form.is_available" type="checkbox"> Available</label>

@@ -187,3 +187,27 @@ export function uploadLogo(restaurantId: number, file: File) {
     body,
   })
 }
+
+// ---- kitchen screen actions -----------------------------------------------------------------------
+
+export function bumpItem(restaurantId: number, itemId: number) {
+  return apiFetch<void>(q(restaurantId, `/kitchen/items/${itemId}/bump`), { method: 'POST' })
+}
+
+export function recallItem(restaurantId: number, itemId: number) {
+  return apiFetch<void>(q(restaurantId, `/kitchen/items/${itemId}/recall`), { method: 'POST' })
+}
+
+/** Bump every open dish on a ticket, or only one station's dishes. */
+export function bumpTicket(restaurantId: number, orderId: number, station?: string | null) {
+  const path = `/kitchen/orders/${orderId}/bump${station ? `?station=${encodeURIComponent(station)}` : ''}`
+  return apiFetch<void>(q(restaurantId, path), { method: 'POST' })
+}
+
+/** "86" a dish (or bring it back): unavailable on every menu and for QR ordering at once. */
+export function setSoldOut(restaurantId: number, menuItemId: number, soldOut: boolean) {
+  return apiFetch<{ id: number, is_available: boolean }>(q(restaurantId, `/menu/${menuItemId}/sold-out`), {
+    method: 'POST',
+    body: JSON.stringify({ sold_out: soldOut }),
+  })
+}
