@@ -51,12 +51,12 @@ PUBLIC = {
 AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout"), ("GET", "/auth/me"), ("GET", "/auth/my-restaurants")}
 # Signed-in customer routes, always scoped to the caller's own tenant and rows.
 CUSTOMER = {
-    ("GET", "/orders"), ("POST", "/orders"), ("GET", "/orders/{order_id}"),
+    ("GET", "/orders"), ("POST", "/orders"), ("GET", "/orders/{order_id}"), ("GET", "/orders/{order_id}/stream"),
     ("GET", "/reservations/me"), ("POST", "/reservations/{reservation_id}/confirm"),
     ("POST", "/reservations/{reservation_id}/cancel"), ("POST", "/restaurants/{identifier}/reservations"),
 }
 # Guests at a table: a table pass (not an account) bound to one restaurant's open session; see test_table_ordering.py.
-GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders")}
+GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "/table-session/stream")}
 # Platform-only.
 PLATFORM = {
     ("GET", "/restaurants"),
