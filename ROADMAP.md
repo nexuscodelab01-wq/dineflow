@@ -120,7 +120,8 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 - [x] Live status for guests (and for customers on their order page) over SSE, with a slow poll only as a fallback.
 - [x] Guest ordering without an account; multiple rounds (each appears on the kitchen screen as "table N"); retry-safe sends (`Idempotency-Key`); refused rounds leave nothing behind; max round value.
 - [x] Access policy: seated-only (default) or open, per restaurant (`restaurants.qr_access_policy`).
-- [ ] Still to do in B1: PIN and staff-approved policies (no admin setting for the policy yet), call-waiter / request-bill, table moved/merged mid-session, PDF/PNG tent export, QR ordering inside opening hours, station routing.
+- [x] Call waiter / ask for the bill from the table (one open request per kind, live to staff with a nav badge, cleared when staff answer or the tab closes).
+- [ ] Still to do in B1: PIN and staff-approved policies (no admin setting for the policy yet), table moved/merged mid-session, PDF/PNG tent export, QR ordering inside opening hours, station routing.
 
 **B2 Live kitchen screen v2 (2–3 wk)** — §7.5
 - [ ] Real-time tickets (SSE), stations (kitchen/bar/dessert), timers and urgency colors, bump/recall, sound.

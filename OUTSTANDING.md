@@ -19,9 +19,11 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - Apply branding to the admin area, emails (logo/colour in the templates) and the landing page (`pages/index.vue` still says "DineFlow").
 
 ### 4. QR ordering follow-ups
-- Settings screen for `qr_access_policy`; PIN and staff-approved modes; call-waiter / request-bill; table tents as a downloadable PDF.
+- Settings screen for `qr_access_policy`; PIN and staff-approved modes; table tents as a downloadable PDF.
+- Waiter/bill requests have no sound or push alert yet (B2 adds sound); the nav badge refreshes every 10 s.
 - A guest's pass lasts 12 h and is bound to one session; it is kept in `localStorage`, so a second phone must scan the code itself (intended).
 - Login rate limit (8 attempts / 10 min per account) is in-process: repeated automated test logins lock the account until the backend restarts.
 
 ## Done
+- Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.
 - Customer order page and table guests did not update live: they now follow their order over SSE (`GET /orders/{id}/stream`, `GET /table-session/stream`), with a slow poll only as a fallback. Status changes show in well under a second.
