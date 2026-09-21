@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 class Restaurant(TimestampMixin, Base):
     __tablename__ = "restaurants"
+    __table_args__ = (Index("uq_restaurants_custom_domain", "custom_domain", unique=True),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -42,6 +43,11 @@ class Restaurant(TimestampMixin, Base):
     reservation_buffer_minutes: Mapped[int] = mapped_column(
         Integer, default=15, server_default="15", nullable=False
     )
+    # Own domain for this restaurant's site (e.g. order.bellavista.com); resolves to this tenant.
+    custom_domain: Mapped[str | None] = mapped_column(String(253), nullable=True)
+    # Order numbers are "<prefix>-<n>", counted per restaurant.
+    order_prefix: Mapped[str] = mapped_column(String(8), default="DF", server_default="DF", nullable=False)
+    next_order_number: Mapped[int] = mapped_column(Integer, default=1001, server_default="1001", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

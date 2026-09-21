@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +12,13 @@ from app.db.base import Base
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_due", "status", "run_at"),
+        Index(
+            "uq_jobs_dedupe_active", "dedupe_key", unique=True,
+            postgresql_where=text("dedupe_key IS NOT NULL AND status IN ('queued', 'running')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     type: Mapped[str] = mapped_column(String(100), nullable=False)

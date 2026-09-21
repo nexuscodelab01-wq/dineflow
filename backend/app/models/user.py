@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -19,15 +19,27 @@ if TYPE_CHECKING:
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # A customer's email is unique within their restaurant; global identities (staff, platform
+        # admins) are unique among themselves. The same email can therefore be a customer of two
+        # restaurants without the accounts being linked.
+        Index("uq_users_tenant_email", "restaurant_id", "email", unique=True, postgresql_where=text("restaurant_id IS NOT NULL")),
+        Index("uq_users_global_email", "email", unique=True, postgresql_where=text("restaurant_id IS NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False, index=True)
+    # The restaurant (tenant) a CUSTOMER belongs to. NULL for global identities: restaurant staff and
+    # platform admins, who reach restaurants through RestaurantUser memberships.
+    restaurant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     role: Mapped["Role"] = relationship("Role", back_populates="users")
     restaurant_memberships: Mapped[list["RestaurantUser"]] = relationship(

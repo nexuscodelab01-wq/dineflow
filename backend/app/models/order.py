@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 class Order(TimestampMixin, Base):
     __tablename__ = "orders"
+    __table_args__ = (UniqueConstraint("restaurant_id", "order_number", name="uq_orders_restaurant_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
@@ -31,7 +32,7 @@ class Order(TimestampMixin, Base):
     restaurant_id: Mapped[int] = mapped_column(
         ForeignKey("restaurants.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    order_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    order_number: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     order_type: Mapped[OrderType] = mapped_column(Enum(OrderType, name="order_type"), nullable=False)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus, name="order_status"), default=OrderStatus.PENDING, nullable=False, index=True
