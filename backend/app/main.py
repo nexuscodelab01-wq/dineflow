@@ -21,6 +21,7 @@ from app.core.exceptions import AppError
 from app.core.logging import request_id_var, setup_logging
 from app.core.realtime import install_shutdown_hook, start_listener, stop_listener
 from app.core.storage import UPLOADS_ROOT
+from app.jobs.worker import start_worker, stop_worker
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -57,8 +58,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     (UPLOADS_ROOT / "menu").mkdir(parents=True, exist_ok=True)
     logger.info("Starting DineFlow API (env=%s)", settings.ENVIRONMENT)
     install_shutdown_hook()  # so open live streams never block a restart
-    start_listener()  # live updates: one LISTEN connection per worker
+    start_listener()  # live updates + job wake-ups: one LISTEN connection per worker
+    if settings.RUN_JOB_WORKER:
+        start_worker()  # background jobs (email…). Use `python -m app.worker` instead for a dedicated worker.
     yield
+    stop_worker()
     stop_listener()
     logger.info("Shutting down DineFlow API")
 

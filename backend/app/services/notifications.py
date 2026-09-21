@@ -1,0 +1,130 @@
+"""Customer emails: branded confirmations queued as background jobs.
+
+Everything is rendered when the event happens and queued in the same database transaction as the
+order/booking itself (so no email for something that rolled back, and none lost after it committed).
+All user-supplied text is HTML-escaped.
+"""
+
+import logging
+from datetime import datetime, timezone
+from html import escape
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.jobs.queue import enqueue
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_COLOR = "#2c6f53"
+
+
+def _logo_url(restaurant) -> str | None:
+    url = getattr(restaurant, "logo_url", None)
+    if not url:
+        return None
+    return url if url.startswith(("http://", "https://")) else f"{settings.PUBLIC_API_URL.rstrip('/')}{url}"
+
+
+def _when(value: datetime) -> str:
+    # Restaurants have no timezone yet (roadmap: stage B5), so be explicit rather than misleading.
+    return value.astimezone(timezone.utc).strftime("%a, %b %d, %I:%M %p UTC").replace(" 0", " ")
+
+
+def _layout(restaurant, heading: str, body_html: str, footer: str = "") -> str:
+    name = escape(restaurant.name)
+    logo = _logo_url(restaurant)
+    header = (
+        f'<img src="{escape(logo, quote=True)}" alt="{name}" style="max-height:48px;max-width:200px">' if logo else f'<span style="font-size:20px;font-weight:700">{name}</span>'
+    )
+    contact = " · ".join(escape(p) for p in (getattr(restaurant, "phone", None), getattr(restaurant, "address", None)) if p)
+    return f"""<!doctype html><html><body style="margin:0;background:#f7f5f1;font-family:Arial,Helvetica,sans-serif;color:#1a1f1c">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
+<tr><td style="background:{DEFAULT_COLOR};padding:18px 24px;color:#ffffff">{header}</td></tr>
+<tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px">{escape(heading)}</h1>{body_html}</td></tr>
+<tr><td style="padding:16px 24px;background:#f1efe9;font-size:12px;color:#6b6f6c">{footer}{escape(restaurant.name)}{(' · ' + contact) if contact else ''}</td></tr>
+</table></td></tr></table></body></html>"""
+
+
+def _queue_email(db: Session, restaurant, to: str | None, subject: str, text: str, html: str, dedupe_key: str) -> None:
+    if not to:
+        return
+    enqueue(
+        db,
+        "send_email",
+        {
+            "to": to,
+            "subject": subject,
+            "text": text,
+            "html": html,
+            "from_name": restaurant.name,
+            "reply_to": getattr(restaurant, "email", None),
+        },
+        restaurant_id=restaurant.id,
+        dedupe_key=dedupe_key,  # the same event can never queue the same email twice
+    )
+
+
+# ---------------------------------------------------------------------------------- orders
+
+def notify_order_placed(db: Session, restaurant, order, lines: list[dict[str, Any]]) -> None:
+    """`lines`: [{"quantity", "name", "options": [str], "instructions"}] captured while the order was built."""
+    type_label = {"DINE_IN": "Dine-in", "PICKUP": "Pickup", "DELIVERY": "Delivery"}.get(getattr(order.order_type, "value", order.order_type), "Order")
+    subject = f"Order {order.order_number} confirmed — {restaurant.name}"
+    track = f"{settings.PUBLIC_SITE_URL.rstrip('/')}/orders/{order.id}"
+
+    text_lines = [f"Hi {order.customer_name},", "", f"Thanks! Your {type_label.lower()} order {order.order_number} is confirmed.", ""]
+    html_items = []
+    for line in lines:
+        text_lines.append(f"{line['quantity']}x {line['name']}")
+        item_html = f"<strong>{line['quantity']}×</strong> {escape(line['name'])}"
+        for option in line.get("options", []):
+            text_lines.append(f"    + {option}")
+            item_html += f'<div style="color:#6b6f6c;font-size:13px">+ {escape(option)}</div>'
+        if line.get("instructions"):
+            text_lines.append(f"    Note: {line['instructions']}")
+            item_html += f'<div style="font-size:13px">Note: {escape(line["instructions"])}</div>'
+        html_items.append(f'<li style="margin-bottom:8px">{item_html}</li>')
+    text_lines += ["", f"Total: ${order.total}", "", f"Track your order: {track}", "", f"— {restaurant.name}"]
+
+    body = (
+        f"<p>Hi {escape(order.customer_name)}, thanks! Your {escape(type_label.lower())} order <strong>{escape(order.order_number)}</strong> is confirmed.</p>"
+        f'<ul style="padding-left:18px;margin:16px 0">{"".join(html_items)}</ul>'
+        f'<p style="font-size:16px"><strong>Total: ${escape(str(order.total))}</strong></p>'
+        f'<p><a href="{escape(track, quote=True)}" style="display:inline-block;background:{DEFAULT_COLOR};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none">Track your order</a></p>'
+    )
+    _queue_email(db, restaurant, order.customer_email, subject, "\n".join(text_lines), _layout(restaurant, "Order confirmed", body), f"email:order:{order.id}:placed")
+
+
+# ---------------------------------------------------------------------------------- reservations
+
+def _reservation_details(reservation, table_number: str | None) -> tuple[str, str]:
+    table = f", table {table_number}" if table_number else ""
+    line = f"{_when(reservation.starts_at)} · party of {reservation.party_size}{table}"
+    return line, escape(line)
+
+
+def notify_reservation_confirmed(db: Session, restaurant, reservation, table_number: str | None) -> None:
+    text_line, html_line = _reservation_details(reservation, table_number)
+    subject = f"Your table at {restaurant.name} is booked"
+    text = f"Hi {reservation.guest_name},\n\nYour reservation is confirmed:\n{text_line}\n\nNeed to change it? Sign in at {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve or contact us.\n\n— {restaurant.name}"
+    body = (
+        f"<p>Hi {escape(reservation.guest_name)}, your reservation is confirmed:</p>"
+        f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px"><strong>{html_line}</strong></p>'
+        f'<p>Need to change it? <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">Manage your reservation</a> or contact us.</p>'
+    )
+    _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "You're booked", body), f"email:reservation:{reservation.id}:confirmed")
+
+
+def notify_reservation_cancelled(db: Session, restaurant, reservation, table_number: str | None) -> None:
+    text_line, html_line = _reservation_details(reservation, table_number)
+    subject = f"Your reservation at {restaurant.name} was cancelled"
+    text = f"Hi {reservation.guest_name},\n\nYour reservation has been cancelled:\n{text_line}\n\nWe'd love to see you another time: {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve\n\n— {restaurant.name}"
+    body = (
+        f"<p>Hi {escape(reservation.guest_name)}, your reservation has been cancelled:</p>"
+        f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px"><s>{html_line}</s></p>'
+        f'<p>We\'d love to see you another time — <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">book a table</a>.</p>'
+    )
+    _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "Reservation cancelled", body), f"email:reservation:{reservation.id}:cancelled")

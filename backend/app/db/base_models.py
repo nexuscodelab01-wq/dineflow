@@ -4,6 +4,7 @@ from app.db.base import Base
 from app.models import (  # noqa: F401
     Address,
     Category,
+    Job,
     MenuItem,
     MenuItemModifier,
     MenuModifier,

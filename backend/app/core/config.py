@@ -59,6 +59,24 @@ class Settings(BaseSettings):
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
     IMAGE_MAX_SIDE: int = 1600  # uploaded photos are scaled down to this many pixels on the long side
 
+    # Background jobs (Postgres-backed queue). Each API process runs a worker thread by default;
+    # set RUN_JOB_WORKER=false and start `python -m app.worker` separately for a dedicated worker.
+    RUN_JOB_WORKER: bool = True
+    JOB_POLL_SECONDS: float = 5.0  # safety-net poll; workers are also woken instantly by NOTIFY
+    JOB_STUCK_MINUTES: int = 10  # a job "running" this long is assumed orphaned by a crashed worker
+
+    # Email. "console" logs messages (development), "smtp" sends through any SMTP service
+    # (SES, Postmark, Mailgun, Gmail…), "memory" keeps them in a list (tests).
+    EMAIL_BACKEND: str = "console"
+    EMAIL_FROM_ADDRESS: str = "noreply@dineflow.local"  # the address mail is sent from (display name = the restaurant)
+    EMAIL_SMTP_HOST: str = ""
+    EMAIL_SMTP_PORT: int = 587
+    EMAIL_SMTP_USER: str = ""
+    EMAIL_SMTP_PASSWORD: str = ""
+    EMAIL_SMTP_SECURITY: str = "starttls"  # starttls | ssl | none
+    PUBLIC_SITE_URL: str = "http://localhost:3000"  # links inside emails point here
+    PUBLIC_API_URL: str = "http://localhost:8000"  # where uploaded logos are served from
+
     # Live-update connections (SSE) one worker will hold open before shedding load.
     REALTIME_MAX_STREAMS: int = 200
 

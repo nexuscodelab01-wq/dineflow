@@ -2,6 +2,7 @@
 
 from app.models.address import Address
 from app.models.category import Category
+from app.models.job import Job
 from app.models.menu_item import MenuItem
 from app.models.menu_item_modifier import MenuItemModifier
 from app.models.menu_modifier import MenuModifier
@@ -22,6 +23,7 @@ from app.models.user import User
 __all__ = [
     "Address",
     "Category",
+    "Job",
     "MenuItem",
     "MenuItemModifier",
     "MenuModifier",

@@ -24,6 +24,7 @@ from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
+from app.services.notifications import notify_order_placed
 from app.services.payment_service import PaymentService
 from app.services.reservation_service import ReservationService
 
@@ -77,6 +78,7 @@ class OrderService:
             raise AppError("One or more menu items are invalid for this restaurant")
 
         subtotal = Decimal("0.00")
+        email_lines: list[dict] = []  # what the confirmation email will list
         order = Order(
             user_id=user.id,
             restaurant_id=restaurant.id,
@@ -118,6 +120,12 @@ class OrderService:
             unit_price, selected_modifiers = self._validate_modifiers(menu_item, line.modifier_option_ids)
             line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
             subtotal += line_total
+            email_lines.append({
+                "quantity": line.quantity,
+                "name": menu_item.name,
+                "options": [mod.name for mod in selected_modifiers],
+                "instructions": line.special_instructions,
+            })
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -187,6 +195,8 @@ class OrderService:
         if reservation is not None:
             self.reservations.attach_to_order(reservation.id, order.id, user.id, restaurant.id)
 
+        # Queued in this same transaction: the email exists only if the order does.
+        notify_order_placed(self.db, restaurant, order, email_lines)
         # Delivered to kitchen screens only if this transaction commits.
         publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order.id, "order_number": order.order_number})
         self.db.commit()

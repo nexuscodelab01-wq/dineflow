@@ -32,6 +32,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 CHANNEL = "dineflow_events"
+JOBS_CHANNEL = "dineflow_jobs"  # "new work is available": wakes idle job workers
+job_wakeup = threading.Event()  # set by the listener whenever a job is announced
 QUEUE_SIZE = 100
 SHUTDOWN = {"type": "__shutdown__"}  # sentinel: tells every open stream to end
 
@@ -140,12 +142,16 @@ class PgListener(threading.Thread):
             try:
                 with psycopg.connect(self._dsn, autocommit=True) as conn:
                     conn.execute(f"LISTEN {CHANNEL}")
+                    conn.execute(f"LISTEN {JOBS_CHANNEL}")
                     logger.info("Realtime listener connected")
                     self.connected.set()
                     backoff = 1.0
                     while not self._stop_event.is_set():
                         for note in conn.notifies(timeout=1.0):
-                            self._handle(note.payload)
+                            if note.channel == JOBS_CHANNEL:
+                                job_wakeup.set()
+                            else:
+                                self._handle(note.payload)
             except Exception as exc:  # noqa: BLE001 — keep the API alive; retry with backoff
                 self.connected.clear()
                 logger.warning("Realtime listener lost its connection (%s); retrying in %.0fs", exc, backoff)

@@ -21,6 +21,7 @@ from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
 from app.repositories.restaurant import RestaurantRepository
+from app.services.notifications import notify_reservation_cancelled, notify_reservation_confirmed
 from app.schemas.reservation import (
     AdminAvailabilityResponse,
     AdminReservationCreate,
@@ -365,6 +366,8 @@ class ReservationService:
             locked.status = TableStatus.OCCUPIED
         else:
             self._sync_table_floor_status(table.id, keep_occupied=True)
+        if status == ReservationStatus.CONFIRMED:  # (walk-ins and short-lived holds aren't emailed)
+            notify_reservation_confirmed(self.db, restaurant, reservation, table.table_number)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -467,6 +470,9 @@ class ReservationService:
         reservation.status = ReservationStatus.CONFIRMED
         reservation.hold_expires_at = None
         self._sync_table_floor_status(reservation.table_id, keep_occupied=True)
+        restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
+        if restaurant is not None and reservation.guest_email:
+            notify_reservation_confirmed(self.db, restaurant, reservation, reservation.table.table_number if reservation.table else None)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -482,6 +488,7 @@ class ReservationService:
         reservation.status = ReservationStatus.CANCELLED
         reservation.hold_expires_at = None
         self._sync_table_floor_status(reservation.table_id)
+        self._email_cancellation(reservation)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -513,6 +520,8 @@ class ReservationService:
             reservation.status = target
             if target != ReservationStatus.HELD:
                 reservation.hold_expires_at = None
+            if target == ReservationStatus.CANCELLED:
+                self._email_cancellation(reservation)
         if data.notes:
             reservation.notes = data.notes
 
@@ -666,6 +675,7 @@ class ReservationService:
             else:
                 reservation.status = ReservationStatus.CANCELLED
                 cancelled += 1
+                self._email_cancellation(reservation, table)
             reservation.hold_expires_at = None
         self.db.flush()
         table.status = target
@@ -711,6 +721,15 @@ class ReservationService:
         return [(t, by_table.get(t.id, [])) for t in tables]
 
     # ------------------------------------------------------------------ internals
+
+    def _email_cancellation(self, reservation: Reservation, table: RestaurantTable | None = None) -> None:
+        """Tell the guest (if we have their email). Queued in the caller's transaction."""
+        if not reservation.guest_email:
+            return
+        restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
+        table = table or reservation.table or self.db.get(RestaurantTable, reservation.table_id)
+        if restaurant is not None:
+            notify_reservation_cancelled(self.db, restaurant, reservation, table.table_number if table else None)
 
     def _active_restaurant(self, restaurant_id: int):
         restaurant = self.restaurants.get_by_id(restaurant_id)
