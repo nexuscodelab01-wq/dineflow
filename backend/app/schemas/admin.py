@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderRead
@@ -59,6 +60,7 @@ class MenuItemCreate(BaseModel):
     @classmethod
     def _check_image_url(cls, value: str | None) -> str | None:
         return _media_url(value)
+    station: str = "KITCHEN"
     is_available: bool = True
     preparation_time_minutes: int = Field(default=15, ge=1)
     is_vegetarian: bool = False
@@ -66,6 +68,17 @@ class MenuItemCreate(BaseModel):
     is_popular: bool = False
     sort_order: int = 0
     modifier_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("station")
+    @classmethod
+    def _station(cls, value: str) -> str:
+        return _check_station(value)
+
+
+def _check_station(value):
+    if value is not None and value not in STATIONS:
+        raise ValueError(f"Station must be one of: {', '.join(STATIONS)}")
+    return value
 
 
 class MenuItemUpdate(BaseModel):
@@ -79,6 +92,7 @@ class MenuItemUpdate(BaseModel):
     @classmethod
     def _check_image_url(cls, value: str | None) -> str | None:
         return _media_url(value)
+    station: str | None = None
     is_available: bool | None = None
     preparation_time_minutes: int | None = Field(default=None, ge=1)
     is_vegetarian: bool | None = None
@@ -86,6 +100,11 @@ class MenuItemUpdate(BaseModel):
     is_popular: bool | None = None
     sort_order: int | None = None
     modifier_ids: list[int] | None = None
+
+    @field_validator("station")
+    @classmethod
+    def _station(cls, value: str | None) -> str | None:
+        return _check_station(value)
 
 
 class ModifierOptionCreate(BaseModel):
@@ -120,6 +139,10 @@ class MenuModifierUpdate(BaseModel):
     min_selections: int | None = None
     max_selections: int | None = None
     sort_order: int | None = None
+
+
+class SoldOutUpdate(BaseModel):
+    sold_out: bool
 
 
 class OrderStatusUpdate(BaseModel):

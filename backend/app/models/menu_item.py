@@ -29,6 +29,8 @@ class MenuItem(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Which screen makes this dish: KITCHEN, BAR or DESSERT (see app/core/stations.py).
+    station: Mapped[str] = mapped_column(String(20), default="KITCHEN", server_default="KITCHEN", nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     preparation_time_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     is_vegetarian: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

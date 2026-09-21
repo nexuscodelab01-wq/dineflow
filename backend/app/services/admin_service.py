@@ -1,6 +1,7 @@
 """Admin business logic services."""
 
 import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -264,6 +265,10 @@ class AdminService:
 
         previous = order.status
         order.status = data.status
+        if data.status in (OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COMPLETED):
+            for line in order.items:  # the whole ticket is done, so no dish is left open on a kitchen screen
+                if line.status != "READY":
+                    line.status, line.ready_at = "READY", datetime.now(UTC)
         self.orders.add_status_history(
             order=order,
             previous=previous,

@@ -55,6 +55,7 @@ class MenuItemListRead(BaseModel):
     is_vegetarian: bool
     is_spicy: bool
     is_popular: bool
+    station: str = "KITCHEN"
 
 
 class MenuItemDetailRead(MenuItemListRead):

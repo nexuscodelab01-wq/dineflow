@@ -3,7 +3,9 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, Numeric, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -29,6 +31,11 @@ class OrderItem(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     special_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Copied from the dish when ordered, so changing a dish's station later doesn't move tickets already on a screen.
+    station: Mapped[str] = mapped_column(String(20), default="KITCHEN", server_default="KITCHEN", nullable=False)
+    # NEW until its station bumps it, then READY. Recall puts it back to NEW.
+    status: Mapped[str] = mapped_column(String(10), default="NEW", server_default="NEW", nullable=False)
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
     menu_item: Mapped["MenuItem"] = relationship("MenuItem")

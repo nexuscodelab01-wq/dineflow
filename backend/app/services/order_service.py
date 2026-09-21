@@ -200,6 +200,7 @@ class OrderService:
                 unit_price=unit_price,
                 line_total=line_total,
                 special_instructions=line.special_instructions,
+                station=menu_item.station,
             )
             self.db.add(order_item)
             self.db.flush()

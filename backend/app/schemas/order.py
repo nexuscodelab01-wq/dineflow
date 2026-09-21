@@ -56,6 +56,9 @@ class OrderItemRead(BaseModel):
     unit_price: Decimal
     line_total: Decimal
     special_instructions: str | None = None
+    station: str = "KITCHEN"
+    status: str = "NEW"
+    ready_at: datetime | None = None
     modifiers: list[OrderItemModifierRead] = Field(default_factory=list)
 
 

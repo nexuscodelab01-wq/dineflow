@@ -59,6 +59,7 @@ class MenuService:
             is_vegetarian=item.is_vegetarian,
             is_spicy=item.is_spicy,
             is_popular=item.is_popular,
+            station=item.station,
         )
 
     def _to_detail_item(self, item) -> MenuItemDetailRead:

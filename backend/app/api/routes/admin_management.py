@@ -17,8 +17,10 @@ from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
 from app.schemas.table_session import OpenSessionRead, QrTableRead, ServiceRequestStaffRead
+from app.services.kitchen_service import KitchenService
 from app.services.table_session_service import TableSessionService
 from app.schemas.admin import (
+    SoldOutUpdate,
     CategoryCreate,
     CategoryReorder,
     CategoryUpdate,
@@ -403,6 +405,49 @@ def update_order_status(
         return service.update_order_status(order_id, data, restaurant_id, user)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+def get_kitchen_service(db: Annotated[Session, Depends(get_db)]) -> KitchenService:
+    return KitchenService(db)
+
+
+KitchenActions = Annotated[KitchenService, Depends(get_kitchen_service)]
+
+
+@router.post("/kitchen/items/{item_id}/bump", status_code=status.HTTP_204_NO_CONTENT)
+def bump_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions) -> None:
+    """One dish is done. The order turns READY when all its dishes are."""
+    try:
+        service.bump_item(item_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/kitchen/items/{item_id}/recall", status_code=status.HTTP_204_NO_CONTENT)
+def recall_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions) -> None:
+    try:
+        service.recall_item(item_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/kitchen/orders/{order_id}/bump", status_code=status.HTTP_204_NO_CONTENT)
+def bump_ticket(order_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions, station: str | None = None) -> None:
+    """Bump every open dish on a ticket (or only one station's dishes with ?station=BAR)."""
+    try:
+        service.bump_ticket(order_id, restaurant_id, station, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/menu/{item_id}/sold-out", response_model=dict)
+def set_sold_out(item_id: int, data: SoldOutUpdate, _: StaffUser, restaurant_id: RestaurantId, service: KitchenActions) -> dict:
+    """"86" a dish: unavailable everywhere at once (kitchen staff may do this; editing the menu stays admin-only)."""
+    try:
+        item = service.set_sold_out(item_id, restaurant_id, data.sold_out)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return {"id": item.id, "is_available": item.is_available}
 
 
 @router.get("/kitchen", response_model=KitchenBoard)

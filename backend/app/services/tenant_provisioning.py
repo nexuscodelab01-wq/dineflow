@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError, ConflictError
 from app.core.images import InvalidImage, process_image
 from app.core.security import hash_password
+from app.core.stations import CATEGORY_STATIONS, DEFAULT_STATION
 from app.core.storage import get_storage, tenant_prefix
 from app.models.audit_log import AuditLog
 from app.models.category import Category
@@ -136,6 +137,7 @@ def provision_tenant(
             db.add(MenuItem(
                 restaurant_id=restaurant.id, category_id=category.id, name=item, description=description or None,
                 price=Decimal(price), is_vegetarian=vegetarian, is_popular=popular, sort_order=position,
+                station=CATEGORY_STATIONS.get(category_name, DEFAULT_STATION),
             ))
     for number, seats, zone in TABLES:
         db.add(RestaurantTable(restaurant_id=restaurant.id, table_number=number, capacity=seats, zone=zone, status=TableStatus.AVAILABLE))
