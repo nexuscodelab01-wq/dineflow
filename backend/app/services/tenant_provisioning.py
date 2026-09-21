@@ -65,8 +65,11 @@ TEMPLATES: dict[str, dict[str, list[tuple[str, str, str, bool, bool]]]] = {
     },
 }
 
-# (number, seats, zone)
-TABLES = [("1", 2, "Main"), ("2", 2, "Main"), ("3", 4, "Main"), ("4", 4, "Main"), ("5", 6, "Main"), ("6", 4, "Patio"), ("7", 2, "Patio")]
+# (number, seats, zone, x %, y %): placed on the floor plan so a new restaurant's map looks tidy straight away
+TABLES = [
+    ("1", 2, "Main", 14, 28), ("2", 2, "Main", 32, 28), ("3", 4, "Main", 50, 28), ("4", 4, "Main", 68, 28), ("5", 6, "Main", 86, 28),
+    ("6", 4, "Patio", 30, 72), ("7", 2, "Patio", 58, 72),
+]
 
 
 @dataclass
@@ -139,8 +142,9 @@ def provision_tenant(
                 price=Decimal(price), is_vegetarian=vegetarian, is_popular=popular, sort_order=position,
                 station=CATEGORY_STATIONS.get(category_name, DEFAULT_STATION),
             ))
-    for number, seats, zone in TABLES:
-        db.add(RestaurantTable(restaurant_id=restaurant.id, table_number=number, capacity=seats, zone=zone, status=TableStatus.AVAILABLE))
+    for number, seats, zone, x, y in TABLES:
+        db.add(RestaurantTable(
+            restaurant_id=restaurant.id, table_number=number, capacity=seats, zone=zone, pos_x=x, pos_y=y, status=TableStatus.AVAILABLE))
 
     owner, password = _owner(db, owner_email, owner_name)
     restaurant_id = restaurant.id

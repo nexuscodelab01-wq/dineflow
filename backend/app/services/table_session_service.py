@@ -31,6 +31,8 @@ from app.schemas.table_session import (
     SessionRead,
     SessionRoundRead,
     TableInfo,
+    WaiterSessionRead,
+    WaiterTableRead,
 )
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
@@ -94,6 +96,7 @@ class TableSessionService:
                 session = TableSession(restaurant_id=table.restaurant_id, table_id=table.id)
                 self.db.add(session)
                 self.db.flush()
+            publish(self.db, kitchen_topic(table.restaurant_id), "session.opened", {"table_id": table.id})
             return session
         except IntegrityError:  # someone else opened it between our read and our insert
             return self.db.scalar(select(TableSession).where(TableSession.table_id == table.id, TableSession.state == OPEN))
@@ -120,7 +123,7 @@ class TableSessionService:
         rounds = [
             SessionRoundRead(
                 order_id=o.id, order_number=o.order_number, round_no=o.round_no, status=o.status.value, total=o.total,
-                ordered_by=names.get(o.session_guest_id), created_at=o.created_at,
+                ordered_by=names.get(o.session_guest_id) if o.session_guest_id else "Staff", created_at=o.created_at,
                 items=[
                     SessionItemRead(
                         name=i.item_name, quantity=i.quantity, line_total=i.line_total,
@@ -140,7 +143,11 @@ class TableSessionService:
 
     # ------------------------------------------------------------------ ordering
 
-    def place_round(self, guest: SessionGuest, session: TableSession, data: RoundCreate, client_token: str | None) -> SessionRoundRead:
+    def place_round(
+        self, guest: SessionGuest | None, session: TableSession, data: RoundCreate, client_token: str | None,
+        *, staff_user=None,
+    ) -> SessionRoundRead:
+        """A round from a guest's phone, or (with `staff_user`) one a waiter sends on the table's behalf."""
         restaurant = self.db.get(Restaurant, session.restaurant_id)
         FeatureService(self.db).require(restaurant.id, FEATURE)
 
@@ -163,13 +170,13 @@ class TableSessionService:
             if len(items_by_id) != len(set(item_ids)):
                 raise AppError("One or more menu items are invalid for this restaurant")
 
-            guest_name = guest.name or f"Table {session.table.table_number}"
+            guest_name = f"{staff_user.first_name} (staff)" if staff_user is not None else (guest.name or f"Table {session.table.table_number}")
             order = Order(
                 user_id=None, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
                 order_type=OrderType.DINE_IN, status=OrderStatus.PENDING,
                 subtotal=Decimal("0.00"), tax=Decimal("0.00"), delivery_fee=Decimal("0.00"), discount=Decimal("0.00"), total=Decimal("0.00"),
                 customer_name=guest_name, customer_email=None, table_id=session.table_id,
-                table_session_id=session.id, session_guest_id=guest.id, round_no=round_no,
+                table_session_id=session.id, session_guest_id=guest.id if guest else None, round_no=round_no,
                 client_token=client_token, notes=data.notes,
             )
             orders.orders.add(order)
@@ -180,11 +187,12 @@ class TableSessionService:
                 raise AppError("That round is too large to send from a table. Please ask a member of staff.")
             order.subtotal, order.tax, order.total = subtotal, tax, total
 
-            self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=None))
+            self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=staff_user.id if staff_user else None))
             order.status = OrderStatus.CONFIRMED  # paid at the end of the meal, so nothing to wait for
             self.db.add(OrderStatusHistory(
                 order_id=order.id, previous_status=OrderStatus.PENDING, new_status=OrderStatus.CONFIRMED,
-                changed_by_user_id=None, notes=f"Sent from table {session.table.table_number} (round {round_no})",
+                changed_by_user_id=staff_user.id if staff_user else None,
+                notes=f"Sent by staff for table {session.table.table_number} (round {round_no})" if staff_user else f"Sent from table {session.table.table_number} (round {round_no})",
             ))
 
         order_id = order.id
@@ -312,6 +320,70 @@ class TableSessionService:
             .where(ServiceRequest.table_session_id == session_id, ServiceRequest.state == REQUEST_OPEN)
             .values(state=DONE, resolved_at=datetime.now(UTC), resolved_by_user_id=staff_user_id)
         )
+
+    # ------------------------------------------------------------------ waiter view
+
+    def waiter_floor(self, restaurant_id: int) -> list[WaiterTableRead]:
+        """Every active table with its live tab (if any): what a waiter needs on one screen."""
+        tables = list(self.db.scalars(
+            select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.is_active.is_(True))
+            .order_by(RestaurantTable.table_number)
+        ).all())
+        sessions = {s.table_id: s for s in self.open_sessions(restaurant_id)}
+        ready = dict(self.db.execute(
+            select(Order.table_session_id, func.count()).where(
+                Order.restaurant_id == restaurant_id, Order.table_session_id.is_not(None), Order.status == OrderStatus.READY)
+            .group_by(Order.table_session_id)
+        ).all())
+        waiting = dict(self.db.execute(
+            select(ServiceRequest.table_session_id, func.min(ServiceRequest.created_at)).where(
+                ServiceRequest.restaurant_id == restaurant_id, ServiceRequest.state == REQUEST_OPEN)
+            .group_by(ServiceRequest.table_session_id)
+        ).all())
+        out = []
+        for t in tables:
+            s = sessions.get(t.id)
+            out.append(WaiterTableRead(
+                table_id=t.id, table_number=t.table_number, capacity=t.capacity, zone=t.zone, shape=t.shape,
+                pos_x=t.pos_x, pos_y=t.pos_y, status=t.status.value,
+                session=WaiterSessionRead(
+                    session_id=s.session_id, opened_at=s.opened_at, guests=s.guests, rounds=s.rounds,
+                    ready_rounds=ready.get(s.session_id, 0), total=s.total, requests=s.requests,
+                    waiting_since=waiting.get(s.session_id),
+                ) if s else None,
+            ))
+        return out
+
+    def staff_session(self, session_id: int, restaurant_id: int) -> TableSession:
+        session = self.db.get(TableSession, session_id)
+        if session is None or session.restaurant_id != restaurant_id:
+            raise NotFoundError("Session not found")
+        if session.state != OPEN:
+            raise AppError("This session is already closed")
+        return session
+
+    def transfer(self, session_id: int, restaurant_id: int, new_table_id: int) -> None:
+        """Move a party's tab to another table: the tab keeps its rounds, the kitchen sees the new table number, the
+        old table is left to be cleaned and its QR code is replaced."""
+        session = self.staff_session(session_id, restaurant_id)
+        target = self._table(new_table_id, restaurant_id)
+        if target.id == session.table_id:
+            raise AppError("That is already this table")
+        if not target.is_active:
+            raise AppError("That table is out of service")
+        if self.db.scalar(select(TableSession.id).where(TableSession.table_id == target.id, TableSession.state == OPEN)) is not None:
+            raise AppError("That table already has an open tab")
+        old = session.table
+        session.table_id = target.id
+        self.db.execute(update(Order).where(Order.table_session_id == session.id).values(table_id=target.id))
+        self.db.execute(update(ServiceRequest).where(ServiceRequest.table_session_id == session.id).values(table_id=target.id))
+        old.status = TableStatus.CLEANING
+        old.qr_token = secrets.token_urlsafe(16)
+        target.status = TableStatus.OCCUPIED
+        data = {"from_table_id": old.id, "table_id": target.id}
+        publish(self.db, kitchen_topic(restaurant_id), "session.transferred", data)
+        publish(self.db, session_topic(session.id), "session.transferred", data)
+        self.db.commit()
 
     def _table(self, table_id: int, restaurant_id: int) -> RestaurantTable:
         table = self.db.get(RestaurantTable, table_id)

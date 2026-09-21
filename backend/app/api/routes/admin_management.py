@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, Query, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,16 @@ from app.db.session import get_db
 from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
-from app.schemas.table_session import OpenSessionRead, QrTableRead, ServiceRequestStaffRead
+from app.schemas.table_session import (
+    OpenSessionRead,
+    QrTableRead,
+    RoundCreate,
+    ServiceRequestStaffRead,
+    SessionRead,
+    SessionRoundRead,
+    TransferRequest,
+    WaiterTableRead,
+)
 from app.services.kitchen_service import KitchenService
 from app.services.table_session_service import TableSessionService
 from app.schemas.admin import (
@@ -559,6 +568,45 @@ def close_table_session(session_id: int, user: StaffUser, restaurant_id: Restaur
     """End a table's tab: guest passes stop working, the table goes to cleaning and its QR code is replaced."""
     try:
         service.close_session(session_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/waiter/floor", response_model=list[WaiterTableRead], dependencies=QR_GATE)
+def waiter_floor(_: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[WaiterTableRead]:
+    """Every table with its live tab, waiting requests and finished-but-not-served rounds."""
+    return service.waiter_floor(restaurant_id)
+
+
+@router.get("/table-sessions/{session_id}", response_model=SessionRead, dependencies=QR_GATE)
+def table_session_detail(session_id: int, _: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> SessionRead:
+    try:
+        return service.view(service.staff_session(session_id, restaurant_id))
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/orders", response_model=SessionRoundRead, status_code=status.HTTP_201_CREATED, dependencies=QR_GATE)
+def staff_send_round(
+    session_id: int,
+    data: RoundCreate,
+    user: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[TableSessionService, Depends(get_table_session_service)],
+    idempotency_key: Annotated[str | None, Header(max_length=64)] = None,
+) -> SessionRoundRead:
+    """A waiter sends a round to the kitchen on the table's behalf (a guest without a phone, a walk-in, a correction)."""
+    try:
+        return service.place_round(None, service.staff_session(session_id, restaurant_id), data, idempotency_key, staff_user=user)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/transfer", status_code=status.HTTP_204_NO_CONTENT, dependencies=QR_GATE)
+def transfer_table_session(session_id: int, data: TransferRequest, _: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> None:
+    """Move a party's tab to another (free) table."""
+    try:
+        service.transfer(session_id, restaurant_id, data.table_id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

@@ -98,3 +98,32 @@ class ServiceRequestStaffRead(BaseModel):
     kind: str
     asked_by: str | None
     created_at: datetime
+
+
+# ---- waiter view ---------------------------------------------------------------------------------
+
+class WaiterSessionRead(BaseModel):
+    session_id: int
+    opened_at: datetime
+    guests: int
+    rounds: int
+    ready_rounds: int  # rounds the kitchen has finished that nobody has served yet
+    total: Decimal  # with tax, excluding cancelled rounds
+    requests: list[str] = Field(default_factory=list)
+    waiting_since: datetime | None = None  # the oldest unanswered request
+
+
+class WaiterTableRead(BaseModel):
+    table_id: int
+    table_number: str
+    capacity: int
+    zone: str | None
+    shape: str
+    pos_x: float | None
+    pos_y: float | None
+    status: str
+    session: WaiterSessionRead | None = None
+
+
+class TransferRequest(BaseModel):
+    table_id: int
