@@ -88,8 +88,8 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 - [x] Error tracking hook (Sentry, optional), structured JSON logs + request ids, readiness check, DB backup scripts with a **verified restore drill** (`docs/OPERATIONS.md`). [ ] Staging environment; off-site backup schedule.
 
 **A2 Platform plumbing (2–3 wk)**
-- [ ] Object storage (S3-compatible) + image resize/WebP; per-tenant prefixes.
-- [ ] Transactional email + template system; background job runner (Redis queue or Postgres-backed).
+- [x] Object storage (local or any S3-compatible) + image validation, resize, WebP, thumbnails, metadata stripping; per-tenant prefixes and cleanup; logo upload.
+- [x] Transactional email (SMTP/console backends, branded HTML+text templates, escaping) and a **Postgres-backed job runner** (transactional enqueue, SKIP LOCKED, retries with backoff, crash recovery, NOTIFY wake-up). First uses: order confirmation, reservation confirmed/cancelled.
 - [x] **SSE real-time channel** with per-tenant topics — Postgres `LISTEN/NOTIFY` fan-out (works across workers, delivers only on commit), fetch-based client with reconnect/watchdog. **Kitchen screen is live** (315 ms order → screen in a 2-worker test). Next: reuse it for guests, waiters and the floor view.
 
 **A3 Multi-tenant core (3–4 wk)**
