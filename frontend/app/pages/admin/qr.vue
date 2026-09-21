@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { OpenTableSession, QrTable } from '~/types/table'
-import { closeSession, fetchOpenSessions, fetchQrTables, rotateQr } from '~/services/table'
+import type { OpenTableSession, QrTable, ServiceRequest } from '~/types/table'
+import { subscribeKitchen } from '~/services/realtime'
+import { closeSession, fetchOpenSessions, fetchQrTables, fetchServiceRequests, finishServiceRequest, rotateQr } from '~/services/table'
 import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
@@ -14,6 +15,7 @@ const restaurantSite = useRestaurantStore()
 
 const enabled = useFeature('qr_table_ordering')
 const sessions = ref<OpenTableSession[]>([])
+const requests = ref<ServiceRequest[]>([])
 const tables = ref<QrTable[]>([])
 const images = ref<Record<number, string>>({})
 const loading = ref(true)
@@ -34,6 +36,7 @@ async function load() {
   if (!rid) return void (loading.value = false)
   try {
     sessions.value = await fetchOpenSessions(rid)
+    requests.value = await fetchServiceRequests(rid)
     if (auth.isAdmin) {
       tables.value = await fetchQrTables(rid)
       await draw(tables.value)
@@ -48,18 +51,24 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  origin.value = window.location.origin
-  void load()
-  timer = setInterval(() => { if (document.visibilityState === 'visible') refreshSessions() }, 8000)
-})
 let timer: ReturnType<typeof setInterval> | null = null
-onUnmounted(() => { if (timer) clearInterval(timer) })
+let live: { close: () => void } | null = null
+onMounted(async () => {
+  origin.value = window.location.origin
+  await load()
+  // Requests and tabs change as guests tap and staff answer: follow them live, with a slow refresh as a fallback.
+  if (admin.restaurantId) live = subscribeKitchen(admin.restaurantId, { onChange: () => void refreshSessions() })
+  timer = setInterval(() => { if (document.visibilityState === 'visible') refreshSessions() }, 30000)
+})
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  live?.close()
+})
 
 async function refreshSessions() {
   if (!admin.restaurantId) return
   try {
-    sessions.value = await fetchOpenSessions(admin.restaurantId)
+    ;[sessions.value, requests.value] = await Promise.all([fetchOpenSessions(admin.restaurantId), fetchServiceRequests(admin.restaurantId)])
   }
   catch { /* the next tick will try again */ }
 }
@@ -80,6 +89,23 @@ async function close(session: OpenTableSession) {
     busy.value = null
   }
 }
+
+async function answer(request: ServiceRequest) {
+  if (!admin.restaurantId) return
+  busy.value = -request.id
+  try {
+    await finishServiceRequest(admin.restaurantId, request.id)
+    requests.value = requests.value.filter(r => r.id !== request.id)
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not update the request')
+  }
+  finally {
+    busy.value = null
+  }
+}
+
+const kindLabel = (kind: string) => (kind === 'BILL' ? 'wants the bill' : 'needs a waiter')
 
 async function replace(table: QrTable) {
   if (!admin.restaurantId) return
@@ -113,13 +139,23 @@ const printName = computed(() => branding.name.value ?? restaurantSite.current?.
       <p v-else-if="error" class="mt-6 rounded-xl bg-red-50 p-4 text-red-700">{{ error }}</p>
 
       <template v-else>
+        <section v-if="requests.length" class="mt-6" aria-live="polite">
+          <h2 class="text-lg font-semibold">Waiting for you</h2>
+          <ul class="mt-3 space-y-2">
+            <li v-for="r in requests" :key="r.id" class="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+              <span><strong>Table {{ r.table_number }}</strong> {{ kindLabel(r.kind) }}<span v-if="r.asked_by" class="text-ink-muted"> · {{ r.asked_by }}</span></span>
+              <AppButton :disabled="busy === -r.id" @click="answer(r)">Done</AppButton>
+            </li>
+          </ul>
+        </section>
+
         <section class="mt-6">
           <h2 class="text-lg font-semibold">Open tabs</h2>
           <p v-if="!sessions.length" class="mt-2 text-sm text-ink-muted">No table is ordering right now. Guests can order once you mark their table as occupied.</p>
           <ul v-else class="mt-3 grid gap-3 sm:grid-cols-2">
             <li v-for="s in sessions" :key="s.session_id" class="rounded-xl border border-brand-100 bg-surface-elevated p-4">
               <div class="flex items-center justify-between">
-                <h3 class="font-semibold">Table {{ s.table_number }}</h3>
+                <h3 class="font-semibold">Table {{ s.table_number }}<span v-if="s.requests.includes('BILL')" class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Bill requested</span></h3>
                 <span class="text-sm text-ink-muted">{{ s.guests }} guest{{ s.guests === 1 ? '' : 's' }} · {{ s.rounds }} round{{ s.rounds === 1 ? '' : 's' }}</span>
               </div>
               <p class="mt-1 text-sm">Running total <strong>{{ formatCurrency(Number(s.total)) }}</strong> <span class="text-ink-subtle">(no tax)</span></p>

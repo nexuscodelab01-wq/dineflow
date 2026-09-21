@@ -35,6 +35,8 @@ export type TableSessionView = {
   guests: string[]
   rounds: SessionRound[]
   total: string
+  /** What this table has asked for and staff haven't answered yet: WAITER and/or BILL. */
+  requests: string[]
 }
 
 export type QrTable = {
@@ -53,4 +55,15 @@ export type OpenTableSession = {
   guests: number
   rounds: number
   total: string
+  requests: string[]
+}
+
+export type ServiceRequest = {
+  id: number
+  session_id: number
+  table_id: number
+  table_number: string
+  kind: 'WAITER' | 'BILL'
+  asked_by?: string | null
+  created_at: string
 }

@@ -3,7 +3,7 @@ import type { Category, MenuItem, MenuItemDetail } from '~/types/menu'
 import type { TableInfo, TableSessionView } from '~/types/table'
 import { fetchCategories, fetchMenu, fetchMenuItem } from '~/services/menu'
 import { subscribeTableSession } from '~/services/realtime'
-import { fetchTableInfo, fetchTableSession, joinTable, sendRound } from '~/services/table'
+import { askForService, fetchTableInfo, fetchTableSession, joinTable, sendRound } from '~/services/table'
 import { ApiError } from '~/utils/api-error'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
@@ -251,6 +251,26 @@ async function send() {
   }
 }
 
+const asking = ref<string | null>(null)
+const waiting = (kind: string) => session.value?.requests.includes(kind) ?? false
+
+async function ask(kind: 'WAITER' | 'BILL') {
+  if (!pass.value || asking.value || waiting(kind)) return
+  asking.value = kind
+  try {
+    await askForService(pass.value.token, kind)
+    await refreshSession().catch(() => {})
+    ui.success(kind === 'WAITER' ? 'A member of staff is on their way' : 'We will bring your bill shortly')
+  }
+  catch (err) {
+    if (err instanceof ApiError && err.status === 401) return endSession()
+    ui.error(err instanceof Error ? err.message : 'Could not send that. Please try again.')
+  }
+  finally {
+    asking.value = null
+  }
+}
+
 const statusText: Record<string, string> = {
   PENDING: 'Sending…', CONFIRMED: 'Received', PREPARING: 'Being prepared', READY: 'Ready', COMPLETED: 'Served', DELIVERED: 'Served', CANCELLED: 'Cancelled',
 }
@@ -351,7 +371,15 @@ const statusText: Record<string, string> = {
         <div v-if="session?.rounds.length" class="flex items-center justify-between rounded-xl bg-brand-50 p-4 font-semibold">
           <span>Table total (with tax)</span><span>{{ formatCurrency(Number(session.total)) }}</span>
         </div>
-        <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">Ready to pay? Ask a member of staff for the bill.</p>
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button class="rounded-xl border border-brand-200 bg-white px-3 py-3 text-sm font-semibold text-brand-900 disabled:opacity-60" :disabled="asking === 'WAITER' || waiting('WAITER')" @click="ask('WAITER')">
+            {{ waiting('WAITER') ? 'Waiter is on the way ✓' : 'Call a waiter' }}
+          </button>
+          <button class="rounded-xl bg-brand-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-60" :disabled="!session?.rounds.length || asking === 'BILL' || waiting('BILL')" @click="ask('BILL')">
+            {{ waiting('BILL') ? 'Bill requested ✓' : 'Ask for the bill' }}
+          </button>
+        </div>
+        <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">You pay at the table when you are ready.</p>
       </div>
 
       <!-- cart bar -->

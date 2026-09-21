@@ -1,4 +1,4 @@
-import type { JoinResponse, OpenTableSession, QrTable, SessionRound, TableInfo, TableSessionView } from '~/types/table'
+import type { JoinResponse, OpenTableSession, QrTable, ServiceRequest, SessionRound, TableInfo, TableSessionView } from '~/types/table'
 import { apiFetch } from '~/services/http'
 
 const json = (body: unknown) => JSON.stringify(body)
@@ -43,4 +43,16 @@ export function fetchOpenSessions(restaurantId: number) {
 
 export function closeSession(restaurantId: number, sessionId: number) {
   return apiFetch<void>(`/api/v1/admin/table-sessions/${sessionId}/close?restaurant_id=${restaurantId}`, { method: 'POST' })
+}
+
+export function askForService(token: string, kind: 'WAITER' | 'BILL') {
+  return apiFetch<string[]>('/api/v1/table-session/requests', { method: 'POST', body: json({ kind }), auth: false, headers: pass(token) })
+}
+
+export function fetchServiceRequests(restaurantId: number) {
+  return apiFetch<ServiceRequest[]>(`/api/v1/admin/service-requests?restaurant_id=${restaurantId}`)
+}
+
+export function finishServiceRequest(restaurantId: number, requestId: number) {
+  return apiFetch<void>(`/api/v1/admin/service-requests/${requestId}/done?restaurant_id=${restaurantId}`, { method: 'POST' })
 }
