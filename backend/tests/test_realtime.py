@@ -188,3 +188,39 @@ def test_orders_and_status_changes_publish_to_that_restaurants_kitchen(world, mo
     before = len(calls)
     w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "PENDING"})   # invalid move -> rejected
     assert len(calls) == before                                                                     # nothing announced
+
+
+# ---------------------------------------------------------------- shutdown must never hang on open streams
+
+def test_close_all_ends_every_open_stream_even_with_a_backlog():
+    """Regression: uvicorn waits for open connections before restarting, and SSE streams never end on
+    their own — a dev auto-reload or a deploy hung for as long as any kitchen tab was open."""
+    async def scenario():
+        streams = [realtime_routes._event_stream(FakeRequest(), f"restaurant:{i}:kitchen") for i in (1, 2)]
+        for s in streams:
+            await s.__anext__()                                            # start (ready)
+        rt.broker.dispatch("restaurant:1:kitchen", {"type": "order.created"})   # backlog on the first
+        await asyncio.sleep(0.05)
+        rt.broker.close_all()
+        for s in streams:
+            with pytest.raises(StopAsyncIteration):
+                for _ in range(3):                                          # drain, at most one stale event
+                    await asyncio.wait_for(s.__anext__(), 1)
+        assert rt.broker.count() == 0
+    run(scenario())
+
+
+def test_shutdown_hook_closes_streams_then_chains_to_the_servers_own_handler(monkeypatch):
+    import signal
+
+    installed = {}
+    calls = []
+    server_handler = lambda number, frame: calls.append(("server", number))          # noqa: E731 — stands in for uvicorn's
+    monkeypatch.setattr(signal, "getsignal", lambda signum: server_handler)
+    monkeypatch.setattr(signal, "signal", lambda signum, handler: installed.__setitem__(signum, handler))
+    monkeypatch.setattr(rt.broker, "close_all", lambda: calls.append(("close_all", None)))
+
+    rt.install_shutdown_hook()
+    assert set(installed) == {signal.SIGTERM, signal.SIGINT}
+    installed[signal.SIGTERM](signal.SIGTERM, None)
+    assert calls == [("close_all", None), ("server", signal.SIGTERM)]                 # streams first, then normal shutdown

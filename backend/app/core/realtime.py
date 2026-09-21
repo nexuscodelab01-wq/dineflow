@@ -16,6 +16,7 @@ Events are *hints* ("orders changed"), not state. Clients refetch what they need
 import asyncio
 import json
 import logging
+import signal
 import threading
 import time
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 CHANNEL = "dineflow_events"
 QUEUE_SIZE = 100
+SHUTDOWN = {"type": "__shutdown__"}  # sentinel: tells every open stream to end
 
 
 def kitchen_topic(restaurant_id: int) -> str:
@@ -83,8 +85,21 @@ class Broker:
                 self.unsubscribe(sub)
         return len(targets)
 
+    def close_all(self) -> None:
+        """Ask every open stream to finish. Thread- and signal-safe. Clients reconnect on their own."""
+        with self._lock:
+            targets = [sub for bucket in self._subs.values() for sub in bucket]
+        for sub in targets:
+            try:
+                sub.loop.call_soon_threadsafe(self._offer, sub, SHUTDOWN, True)
+            except RuntimeError:
+                pass
+
     @staticmethod
-    def _offer(sub: Subscription, event: dict[str, Any]) -> None:
+    def _offer(sub: Subscription, event: dict[str, Any], force: bool = False) -> None:
+        if force:
+            while not sub.queue.empty():  # make room: shutdown must not be blocked by a backlog
+                sub.queue.get_nowait()
         if sub.queue.full():
             # A stalled client: drop its backlog and tell it to refetch everything.
             while not sub.queue.empty():
@@ -145,6 +160,30 @@ class PgListener(threading.Thread):
             broker.dispatch(message["topic"], message["event"])
         except (ValueError, KeyError, TypeError):
             logger.warning("Ignoring malformed realtime payload: %.200s", payload)
+
+
+def install_shutdown_hook() -> None:
+    """End live streams the moment the server is told to stop.
+
+    Uvicorn waits for every open connection to close *before* it runs shutdown hooks, and an SSE
+    stream never closes by itself — so without this a redeploy (or a dev auto-reload) hangs for as
+    long as any kitchen screen is open. Runs on the main thread during startup, after uvicorn has
+    installed its own handlers, and chains to them.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        previous = signal.getsignal(signum)
+
+        def handler(number, frame, _previous=previous):
+            broker.close_all()
+            if callable(_previous):
+                _previous(number, frame)
+
+        try:
+            signal.signal(signum, handler)
+        except (ValueError, OSError):  # not allowed in this context (e.g. some test runners)
+            return
 
 
 _listener: PgListener | None = None

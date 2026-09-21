@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
-from app.core.realtime import broker, kitchen_topic
+from app.core.realtime import SHUTDOWN, broker, kitchen_topic
 from app.dependencies.restaurant import RestaurantId, StaffUser
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ async def _event_stream(request: Request, topic: str) -> AsyncIterator[str]:
                     break
                 yield ": ping\n\n"  # keeps proxies and load balancers from closing an idle stream
                 continue
+            if event == SHUTDOWN:
+                break  # server is stopping: end cleanly, the browser reconnects to the next instance
             yield f"event: {event['type']}\ndata: {json.dumps(event, separators=(',', ':'))}\n\n"
     finally:
         broker.unsubscribe(sub)

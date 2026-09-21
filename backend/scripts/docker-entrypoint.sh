@@ -13,4 +13,5 @@ echo "Starting API server..."
 exec uvicorn app.main:app \
   --host "${BACKEND_HOST:-0.0.0.0}" \
   --port "${BACKEND_PORT:-8000}" \
-  --workers "${UVICORN_WORKERS:-2}"
+  --workers "${UVICORN_WORKERS:-2}" \
+  --timeout-graceful-shutdown "${GRACEFUL_SHUTDOWN_SECONDS:-10}"

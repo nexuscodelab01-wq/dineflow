@@ -18,7 +18,7 @@ from app.api.routes import api_router
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import request_id_var, setup_logging
-from app.core.realtime import start_listener, stop_listener
+from app.core.realtime import install_shutdown_hook, start_listener, stop_listener
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -55,6 +55,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
     (UPLOADS_ROOT / "menu").mkdir(parents=True, exist_ok=True)
     logger.info("Starting DineFlow API (env=%s)", settings.ENVIRONMENT)
+    install_shutdown_hook()  # so open live streams never block a restart
     start_listener()  # live updates: one LISTEN connection per worker
     yield
     stop_listener()
