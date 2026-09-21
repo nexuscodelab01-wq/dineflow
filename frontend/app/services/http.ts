@@ -56,7 +56,8 @@ export async function apiFetch<T>(
       }
     }
 
-    if (error.isUnauthorized && import.meta.client) {
+    // Calls that carry their own credentials (login, a table pass) must not sign out a customer's separate account.
+    if (error.isUnauthorized && options.auth !== false && import.meta.client) {
       const auth = useAuthStore()
       if (auth.isAuthenticated) {
         await auth.logout()
