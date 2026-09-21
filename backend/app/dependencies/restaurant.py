@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ForbiddenError, NotFoundError
-from app.db.session import get_db
+from app.db.session import enter_tenant_mode, get_db
 from app.dependencies.auth import CurrentUser, require_roles
 from app.models.enums import RoleName
 from app.models.restaurant import Restaurant
@@ -63,6 +63,8 @@ def get_restaurant_id(
         raise NotFoundError("Restaurant not found")
     if not user_can_access_restaurant(db, current_user, restaurant_id):
         raise ForbiddenError("No access to this restaurant")
+    # Access is settled: restrict the database to this restaurant for the rest of the request.
+    enter_tenant_mode(db, restaurant_id)
     return restaurant_id
 
 

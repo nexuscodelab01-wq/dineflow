@@ -43,6 +43,7 @@ class OrderService:
         self.reservations = ReservationService(db)
 
     def create_order(self, data: OrderCreate, user: User) -> OrderRead:
+        ensure_customer_of(user, data.restaurant_id)  # first: another restaurant's rows are invisible to this customer
         restaurant = self.restaurants.get_by_id(data.restaurant_id)
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")

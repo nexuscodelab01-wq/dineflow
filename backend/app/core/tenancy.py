@@ -28,6 +28,16 @@ def ensure_customer_of(user: User, restaurant_id: int) -> None:
         raise ForbiddenError("Your account belongs to a different restaurant")
 
 
+def ensure_customer_of_identifier(db: Session, user: User, identifier: str) -> None:
+    """Like `ensure_customer_of`, for a restaurant named by id or slug (as in reservation URLs). A customer may only
+    name their own restaurant; anything else is refused before any lookup."""
+    if role_value(user) != RoleName.CUSTOMER.value:
+        return
+    own = db.get(Restaurant, user.restaurant_id) if user.restaurant_id is not None else None
+    if own is None or identifier not in (str(own.id), own.slug):
+        raise ForbiddenError("Your account belongs to a different restaurant")
+
+
 def normalize_host(host: str) -> str:
     """Lower-case hostname without port or trailing dot."""
     host = host.strip().lower()

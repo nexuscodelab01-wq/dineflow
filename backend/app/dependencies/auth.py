@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
-from app.db.session import get_db
+from app.db.session import enter_tenant_mode, get_db
 from app.models.enums import RoleName
 from app.models.user import User
 from app.repositories.user import UserRepository
@@ -36,6 +36,9 @@ def get_current_user(
     # tenancy (no claim) are rejected so everyone signs in once more and gets a bound token.
     if "tenant" not in payload or payload["tenant"] != user.restaurant_id:
         raise UnauthorizedError("Invalid access token")
+    if user.restaurant_id is not None:
+        # A customer belongs to one restaurant: from here on the database itself refuses to show them anyone else's rows.
+        enter_tenant_mode(db, user.restaurant_id)
     return user
 
 

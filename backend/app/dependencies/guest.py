@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import UnauthorizedError
 from app.core.security import decode_guest_token
-from app.db.session import get_db
+from app.db.session import enter_tenant_mode, get_db
 from app.dependencies.auth import bearer_scheme
 from app.models.table_session import SessionGuest, TableSession
 from app.services.table_session_service import TableSessionService
@@ -33,6 +33,7 @@ def get_table_guest(
     except (ValueError, KeyError):
         raise UnauthorizedError("Invalid table pass") from None
     guest, session = TableSessionService(db).authenticate(guest_id, session_id, restaurant_id)
+    enter_tenant_mode(db, session.restaurant_id)  # a table pass reaches one restaurant only, and now the database enforces it
     return TableGuest(guest, session)
 
 

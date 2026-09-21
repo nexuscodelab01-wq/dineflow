@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.tenancy import ensure_customer_of
+from app.core.tenancy import ensure_customer_of, ensure_customer_of_identifier
 from app.services.feature_service import FeatureService
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
@@ -74,6 +74,7 @@ def create_reservation(
     service: Annotated[ReservationService, Depends(get_reservation_service)],
 ) -> ReservationRead:
     try:
+        ensure_customer_of_identifier(db, user, identifier)  # before any lookup: other restaurants are invisible to a customer
         restaurant_id = _restaurant_id(identifier, db)
         FeatureService(db).require(restaurant_id, "reservations")
         ensure_customer_of(user, restaurant_id)
