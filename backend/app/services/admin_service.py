@@ -3,7 +3,7 @@
 import logging
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
@@ -12,6 +12,7 @@ from app.models.enums import OrderStatus, TableStatus
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
+from app.models.order_item import OrderItem
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
@@ -81,6 +82,7 @@ class AdminService:
         return [CategoryRead.model_validate(c) for c in self.categories.list_for_restaurant(restaurant_id)]
 
     def create_category(self, data: CategoryCreate) -> CategoryRead:
+        self._ensure_category_slug_free(data.restaurant_id, data.slug)
         category = Category(**data.model_dump())
         self.categories.create(category)
         self.db.commit()
@@ -88,13 +90,22 @@ class AdminService:
 
     def update_category(self, category_id: int, data: CategoryUpdate, restaurant_id: int) -> CategoryRead:
         category = self._get_category(category_id, restaurant_id)
-        for key, value in data.model_dump(exclude_unset=True).items():
+        payload = data.model_dump(exclude_unset=True)
+        if payload.get("slug") and payload["slug"] != category.slug:
+            self._ensure_category_slug_free(restaurant_id, payload["slug"])
+        for key, value in payload.items():
             setattr(category, key, value)
         self.db.commit()
         return CategoryRead.model_validate(category)
 
     def delete_category(self, category_id: int, restaurant_id: int) -> None:
         category = self._get_category(category_id, restaurant_id)
+        count = self.db.scalar(select(func.count(MenuItem.id)).where(MenuItem.category_id == category.id)) or 0
+        if count:
+            raise ConflictError(
+                f"“{category.name}” still has {count} menu item{'s' if count != 1 else ''}. "
+                "Move or delete them first."
+            )
         self.categories.delete(category)
         self.db.commit()
 
@@ -135,6 +146,11 @@ class AdminService:
 
     def delete_menu_item(self, item_id: int, restaurant_id: int) -> None:
         item = self._get_menu_item(item_id, restaurant_id)
+        if self.db.scalar(select(OrderItem.id).where(OrderItem.menu_item_id == item.id).limit(1)) is not None:
+            raise ConflictError(
+                f"“{item.name}” appears in past orders, so it can't be deleted. "
+                "Mark it unavailable instead to hide it from the menu."
+            )
         self.menu.delete_item(item)
         self.db.commit()
 
@@ -418,6 +434,13 @@ class AdminService:
         if table is None or table.restaurant_id != restaurant_id:
             raise NotFoundError("Table not found")
         return table
+
+    def _ensure_category_slug_free(self, restaurant_id: int, slug: str) -> None:
+        taken = self.db.scalar(
+            select(Category.id).where(Category.restaurant_id == restaurant_id, Category.slug == slug)
+        )
+        if taken is not None:
+            raise ConflictError(f"A category with the link name “{slug}” already exists")
 
     def _ensure_table_number_free(self, restaurant_id: int, table_number: str) -> None:
         taken = self.db.scalar(
