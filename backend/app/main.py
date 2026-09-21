@@ -164,5 +164,8 @@ class UploadsFiles(StaticFiles):
 # were served as text/plain — which browsers refuse to render as images under `nosniff`.
 mimetypes.add_type("image/webp", ".webp")
 
+# The mount checks the folder exists *now*, at import time — before the lifespan hook that used to
+# create it. It is git-ignored, so on a fresh checkout (CI, a new machine) the app failed to start.
+UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", UploadsFiles(directory=str(UPLOADS_ROOT)), name="uploads")
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
