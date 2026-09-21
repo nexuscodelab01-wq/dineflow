@@ -55,7 +55,13 @@ CUSTOMER = {
     ("POST", "/reservations/{reservation_id}/cancel"), ("POST", "/restaurants/{identifier}/reservations"),
 }
 # Platform-only.
-PLATFORM = {("GET", "/restaurants")}
+PLATFORM = {
+    ("GET", "/restaurants"),
+    ("GET", "/platform/restaurants/{restaurant_id}/features"),
+    ("PUT", "/platform/restaurants/{restaurant_id}/features/{key}"),
+    ("DELETE", "/platform/restaurants/{restaurant_id}/features/{key}"),
+    ("GET", "/platform/audit-log"),
+}
 
 
 def all_routes():
