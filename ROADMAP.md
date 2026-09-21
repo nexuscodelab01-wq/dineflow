@@ -98,7 +98,9 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 - [x] Frontend bootstrap: tenant from the address in SSR, baked-in slug removed, clear "no restaurant here" page, restaurant-scoped sign-in/sign-up. Also upgraded pinia 2→3 (2.x crashed SSR on any error page).
 - [x] **Isolation test suite** (`backend/tests/test_tenant_isolation.py`): every route must be classified, every `/admin` route swept with wrong-tenant/staff/customer tokens, IDOR table, customer attacks, and a full-data snapshot proving nothing changed.
 - [ ] **Row-level security** as a second net: needs a non-superuser app DB role (the current `dineflow` role bypasses RLS), `SET LOCAL app.tenant_id` per request, and explicit bypass for trusted jobs. Do before the first real client.
-- [ ] Known gap: signed-in direct page loads log a Vue hydration warning (session lives in localStorage, so SSR renders signed-out). Harmless; fix by rendering auth-dependent UI client-only.
+- [x] Fixed: signed-in page loads no longer mismatch between server and browser in the site header, the admin sidebar and the profile page (they used to keep the server's link targets under the wrong labels). Other pages that read browser-only state directly may still warn; use `useHydrated()`.
+
+- [x] **Password reset and change**: emailed one-time links (hashed, 1 hour, single use, throttled), same answer whether or not the account exists, all other sessions signed out on any change, notification email, change-password while signed in.
 
 **A4 Minimal feature flags (~1 wk)**
 - [x] Code-declared registry (`app/core/features.py`) + per-restaurant DB overrides; server-enforced `requires_feature(...)` (staff routes) / `FeatureService.require` (customer routes); flags delivered with `GET /tenant` and read with `useFeature()` on the frontend; audit log of every change. First gated feature: `reservations`. Operate with `python -m app.cli` or the `/platform` API (platform admins only); a UI can come later.
@@ -108,7 +110,8 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 ### Stage A½ — Demo kit · ~1 week
 - [x] `python -m app.cli create-tenant`: name, slug, logo, brand colour, cuisine template (generic / pizzeria / cafe: starter menu, tables, hours), owner admin account; switches on `custom_branding`; audited. Prints the site address and a one-time password.
 - [x] Palette generated from one colour with a contrast check (brand-600 is darkened just enough for white text to reach WCAG AA); CSS variables, page title and favicon rendered on the server, so there is no flash of the default theme. Only when the restaurant's `custom_branding` flag is on. Logo shown in the header.
-- [ ] Not yet: owner *invite email* / password reset (the script prints a one-time password for now, see OUTSTANDING.md), a settings-page colour picker and logo uploader, branding on the admin area and emails.
+- [x] Owner invite: no password is ever printed; `create-tenant` produces a one-time set-password link (optionally emailed). Password reset, reset-by-email and change-password are built (see A1/A3 hardening).
+- [ ] Not yet: a settings-page colour picker and logo uploader, branding on the admin area and emails.
 - **Exit:** ~10 minutes from nothing to a prospect's site with *their* name, logo and colours. Try it: `docker compose exec backend python -m app.cli create-tenant --name "Luigi's" --slug luigis --owner owner@luigis.demo --color "#c0392b" --template pizzeria`.
 
 ### Stage B — Hero experience · ~8–12 weeks

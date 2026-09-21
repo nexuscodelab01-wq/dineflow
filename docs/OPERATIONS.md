@@ -120,7 +120,7 @@ docker compose exec backend python -m app.cli create-tenant \
   --name "Luigi's Trattoria" --slug luigis --owner owner@luigis.com --owner-name "Luigi Rossi" \
   --color "#c0392b" --logo /path/to/logo.png --template pizzeria     # templates: generic | pizzeria | cafe
 ```
-It creates the restaurant with a starter menu, tables and hours, an admin account (a random password is printed once), turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
+It creates the restaurant with a starter menu, tables and hours, an owner admin account, turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
 A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
 
 ## Waiter view
@@ -152,6 +152,13 @@ Switch it on per restaurant: `python -m app.cli features <slug> qr_table_orderin
 
 ## Testing on a phone (same Wi-Fi)
 `localhost` and `<slug>.localhost` only exist on your computer, so a phone can't open them. Run `scripts/lan-dev.sh on luigis` (any restaurant slug): it points the site and API at your computer's Wi-Fi address, allows that origin, and makes that restaurant the default one there. Then open `http://<your-ip>:3000` on the phone. Open the admin **Table ordering** page from that same address so the printed QR codes carry it. `scripts/lan-dev.sh off` restores your `.env`. If the phone can't connect, allow incoming connections for Docker in the macOS firewall. This is for development only: with a real domain, tenants are found by subdomain (see *Tenants* above).
+
+## Passwords
+- **Forgot password:** *Sign in → Forgot your password?* emails a link from the restaurant's own site (or its custom domain); it works **once** and expires in **1 hour**. The page gives the same answer whether or not the email has an account. Limits: 8 requests / 10 min per address, 4 / hour per account, and at most 3 links per account per hour.
+- **Choosing a password** (reset, change or sign-up): at least 8 characters with a letter and a number, not a common password, and not containing the email name.
+- **What a change does:** the person's other sessions are signed out (refresh tokens revoked) and they get a "your password was changed" email. An access token already issued can keep working for up to `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (30) after a change.
+- **Signed in:** *Profile → Change password* needs the current password and keeps this device signed in.
+- **Owners of new restaurants** get a set-password link from `create-tenant` (7 days). In development, with `EMAIL_BACKEND=console`, emailed links appear in the backend log: `docker compose logs backend | grep reset-password`. Emails need `PUBLIC_SITE_URL` (and `PLATFORM_DOMAIN`) set to your real addresses in production.
 
 ## Feature flags
 Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
