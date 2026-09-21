@@ -1,29 +1,73 @@
 <script setup lang="ts">
+import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import type { KitchenBoard } from '~/types/admin'
 import type { Order, OrderStatus } from '~/types/order'
 import { fetchKitchenBoard, updateOrderStatus } from '~/services/admin'
+import { subscribeKitchen } from '~/services/realtime'
+import type { SseStatus } from '~/utils/sse'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
 const admin = useAdminStore()
+const ui = useUiStore()
 const board = ref<KitchenBoard | null>(null)
 const loading = ref(true)
+const connection = ref<SseStatus>('connecting')
 
 async function load() {
   await admin.initialize()
   if (!admin.restaurantId) return
-  board.value = await fetchKitchenBoard(admin.restaurantId)
-  loading.value = false
+  try {
+    board.value = await fetchKitchenBoard(admin.restaurantId)
+  }
+  catch (err) {
+    if (loading.value) ui.error(err instanceof Error ? err.message : 'Could not load orders')
+  }
+  finally {
+    loading.value = false
+  }
 }
 
-onMounted(load)
-const { pause } = useIntervalFn(load, 15000)
-onUnmounted(pause)
+// Several events can arrive together (an order plus its status change): refetch once.
+const refreshSoon = useDebounceFn(load, 250)
+
+let stream: { close: () => void } | null = null
+
+onMounted(async () => {
+  await load()
+  if (!admin.restaurantId) return
+  stream = subscribeKitchen(admin.restaurantId, {
+    onChange: refreshSoon,
+    onStatus: (status) => {
+      connection.value = status
+    },
+  })
+  document.addEventListener('visibilitychange', onVisible)
+})
+
+onBeforeUnmount(() => {
+  stream?.close()
+  document.removeEventListener('visibilitychange', onVisible)
+})
+
+// A tablet that slept or a background tab may have missed events: catch up when it wakes.
+function onVisible() {
+  if (document.visibilityState === 'visible') load()
+}
+
+// Safety net: rarely while the live stream is healthy, often when it is not.
+useIntervalFn(load, computed(() => (connection.value === 'live' ? 60000 : 15000)))
 
 async function advance(order: Order, status: OrderStatus) {
   if (!admin.restaurantId) return
-  await updateOrderStatus(admin.restaurantId, order.id, status)
-  await load()
+  try {
+    await updateOrderStatus(admin.restaurantId, order.id, status)
+    await load()
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not update the order')
+    await load()
+  }
 }
 
 function nextStatus(order: Order): OrderStatus | null {
@@ -36,8 +80,21 @@ function nextStatus(order: Order): OrderStatus | null {
 
 <template>
   <div>
-    <h1 class="font-display text-2xl font-semibold text-brand-900">Kitchen display</h1>
-    <p class="text-sm text-ink-muted">Live order queue — refreshes every 15s</p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="font-display text-2xl font-semibold text-brand-900">Kitchen display</h1>
+        <p class="text-sm text-ink-muted">Orders appear the moment they are placed.</p>
+      </div>
+      <span
+        class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
+        :class="connection === 'live' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'"
+        role="status"
+        data-testid="connection-status"
+      >
+        <span class="h-2 w-2 rounded-full" :class="connection === 'live' ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'" />
+        {{ connection === 'live' ? 'Live' : connection === 'closed' ? 'Offline — refreshing every 15s' : 'Reconnecting…' }}
+      </span>
+    </div>
 
     <div v-if="loading" class="mt-6 h-64 animate-pulse rounded-2xl bg-brand-100/60" />
 
