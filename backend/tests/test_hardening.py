@@ -17,7 +17,7 @@ from tests.test_menu_orders import _seed_menu
 
 
 def _login(client: TestClient, user) -> dict[str, str]:
-    token = client.post("/api/v1/auth/login", json={"email": user.email, "password": "Test1234!"}).json()["access_token"]
+    token = client.post("/api/v1/auth/login", json={"email": user.email, "password": "Test1234!", "restaurant_id": user.restaurant_id}).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -88,10 +88,11 @@ def test_login_is_rate_limited_per_ip(client: TestClient, db: Session, limits_on
 
 def test_registration_is_rate_limited(client: TestClient, db: Session, limits_on) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
+    restaurant = _seed_menu(db)[0]
     codes = []
     for i in range(12):
         r = client.post("/api/v1/auth/register", json={
-            "email": f"bulk{i}@demo.com", "password": "Sturdy-Pass9", "first_name": "B", "last_name": "K",
+            "restaurant_id": restaurant.id, "email": f"bulk{i}@demo.com", "password": "Sturdy-Pass9", "first_name": "B", "last_name": "K",
         })
         codes.append(r.status_code)
     assert codes[:10] == [201] * 10 and codes[10:] == [429, 429]
@@ -132,7 +133,7 @@ def test_forwarded_ip_is_only_trusted_when_configured(client: TestClient, monkey
 ])
 def test_weak_passwords_are_rejected(client: TestClient, password: str, expected: str) -> None:
     r = client.post("/api/v1/auth/register", json={
-        "email": "alexander@demo.com", "password": password, "first_name": "A", "last_name": "B",
+        "restaurant_id": 1, "email": "alexander@demo.com", "password": password, "first_name": "A", "last_name": "B",
     })
     assert r.status_code == 422, r.text
     assert expected in r.json()["errors"][0]["message"], r.json()
@@ -141,7 +142,7 @@ def test_weak_passwords_are_rejected(client: TestClient, password: str, expected
 def test_strong_password_is_accepted(client: TestClient, db: Session) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
     r = client.post("/api/v1/auth/register", json={
-        "email": "fresh@demo.com", "password": "Horse-Battery-9", "first_name": "F", "last_name": "R",
+        "restaurant_id": _seed_menu(db)[0].id, "email": "fresh@demo.com", "password": "Horse-Battery-9", "first_name": "F", "last_name": "R",
     })
     assert r.status_code == 201
     app.dependency_overrides.clear()

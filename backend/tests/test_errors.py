@@ -18,7 +18,7 @@ def test_validation_error_format(client: TestClient) -> None:
 
 
 def test_not_found_error_format(client: TestClient) -> None:
-    response = client.get("/api/v1/menu/999999")
+    response = client.get("/api/v1/menu/999999?restaurant_id=1")
     assert response.status_code == 404
     body = response.json()
     assert isinstance(body["detail"], str)

@@ -35,6 +35,8 @@ def _seed_menu(db: Session) -> tuple[Restaurant, MenuItem, User]:
     )
     db.add_all([user, restaurant])
     db.flush()
+    user.restaurant_id = restaurant.id
+    db.flush()
 
     category = Category(
         restaurant_id=restaurant.id,
@@ -68,13 +70,13 @@ def test_list_menu_and_create_order(client: TestClient, db: Session) -> None:
     assert menu_data["total"] >= 1
     assert any(i["name"] == "Test Burger" for i in menu_data["items"])
 
-    detail_response = client.get(f"/api/v1/menu/{item.id}")
+    detail_response = client.get(f"/api/v1/menu/{item.id}?restaurant_id={restaurant.id}")
     assert detail_response.status_code == 200
     assert detail_response.json()["name"] == "Test Burger"
 
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user.email, "password": "Test1234!"},
+        json={"email": user.email, "password": "Test1234!", "restaurant_id": restaurant.id},
     )
     token = login.json()["access_token"]
 
@@ -114,7 +116,7 @@ def test_unavailable_item_rejected(client: TestClient, db: Session) -> None:
 
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user.email, "password": "Test1234!"},
+        json={"email": user.email, "password": "Test1234!", "restaurant_id": restaurant.id},
     )
     token = login.json()["access_token"]
 

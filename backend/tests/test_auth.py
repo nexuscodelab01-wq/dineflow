@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.main import app
+from app.models.restaurant import Restaurant
 from app.models.user import User
 from tests.conftest import override_get_db
 
@@ -12,7 +13,12 @@ from tests.conftest import override_get_db
 def test_register_and_login(client: TestClient, db: Session) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
 
+    restaurant = Restaurant(name="Reg Kitchen", slug="reg-kitchen")
+    db.add(restaurant)
+    db.flush()
+
     register_payload = {
+        "restaurant_id": restaurant.id,
         "email": "newuser@demo.com",
         "password": "SecurePass1!",
         "first_name": "New",
@@ -37,7 +43,7 @@ def test_register_and_login(client: TestClient, db: Session) -> None:
 
     login_response = client.post(
         "/api/v1/auth/login",
-        json={"email": "newuser@demo.com", "password": "SecurePass1!"},
+        json={"email": "newuser@demo.com", "password": "SecurePass1!", "restaurant_id": restaurant.id},
     )
     assert login_response.status_code == 200
 

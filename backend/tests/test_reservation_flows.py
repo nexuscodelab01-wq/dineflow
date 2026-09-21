@@ -22,7 +22,7 @@ from tests.conftest import override_get_db
 
 def _header(user: User) -> dict[str, str]:
     role = user.role.name.value if hasattr(user.role.name, "value") else str(user.role.name)
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), claims={'role': role})}"}
+    return {"Authorization": f"Bearer {create_access_token(str(user.id), claims={'role': role, 'tenant': user.restaurant_id})}"}
 
 
 def _iso(dt: datetime) -> str:
@@ -39,6 +39,8 @@ def world(client: TestClient, db: Session):
     customer = User(email="rf-cust@demo.com", hashed_password=hash_password("x"), first_name="C", last_name="Ust", role_id=cust_role.id)
     restaurant = Restaurant(name="Flow Kitchen", slug="flow-kitchen", tax_rate=Decimal("0.1"), delivery_fee=Decimal("1"), dine_in_enabled=True)
     db.add_all([admin, customer, restaurant])
+    db.flush()
+    customer.restaurant_id = restaurant.id
     db.flush()
     db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
     tables = [RestaurantTable(restaurant_id=restaurant.id, table_number=n, capacity=c, status=TableStatus.AVAILABLE)

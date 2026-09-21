@@ -63,7 +63,7 @@ def test_list_categories_and_menu(client: TestClient, db: Session) -> None:
     assert menu_data["total"] >= 1
     assert any(i["name"] == "Test Burger" for i in menu_data["items"])
 
-    detail_response = client.get(f"/api/v1/menu/{item.id}")
+    detail_response = client.get(f"/api/v1/menu/{item.id}?restaurant_id={restaurant.id}")
     assert detail_response.status_code == 200
     assert detail_response.json()["name"] == "Test Burger"
 
@@ -89,10 +89,8 @@ def test_list_restaurants(client: TestClient, db: Session) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
     restaurant, _item = _seed_menu(db)
 
-    list_response = client.get("/api/v1/restaurants")
-    assert list_response.status_code == 200
-    slugs = [r["slug"] for r in list_response.json()]
-    assert restaurant.slug in slugs
+    # The directory of all restaurants is platform-only (see test_tenant_isolation); a site's own details stay public.
+    assert client.get("/api/v1/restaurants").status_code == 401
 
     detail_response = client.get(f"/api/v1/restaurants/{restaurant.slug}")
     assert detail_response.status_code == 200

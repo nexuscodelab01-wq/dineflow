@@ -89,7 +89,7 @@ def test_analytics_endpoint(client: TestClient, db: Session) -> None:
     db.flush()
 
     role_name = admin.role.name.value if hasattr(admin.role.name, "value") else str(admin.role.name)
-    token = create_access_token(str(admin.id), claims={"role": role_name})
+    token = create_access_token(str(admin.id), claims={"role": role_name, "tenant": admin.restaurant_id})
     headers = {"Authorization": f"Bearer {token}"}
 
     response = client.get(

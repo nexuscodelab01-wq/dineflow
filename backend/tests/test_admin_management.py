@@ -24,12 +24,12 @@ from tests.conftest import override_get_db
 
 def _header(user: User) -> dict[str, str]:
     role = user.role.name.value if hasattr(user.role.name, "value") else str(user.role.name)
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), claims={'role': role})}"}
+    return {"Authorization": f"Bearer {create_access_token(str(user.id), claims={'role': role, 'tenant': user.restaurant_id})}"}
 
 
-def _user(db: Session, email: str, role: RoleName, first="T") -> User:
+def _user(db: Session, email: str, role: RoleName, first="T", restaurant_id: int | None = None) -> User:
     role_row = db.query(Role).filter(Role.name == role.value).one()
-    user = User(email=email, hashed_password=hash_password("Test1234!"), first_name=first, last_name="User", role_id=role_row.id)
+    user = User(email=email, hashed_password=hash_password("Test1234!"), first_name=first, last_name="User", role_id=role_row.id, restaurant_id=restaurant_id)
     db.add(user)
     db.flush()
     return user
@@ -45,7 +45,7 @@ def world(client: TestClient, db: Session):
     db.flush()
     admin = _user(db, "am-admin@demo.com", RoleName.RESTAURANT_ADMIN, "Ada")
     staff = _user(db, "am-staff@demo.com", RoleName.RESTAURANT_STAFF, "Stan")
-    customer = _user(db, "am-cust@demo.com", RoleName.CUSTOMER, "Cara")
+    customer = _user(db, "am-cust@demo.com", RoleName.CUSTOMER, "Cara", restaurant_id=a.id)
     admin_b = _user(db, "am-admin-b@demo.com", RoleName.RESTAURANT_ADMIN, "Bea")
     db.add_all([
         RestaurantUser(restaurant_id=a.id, user_id=admin.id),

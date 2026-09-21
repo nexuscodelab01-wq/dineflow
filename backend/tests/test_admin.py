@@ -20,7 +20,7 @@ from tests.conftest import override_get_db
 
 def auth_header(user: User) -> dict[str, str]:
     role_name = user.role.name.value if hasattr(user.role.name, "value") else str(user.role.name)
-    token = create_access_token(str(user.id), claims={"role": role_name})
+    token = create_access_token(str(user.id), claims={"role": role_name, "tenant": user.restaurant_id})
     return {"Authorization": f"Bearer {token}"}
 
 
