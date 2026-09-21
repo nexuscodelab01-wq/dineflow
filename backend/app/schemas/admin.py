@@ -1,5 +1,6 @@
 """Admin request/response schemas."""
 
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -236,6 +237,7 @@ class RestaurantSettingsUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     logo_url: str | None = None
+    primary_color: str | None = None
     address: str | None = None
     city: str | None = None
     postal_code: str | None = None
@@ -253,6 +255,16 @@ class RestaurantSettingsUpdate(BaseModel):
     @classmethod
     def _check_logo_url(cls, value: str | None) -> str | None:
         return _media_url(value)
+
+    @field_validator("primary_color")
+    @classmethod
+    def _check_primary_color(cls, value: str | None) -> str | None:
+        # Injected into a <style> tag by the site, so it must be exactly #rrggbb and nothing else.
+        if value is None:
+            return None
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError("Colour must look like #1a7f5a")
+        return value.lower()
 
 
 class CustomerSummary(BaseModel):
