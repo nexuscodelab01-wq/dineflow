@@ -70,11 +70,11 @@ risky rework out and the demo close.
 | Feature flags | None | §7.2 |
 | Email / SMS / jobs / real-time | None (kitchen polls every 15 s) | Email, SMS, job queue, SSE |
 | Payments | Mock only | Stripe Connect |
-| Sessions | 30-min token; refresh never used by the UI | Silent refresh |
+| Sessions | ~~30-min token, refresh never used~~ — **fixed**: silent refresh with single-flight + multi-tab safety | — |
 | Orders | Login required; no table sessions; one order per reservation | Guest orders, table sessions, rounds |
 | Platform admin | `SUPER_ADMIN` role, no UI | Console (Stage E) |
 
-**Known issues to fix first:** client-supplied order `discount` (anyone can send `discount: 9999`), no rate limiting, `test_admin.py` lost most of its tests in the working copy.
+**Known issues (status):** ~~client-supplied order `discount`~~ fixed · ~~no rate limiting~~ fixed · admin test coverage restored in `tests/test_admin_management.py` (your working copy of `test_admin.py` is still trimmed — decide whether to keep or restore it).
 
 ## 5. Stages
 
@@ -82,10 +82,10 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 
 ### Stage A — Thin foundation · ~6–9 weeks
 **A1 Hardening (1–2 wk)**
-- [ ] Server-side order pricing; remove client `discount`.
-- [ ] Silent token refresh; rate limiting; password rules; security headers.
-- [ ] Restore/extend tests; make CI required on `main`.
-- [ ] Error tracking (Sentry), structured logs, health checks, DB backups with a tested restore, a staging environment.
+- [x] Server-side order pricing; remove client `discount` (and client `table_id`).
+- [x] Silent token refresh; rate limiting; password rules; security headers (API and site).
+- [x] Restore/extend tests (new admin suite found and fixed 3 crash bugs). [ ] Make CI required on `main` (GitHub branch-protection setting — do this in the repo settings).
+- [x] Error tracking hook (Sentry, optional), structured JSON logs + request ids, readiness check, DB backup scripts with a **verified restore drill** (`docs/OPERATIONS.md`). [ ] Staging environment; off-site backup schedule.
 
 **A2 Platform plumbing (2–3 wk)**
 - [ ] Object storage (S3-compatible) + image resize/WebP; per-tenant prefixes.
