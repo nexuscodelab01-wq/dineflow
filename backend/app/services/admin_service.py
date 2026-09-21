@@ -121,7 +121,7 @@ class AdminService:
     # Menu items
     def list_menu_items(self, restaurant_id: int) -> list[MenuItemDetailRead]:
         items = self.menu.list_items(restaurant_id)
-        return [self.menu_reader.get_item(i.id) for i in items]
+        return [self.menu_reader.get_item(i.id, i.restaurant_id) for i in items]
 
     def create_menu_item(self, data: MenuItemCreate) -> MenuItemDetailRead:
         self._get_category(data.category_id, data.restaurant_id)
@@ -131,7 +131,7 @@ class AdminService:
             self._validate_modifiers(data.restaurant_id, data.modifier_ids)
             self.menu.set_item_modifiers(item, data.modifier_ids)
         self.db.commit()
-        return self.menu_reader.get_item(item.id)
+        return self.menu_reader.get_item(item.id, item.restaurant_id)
 
     def update_menu_item(self, item_id: int, data: MenuItemUpdate, restaurant_id: int) -> MenuItemDetailRead:
         item = self._get_menu_item(item_id, restaurant_id)
@@ -147,7 +147,7 @@ class AdminService:
         self.db.commit()
         if "image_url" in payload and old_image != item.image_url:
             delete_owned_url(old_image, restaurant_id)  # the replaced upload is no longer referenced
-        return self.menu_reader.get_item(item.id)
+        return self.menu_reader.get_item(item.id, item.restaurant_id)
 
     def delete_menu_item(self, item_id: int, restaurant_id: int) -> None:
         item = self._get_menu_item(item_id, restaurant_id)

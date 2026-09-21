@@ -9,6 +9,8 @@ from app.core.exceptions import AppError, raise_http_for_app_error
 from app.core.rate_limit import client_ip, limiter, rate_limit
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
+from app.dependencies.restaurant import list_accessible_restaurants
+from app.schemas.restaurant import RestaurantRead
 from app.schemas.auth import (
     MessageResponse,
     TokenRefresh,
@@ -80,3 +82,13 @@ def logout(
 @router.get("/me", response_model=UserRead)
 def me(current_user: CurrentUser) -> UserRead:
     return UserRead.model_validate(current_user)
+
+
+@router.get("/my-restaurants", response_model=list[RestaurantRead])
+def my_restaurants(
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[RestaurantRead]:
+    """The restaurants this account can manage: all of them for platform admins, memberships for staff,
+    nothing for customers."""
+    return [RestaurantRead.model_validate(r) for r in list_accessible_restaurants(db, user)]

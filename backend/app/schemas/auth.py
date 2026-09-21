@@ -14,6 +14,8 @@ _COMMON_PASSWORDS = {
 
 
 class UserRegister(BaseModel):
+    # Customers belong to one restaurant (the site they sign up on).
+    restaurant_id: int
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
@@ -40,6 +42,8 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    # The restaurant site being signed in to. Omit for platform / global staff sign-in.
+    restaurant_id: int | None = None
 
 
 class TokenRefresh(BaseModel):
@@ -70,6 +74,7 @@ class UserRead(BaseModel):
     phone: str | None = None
     is_active: bool
     role: RoleRead
+    restaurant_id: int | None = None
 
 
 class MessageResponse(BaseModel):

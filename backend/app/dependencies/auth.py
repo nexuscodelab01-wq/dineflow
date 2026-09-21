@@ -32,6 +32,10 @@ def get_current_user(
     user = UserRepository(db).get_by_id(user_id)
     if user is None or not user.is_active:
         raise UnauthorizedError("User not found or inactive")
+    # The token names the tenant it was issued for; it must still match the account. Tokens from before
+    # tenancy (no claim) are rejected so everyone signs in once more and gets a bound token.
+    if "tenant" not in payload or payload["tenant"] != user.restaurant_id:
+        raise UnauthorizedError("Invalid access token")
     return user
 
 

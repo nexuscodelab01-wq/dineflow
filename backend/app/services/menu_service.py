@@ -38,9 +38,9 @@ class MenuService:
             pages=pages,
         )
 
-    def get_item(self, item_id: int) -> MenuItemDetailRead:
+    def get_item(self, item_id: int, restaurant_id: int) -> MenuItemDetailRead:
         item = self.menu.get_item_detail(item_id)
-        if item is None:
+        if item is None or item.restaurant_id != restaurant_id:
             raise NotFoundError("Menu item not found")
         return self._to_detail_item(item)
 

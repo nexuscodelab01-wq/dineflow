@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.tenancy import ensure_customer_of
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
 from app.core.rate_limit import rate_limit
@@ -70,7 +71,9 @@ def create_reservation(
     service: Annotated[ReservationService, Depends(get_reservation_service)],
 ) -> ReservationRead:
     try:
-        return service.create_reservation(_restaurant_id(identifier, db), payload, user)
+        restaurant_id = _restaurant_id(identifier, db)
+        ensure_customer_of(user, restaurant_id)
+        return service.create_reservation(restaurant_id, payload, user)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

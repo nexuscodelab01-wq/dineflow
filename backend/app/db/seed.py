@@ -196,6 +196,7 @@ def seed() -> None:
         restaurant = Restaurant(
             name="Bella Vista Kitchen",
             slug="bella-vista-kitchen",
+            order_prefix="BV",
             description="Modern Italian-American dining with wood-fired pizza and craft burgers.",
             logo_url=None,
             address="124 Market Street",
@@ -226,6 +227,7 @@ def seed() -> None:
             last: str,
             role: RoleName,
             phone: str | None = None,
+            restaurant_id: int | None = None,
         ) -> User:
             user = User(
                 email=email,
@@ -234,6 +236,7 @@ def seed() -> None:
                 last_name=last,
                 phone=phone,
                 role_id=role_map[role.value].id,
+                restaurant_id=restaurant_id,  # customers belong to one restaurant; staff are global
             )
             db.add(user)
             db.flush()
@@ -244,9 +247,9 @@ def seed() -> None:
         staff = create_user("staff@bellavista.demo", "Elena", "Chen", RoleName.RESTAURANT_STAFF, "+14155550102")
 
         customers = [
-            create_user("customer1@demo.com", "Alex", "Johnson", RoleName.CUSTOMER, "+14155550111"),
-            create_user("customer2@demo.com", "Priya", "Patel", RoleName.CUSTOMER, "+14155550112"),
-            create_user("customer3@demo.com", "Jordan", "Lee", RoleName.CUSTOMER, "+14155550113"),
+            create_user("customer1@demo.com", "Alex", "Johnson", RoleName.CUSTOMER, "+14155550111", restaurant.id),
+            create_user("customer2@demo.com", "Priya", "Patel", RoleName.CUSTOMER, "+14155550112", restaurant.id),
+            create_user("customer3@demo.com", "Jordan", "Lee", RoleName.CUSTOMER, "+14155550113", restaurant.id),
         ]
 
         for user in (admin, staff):

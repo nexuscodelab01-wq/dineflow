@@ -10,6 +10,7 @@ from app.core.exceptions import ForbiddenError, NotFoundError
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser, require_roles
 from app.models.enums import RoleName
+from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.repositories.restaurant import RestaurantRepository
@@ -32,6 +33,20 @@ def user_can_access_restaurant(db: Session, user: User, restaurant_id: int) -> b
         )
         return membership is not None
     return False
+
+
+def list_accessible_restaurants(db: Session, user: User) -> list:
+    role = get_role_name(user)
+    stmt = select(Restaurant).where(Restaurant.is_active.is_(True)).order_by(Restaurant.name)
+    if role == RoleName.SUPER_ADMIN.value:
+        pass
+    elif role in {RoleName.RESTAURANT_ADMIN.value, RoleName.RESTAURANT_STAFF.value}:
+        stmt = stmt.join(RestaurantUser, RestaurantUser.restaurant_id == Restaurant.id).where(
+            RestaurantUser.user_id == user.id
+        )
+    else:
+        return []
+    return list(db.scalars(stmt).all())
 
 
 StaffUser = Annotated[User, Depends(require_roles(RoleName.RESTAURANT_STAFF, RoleName.RESTAURANT_ADMIN, RoleName.SUPER_ADMIN))]

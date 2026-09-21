@@ -38,6 +38,13 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Multi-tenancy. A restaurant's site is reached at <slug>.<PLATFORM_DOMAIN> (or its own custom domain).
+    # In development set PLATFORM_DOMAIN=localhost so <slug>.localhost:3000 works, and DEFAULT_TENANT_SLUG so
+    # plain localhost:3000 opens one restaurant. Leave both empty in production unless you want a default.
+    PLATFORM_DOMAIN: str = ""
+    DEFAULT_TENANT_SLUG: str = ""
+    RESERVED_SUBDOMAINS: str = "www,admin,api,app,static,assets,cdn,mail,status,docs,platform"
+
     # Abuse protection. The limiter is in-process (per worker); move it to Redis when we run
     # several workers/instances (roadmap stage A2).
     RATE_LIMIT_ENABLED: bool = True
@@ -84,6 +91,10 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "text"  # "text" (dev) or "json" (production log shippers)
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
+    @property
+    def reserved_subdomains(self) -> set[str]:
+        return {s.strip().lower() for s in self.RESERVED_SUBDOMAINS.split(",") if s.strip()}
 
     @property
     def is_production(self) -> bool:

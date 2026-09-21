@@ -1,10 +1,10 @@
 """Order creation and validation business logic."""
 
 import logging
-import secrets
 from collections import defaultdict
 from decimal import Decimal
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError
@@ -18,11 +18,13 @@ from app.models.order_item import OrderItem
 from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
+from app.models.restaurant import Restaurant
 from app.core.realtime import kitchen_topic, publish
 from app.models.user import User
 from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
+from app.core.tenancy import ensure_customer_of
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.notifications import notify_order_placed
 from app.services.payment_service import PaymentService
@@ -44,6 +46,7 @@ class OrderService:
         restaurant = self.restaurants.get_by_id(data.restaurant_id)
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
+        ensure_customer_of(user, restaurant.id)
 
         # The table always comes from the customer's reservation (dine-in), never from the request.
         table_id: int | None = None
@@ -82,7 +85,7 @@ class OrderService:
         order = Order(
             user_id=user.id,
             restaurant_id=restaurant.id,
-            order_number=self._generate_order_number(),
+            order_number=self._next_order_number(restaurant.id),
             order_type=data.order_type,
             status=OrderStatus.PENDING,
             subtotal=Decimal("0.00"),
@@ -264,6 +267,13 @@ class OrderService:
         unit_price = menu_item.price + sum(opt.price_adjustment for opt in selected)
         return unit_price.quantize(Decimal("0.01")), selected
 
-    @staticmethod
-    def _generate_order_number() -> str:
-        return f"DF-{secrets.token_hex(4).upper()}"
+    def _next_order_number(self, restaurant_id: int) -> str:
+        """Sequential per restaurant (e.g. PZ-1001). The row lock serialises concurrent orders, and the
+        counter rolls back with the order if it fails, so numbers never skip or repeat."""
+        row = self.db.execute(
+            update(Restaurant)
+            .where(Restaurant.id == restaurant_id)
+            .values(next_order_number=Restaurant.next_order_number + 1)
+            .returning(Restaurant.order_prefix, Restaurant.next_order_number)
+        ).one()
+        return f"{row.order_prefix}-{row.next_order_number - 1}"

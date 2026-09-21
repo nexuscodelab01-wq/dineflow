@@ -21,6 +21,7 @@ from app.core.exceptions import AppError
 from app.core.logging import request_id_var, setup_logging
 from app.core.realtime import install_shutdown_hook, start_listener, stop_listener
 from app.core.storage import UPLOADS_ROOT
+from app.core.tenancy import origin_regex
 from app.jobs.worker import start_worker, stop_worker
 
 setup_logging()
@@ -143,6 +144,7 @@ async def request_context(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

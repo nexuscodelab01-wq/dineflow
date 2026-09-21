@@ -626,5 +626,5 @@ def update_settings(
 
 
 @router.get("/ping")
-def admin_ping(_: AdminUser) -> dict[str, str]:
+def admin_ping(_: AdminUser, restaurant_id: RestaurantId) -> dict[str, str]:
     return {"message": "admin ok"}

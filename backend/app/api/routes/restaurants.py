@@ -7,7 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, raise_http_for_app_error
+from app.core.tenancy import resolve_tenant
 from app.db.session import get_db
+from app.dependencies.auth import require_roles
+from app.models.enums import RoleName
 from app.models.restaurant_table import RestaurantTable
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.restaurant import RestaurantRead
@@ -16,8 +19,13 @@ from app.services.reservation_service import ReservationService
 router = APIRouter(prefix="/restaurants")
 
 
-@router.get("", response_model=list[RestaurantRead])
+@router.get(
+    "",
+    response_model=list[RestaurantRead],
+    dependencies=[Depends(require_roles(RoleName.SUPER_ADMIN))],
+)
 def list_restaurants(db: Annotated[Session, Depends(get_db)]) -> list[RestaurantRead]:
+    """The platform directory. Restaurant sites never list each other, so this is platform-admin only."""
     restaurants = RestaurantRepository(db).list_active()
     return [RestaurantRead.model_validate(r) for r in restaurants]
 

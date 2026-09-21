@@ -61,9 +61,10 @@ def list_menu(
 @router.get("/menu/{item_id}", response_model=MenuItemDetailRead)
 def get_menu_item(
     item_id: int,
+    restaurant_id: int,
     service: Annotated[MenuService, Depends(get_menu_service)],
 ) -> MenuItemDetailRead:
     try:
-        return service.get_item(item_id)
+        return service.get_item(item_id, restaurant_id)
     except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc

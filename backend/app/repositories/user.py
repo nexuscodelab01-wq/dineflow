@@ -1,6 +1,6 @@
 """User data access."""
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.role import Role
@@ -19,13 +19,30 @@ class UserRepository:
         )
         return self.db.scalar(stmt)
 
-    def get_by_email(self, email: str) -> User | None:
+    def get_by_email(self, email: str, restaurant_id: int | None = None) -> User | None:
+        """The identity that signs in with this email *in this context*.
+
+        With a restaurant: that restaurant's customer, otherwise a global identity (staff / platform admin).
+        Without one: global identities only. Customers of other restaurants never match.
+        """
+        condition = User.restaurant_id.is_(None) if restaurant_id is None else or_(User.restaurant_id == restaurant_id, User.restaurant_id.is_(None))
         stmt = (
             select(User)
             .options(joinedload(User.role))
-            .where(User.email == email.lower())
+            .where(User.email == email.lower(), condition)
+            .order_by(User.restaurant_id.asc().nulls_last())  # a restaurant's own customer wins over a global identity
+            .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def email_taken(self, email: str, restaurant_id: int) -> bool:
+        """Is the email already used by a customer of this restaurant, or by a global identity?"""
+        return self.db.scalar(
+            select(User.id).where(
+                User.email == email.lower(),
+                or_(User.restaurant_id == restaurant_id, User.restaurant_id.is_(None)),
+            ).limit(1)
+        ) is not None
 
     def create(
         self,
@@ -36,6 +53,7 @@ class UserRepository:
         last_name: str,
         role_id: int,
         phone: str | None = None,
+        restaurant_id: int | None = None,
     ) -> User:
         user = User(
             email=email.lower(),
@@ -44,6 +62,7 @@ class UserRepository:
             last_name=last_name,
             phone=phone,
             role_id=role_id,
+            restaurant_id=restaurant_id,
         )
         self.db.add(user)
         self.db.flush()

@@ -4,7 +4,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import (
     create_access_token,
     create_refresh_token_value,
@@ -16,6 +16,7 @@ from app.core.security import (
 from app.models.enums import RoleName
 from app.models.user import User
 from app.repositories.refresh_token import RefreshTokenRepository
+from app.repositories.restaurant import RestaurantRepository
 from app.repositories.user import RoleRepository, UserRepository
 from app.schemas.auth import TokenResponse, UserLogin, UserRegister
 
@@ -28,9 +29,11 @@ class AuthService:
         self.users = UserRepository(db)
         self.roles = RoleRepository(db)
         self.refresh_tokens = RefreshTokenRepository(db)
+        self.restaurants = RestaurantRepository(db)
 
     def register(self, data: UserRegister) -> TokenResponse:
-        if self.users.get_by_email(data.email):
+        self._active_restaurant(data.restaurant_id)
+        if self.users.email_taken(data.email, data.restaurant_id):
             raise ConflictError("Email already registered")
 
         self.roles.ensure_defaults()
@@ -45,13 +48,16 @@ class AuthService:
             last_name=data.last_name,
             phone=data.phone,
             role_id=customer_role.id,
+            restaurant_id=data.restaurant_id,
         )
         self.db.commit()
         logger.info("User registered: user_id=%s", user.id)
         return self._issue_tokens(user)
 
     def login(self, data: UserLogin) -> TokenResponse:
-        user = self.users.get_by_email(data.email)
+        if data.restaurant_id is not None:
+            self._active_restaurant(data.restaurant_id)
+        user = self.users.get_by_email(data.email, data.restaurant_id)
         if user is None or not verify_password(data.password, user.hashed_password):
             raise UnauthorizedError("Invalid email or password")
         if not user.is_active:
@@ -82,6 +88,12 @@ class AuthService:
             self.db.commit()
             logger.info("User logout: user_id=%s", record.user_id)
 
+    def _active_restaurant(self, restaurant_id: int):
+        restaurant = self.restaurants.get_by_id(restaurant_id)
+        if restaurant is None or not restaurant.is_active:
+            raise NotFoundError("Restaurant not found")
+        return restaurant
+
     def _issue_tokens(self, user: User) -> TokenResponse:
         access_token = create_access_token(
             str(user.id),
@@ -90,7 +102,10 @@ class AuthService:
                     user.role.name.value
                     if hasattr(user.role.name, "value")
                     else str(user.role.name)
-                )
+                ),
+                # The tenant this identity belongs to (None for staff / platform admins). Checked on every
+                # request, so a token can never be replayed against a different restaurant's customers.
+                "tenant": user.restaurant_id,
             },
         )
         refresh_value = create_refresh_token_value()
