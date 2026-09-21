@@ -15,12 +15,17 @@ const allNav = [
   { to: '/admin/kitchen', label: 'Kitchen' },
   { to: '/admin/tables', label: 'Tables' },
   { to: '/admin/floor-plan', label: 'Floor plan', adminOnly: true },
-  { to: '/admin/reservations', label: 'Reservations' },
+  { to: '/admin/reservations', label: 'Reservations', feature: 'reservations' },
   { to: '/admin/customers', label: 'Customers' },
   { to: '/admin/settings', label: 'Settings', adminOnly: true },
 ]
 // Staff can run the floor; menu edits, tables and settings need an admin.
-const nav = computed(() => allNav.filter(item => !item.adminOnly || auth.isAdmin))
+const restaurantSite = useRestaurantStore()
+// Flags come from the site's own restaurant; only apply them when that is the restaurant being managed.
+const nav = computed(() => allNav.filter(item =>
+  (!item.adminOnly || auth.isAdmin)
+  && (!item.feature || admin.restaurantId !== restaurantSite.id || isFeatureOn(restaurantSite.current?.features, item.feature)),
+))
 
 watch(() => route.path, () => {
   mobileOpen.value = false
