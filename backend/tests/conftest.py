@@ -75,3 +75,15 @@ def admin_user(db: Session) -> User:
     db.add(user)
     db.flush()
     return db.scalar(select(User).options(joinedload(User.role)).where(User.id == user.id))
+
+
+@pytest.fixture(autouse=True)
+def _rate_limiting_off_by_default(monkeypatch):
+    """Most tests hammer the same endpoints from one 'client'; rate limiting has its own tests."""
+    from app.core.config import settings
+    from app.core.rate_limit import limiter
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+    limiter.reset()
+    yield
+    limiter.reset()

@@ -1,6 +1,9 @@
 """Application entrypoint."""
 
 import logging
+import re
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -14,10 +17,34 @@ from pathlib import Path
 from app.api.routes import api_router
 from app.core.config import settings
 from app.core.exceptions import AppError
-from app.core.logging import setup_logging
+from app.core.logging import request_id_var, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Fail fast: never boot in production with placeholder secrets.
+settings.assert_production_ready()
+
+
+def _init_sentry() -> None:
+    """Report unhandled errors to Sentry when SENTRY_DSN is set. Optional dependency."""
+    if not settings.SENTRY_DSN:
+        return
+    try:
+        import sentry_sdk
+    except ImportError:
+        logger.warning("SENTRY_DSN is set but sentry-sdk is not installed; error reporting is off")
+        return
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        send_default_pii=False,
+    )
+    logger.info("Sentry error reporting enabled")
+
+
+_init_sentry()
 
 UPLOADS_ROOT = Path(__file__).resolve().parents[1] / "uploads"
 
@@ -44,7 +71,20 @@ app = FastAPI(
 
 @app.exception_handler(AppError)
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+    headers = {"Retry-After": str(exc.retry_after)} if hasattr(exc, "retry_after") else None
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message}, headers=headers)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Never leak internals; give the client an id support can look up in the logs."""
+    request_id = getattr(request.state, "request_id", "-")
+    logger.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong on our side.", "request_id": request_id},
+        headers={"X-Request-ID": request_id},
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -63,12 +103,41 @@ async def validation_exception_handler(
     )
 
 
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+_QUIET_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a request id, log the request, and add baseline security headers."""
+    incoming = request.headers.get("x-request-id", "")
+    request_id = incoming if _REQUEST_ID_RE.match(incoming) else uuid.uuid4().hex[:16]
+    request.state.request_id = request_id
+    request_id_var.set(request_id)
+    started = time.perf_counter()
+
+    response = await call_next(request)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if request.url.path not in _QUIET_PATHS:
+        logger.info("%s %s -> %s (%.0f ms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    response.headers["X-Request-ID"] = request_id
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if settings.is_production:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "Retry-After"],
 )
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT)), name="uploads")

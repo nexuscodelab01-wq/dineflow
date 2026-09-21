@@ -30,5 +30,11 @@ class ConflictError(AppError):
         super().__init__(message, status.HTTP_409_CONFLICT)
 
 
+class TooManyRequestsError(AppError):
+    def __init__(self, retry_after: int, message: str = "Too many requests. Please slow down and try again shortly.") -> None:
+        super().__init__(message, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.retry_after = retry_after
+
+
 def raise_http_for_app_error(exc: AppError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.message)

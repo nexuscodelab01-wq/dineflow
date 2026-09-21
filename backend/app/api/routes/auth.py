@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, raise_http_for_app_error
+from app.core.rate_limit import client_ip, limiter, rate_limit
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.schemas.auth import (
@@ -25,7 +26,12 @@ def get_auth_service(db: Annotated[Session, Depends(get_db)]) -> AuthService:
     return AuthService(db)
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=201,
+    dependencies=[rate_limit("register", 10, 600)],
+)
 def register(
     data: UserRegister,
     service: Annotated[AuthService, Depends(get_auth_service)],
@@ -36,18 +42,22 @@ def register(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[rate_limit("login", 20, 60)])
 def login(
     data: UserLogin,
+    request: Request,
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> TokenResponse:
+    # Slow down password guessing against one account from one place. Keyed by IP *and* email, so
+    # hammering someone's address can't lock the real owner out from their own network.
+    limiter.enforce(f"login-account:{client_ip(request)}:{data.email.lower()}", 8, 600)
     try:
         return service.login(data)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, dependencies=[rate_limit("refresh", 60, 60)])
 def refresh_token(
     data: TokenRefresh,
     service: Annotated[AuthService, Depends(get_auth_service)],

@@ -43,7 +43,8 @@ class OrderService:
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
 
-        table_id = data.table_id
+        # The table always comes from the customer's reservation (dine-in), never from the request.
+        table_id: int | None = None
         reservation = None
 
         if data.order_type == OrderType.DELIVERY:
@@ -84,7 +85,7 @@ class OrderService:
             subtotal=Decimal("0.00"),
             tax=Decimal("0.00"),
             delivery_fee=Decimal("0.00"),
-            discount=data.discount,
+            discount=Decimal("0.00"),  # server-side only; coupons will set this later
             total=Decimal("0.00"),
             customer_name=data.customer_name,
             customer_email=str(data.customer_email),
@@ -141,7 +142,7 @@ class OrderService:
                 )
 
         delivery_fee = restaurant.delivery_fee if data.order_type == OrderType.DELIVERY else Decimal("0.00")
-        taxable = max(subtotal - data.discount, Decimal("0.00"))
+        taxable = max(subtotal - order.discount, Decimal("0.00"))
         tax = (taxable * restaurant.tax_rate).quantize(Decimal("0.01"))
         total = (taxable + tax + delivery_fee).quantize(Decimal("0.01"))
 

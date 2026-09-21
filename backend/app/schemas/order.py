@@ -29,12 +29,12 @@ class OrderCreate(BaseModel):
     customer_name: str = Field(min_length=1, max_length=200)
     customer_email: EmailStr
     customer_phone: str | None = Field(default=None, max_length=30)
-    table_id: int | None = None
+    # Prices, discounts and the table are decided by the server — never by the client.
+    # (Unknown fields such as `discount` or `table_id` in a request are ignored.)
     reservation_id: int | None = None
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=1000)
-    discount: Decimal = Field(default=Decimal("0.00"), ge=0)
 
 
 class OrderItemModifierRead(BaseModel):

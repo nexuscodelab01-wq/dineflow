@@ -38,6 +38,38 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Abuse protection. The limiter is in-process (per worker); move it to Redis when we run
+    # several workers/instances (roadmap stage A2).
+    RATE_LIMIT_ENABLED: bool = True
+    # Read the client IP from X-Forwarded-For. Only enable behind a proxy you control,
+    # otherwise anyone can spoof their IP and dodge the limits.
+    TRUST_PROXY_HEADERS: bool = False
+
+    # Observability
+    LOG_FORMAT: str = "text"  # "text" (dev) or "json" (production log shippers)
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
+
+    def assert_production_ready(self) -> None:
+        """Refuse to boot in production with placeholder secrets (a classic way to get owned)."""
+        if not self.is_production:
+            return
+        problems = []
+        for name in ("JWT_SECRET", "JWT_REFRESH_SECRET"):
+            value = getattr(self, name)
+            if value.startswith("change-me") or len(value) < 32:
+                problems.append(f"{name} must be a unique random value of at least 32 characters")
+        if self.JWT_SECRET == self.JWT_REFRESH_SECRET:
+            problems.append("JWT_SECRET and JWT_REFRESH_SECRET must differ")
+        if "dineflow_dev_password" in self.DATABASE_URL:
+            problems.append("DATABASE_URL still uses the development database password")
+        if problems:
+            raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

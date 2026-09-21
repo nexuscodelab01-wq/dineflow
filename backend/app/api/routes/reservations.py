@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
+from app.core.rate_limit import rate_limit
 from app.dependencies.auth import CurrentUser
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.reservation import (
@@ -31,7 +32,11 @@ def _restaurant_id(identifier: str, db: Session) -> int:
     return restaurant.id
 
 
-@router.get("/restaurants/{identifier}/reservations/availability", response_model=AvailabilityResponse)
+@router.get(
+    "/restaurants/{identifier}/reservations/availability",
+    response_model=AvailabilityResponse,
+    dependencies=[rate_limit("availability", 90, 60)],
+)
 def reservation_availability(
     identifier: str,
     db: Annotated[Session, Depends(get_db)],
@@ -55,6 +60,7 @@ def reservation_availability(
     "/restaurants/{identifier}/reservations",
     response_model=ReservationRead,
     status_code=201,
+    dependencies=[rate_limit("reserve", 20, 600)],
 )
 def create_reservation(
     identifier: str,

@@ -1,6 +1,16 @@
 """Authentication and user Pydantic schemas."""
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+# A short list of the passwords attackers try first. Not a substitute for a breach-list check
+# (planned), but it stops the most obvious choices.
+_COMMON_PASSWORDS = {
+    "password", "password1", "password12", "password123", "passw0rd", "12345678", "123456789",
+    "1234567890", "qwertyui", "qwerty123", "qwertyuiop", "iloveyou", "admin123", "welcome1",
+    "welcome123", "letmein1", "abc12345", "11111111", "00000000", "changeme", "dineflow123",
+}
 
 
 class UserRegister(BaseModel):
@@ -9,6 +19,22 @@ class UserRegister(BaseModel):
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
     phone: str | None = Field(default=None, max_length=30)
+
+    @field_validator("password")
+    @classmethod
+    def _strong_enough(cls, value: str) -> str:
+        if not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
+            raise ValueError("Password must include at least one letter and one number")
+        if value.lower() in _COMMON_PASSWORDS:
+            raise ValueError("That password is too common — please choose another")
+        return value
+
+    @model_validator(mode="after")
+    def _not_derived_from_identity(self) -> "UserRegister":
+        local_part = str(self.email).split("@", 1)[0].lower()
+        if len(local_part) >= 4 and local_part in self.password.lower():
+            raise ValueError("Password must not contain your email name")
+        return self
 
 
 class UserLogin(BaseModel):

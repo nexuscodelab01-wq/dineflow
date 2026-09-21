@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
+from app.core.rate_limit import rate_limit
 from app.dependencies.auth import CurrentUser
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.order_service import OrderService
@@ -18,7 +19,12 @@ def get_order_service(db: Annotated[Session, Depends(get_db)]) -> OrderService:
     return OrderService(db)
 
 
-@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=OrderRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[rate_limit("order", 30, 600)],
+)
 def create_order(
     data: OrderCreate,
     user: CurrentUser,
