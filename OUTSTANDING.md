@@ -30,6 +30,11 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - An "expo" view (everything ready to pass, across stations), course firing, allergen tags, average ticket time.
 - The kitchen screen refreshes the whole board on every event (fine for a restaurant's volume; switch to applying small updates if boards get very large).
 
+### 6. Waiter view follow-ups
+- Merge tables (large parties) and void/comp with a reason are not built; a staff round can add items but not remove them.
+- No sound or push for new requests (the sidebar badge polls every 10 s).
+- A guest who scans the *new* table's code joins the same tab (intended), but the old table's printed code stops working after a move, so a guest who reloads still relies on their saved pass.
+
 ## Done
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.
 - Customer order page and table guests did not update live: they now follow their order over SSE (`GET /orders/{id}/stream`, `GET /table-session/stream`), with a slow poll only as a fallback. Status changes show in well under a second.

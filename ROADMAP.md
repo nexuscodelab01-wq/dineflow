@@ -132,7 +132,8 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 **B3 Front of house (1–2 wk)**
 - [x] Guest phone shows live status (Received → Preparing → Ready/Served). *(done in B1)*
 - [x] **Service requests**: call waiter, request bill → staff queue and badge. *(done in B1; water/napkins and sound alerts still to do)*
-- [ ] Waiter view: table map with session totals, open orders, requests; add items on behalf of guests; transfer/merge tables; void/comp with reason.
+- [x] **Waiter view** (`/admin/waiter`): live floor plan with each table's tab total, tables that need someone (requests, food ready to serve) glowing and queued longest-waiting first; tap a table for its rounds, mark rounds served, answer requests, **add items on the table's behalf**, **move the tab to another table** (kitchen, requests and guests follow; old table to cleaning, its QR replaced), close the tab. Seat walk-ins.
+- [ ] Still to do in B3: merge tables, void/comp with a reason, split-the-tab views, per-waiter sections, a sound for new requests.
 
 **B4 Pay at table (2–3 wk)**
 - [ ] Stripe Connect onboarding per tenant; pay the full bill, split equally or by item; tips; Apple/Google Pay; receipts by email.

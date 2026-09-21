@@ -123,6 +123,15 @@ docker compose exec backend python -m app.cli create-tenant \
 It creates the restaurant with a starter menu, tables and hours, an admin account (a random password is printed once), turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
 A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
 
+## Waiter view
+**Waiter view** (admin sidebar, needs `qr_table_ordering`) is the floor at a glance: the seating plan with each table's tab total on it. A table glows yellow and is listed under *Needs you now* when a guest has called the waiter or asked for the bill, or when the kitchen has finished a round nobody has served yet (longest-waiting first). Tap a table for its panel:
+- the rounds ordered so far with their status; **Mark served** when you have brought a finished round;
+- requests, each with **Done**;
+- **Add items for the table**: pick dishes (options and notes supported) and send them to the kitchen as a round on the table's behalf (shown as *Staff*); useful for guests without a phone;
+- **Move to another table**: pick a free table; the tab keeps its rounds, the kitchen and requests follow, the guests' phones keep working, the old table goes to *Cleaning* and its QR code is replaced;
+- **Close tab & clean table**; and **Seat guests here** for a free table.
+Positions come from **Floor plan**; new restaurants made with `create-tenant` get a tidy default layout.
+
 ## Kitchen screen (stations, bump, 86)
 Open **Kitchen** in the admin area (works full screen on a cheap tablet: use the *Full screen* button). Pick a station tab — *All stations*, *Kitchen*, *Bar* or *Dessert* — and the screen remembers it. Each dish has a station, set on the dish in **Menu → Made at** (new restaurants get sensible defaults: drinks → Bar, desserts → Dessert). A ticket shows only that station's dishes.
 - **Bump:** tap a dish when it is done (tap again to recall it). When every dish is bumped the order becomes *Ready* by itself, and the customer or table sees it live. *Bump all* bumps a ticket (only this station's dishes on a station screen). In the *All stations* view, *Served — clear* finishes a ready order.
