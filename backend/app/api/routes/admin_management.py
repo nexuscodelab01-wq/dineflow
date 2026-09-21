@@ -13,6 +13,7 @@ from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_erro
 from app.core.images import THUMB_SIDE, InvalidImage, process_image
 from app.core.storage import get_storage, tenant_prefix, thumb_key
 from app.db.session import get_db
+from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
 from app.schemas.admin import (
@@ -492,7 +493,7 @@ def delete_table(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.get("/reservations/availability", response_model=AdminAvailabilityResponse)
+@router.get("/reservations/availability", response_model=AdminAvailabilityResponse, dependencies=[Depends(requires_feature("reservations"))])
 def admin_reservation_availability(
     _: StaffUser,
     restaurant_id: RestaurantId,
@@ -514,7 +515,7 @@ def admin_reservation_availability(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.get("/reservations", response_model=list[ReservationRead])
+@router.get("/reservations", response_model=list[ReservationRead], dependencies=[Depends(requires_feature("reservations"))])
 def list_reservations(
     _: StaffUser,
     restaurant_id: RestaurantId,
@@ -526,7 +527,7 @@ def list_reservations(
     return service.list_restaurant_reservations(restaurant_id, start=start, end=end, status=status_filter)
 
 
-@router.post("/reservations", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
+@router.post("/reservations", response_model=ReservationRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(requires_feature("reservations"))])
 def create_admin_reservation(
     data: AdminReservationCreate,
     _: StaffUser,
@@ -539,7 +540,7 @@ def create_admin_reservation(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.patch("/reservations/{reservation_id}", response_model=ReservationRead)
+@router.patch("/reservations/{reservation_id}", response_model=ReservationRead, dependencies=[Depends(requires_feature("reservations"))])
 def update_admin_reservation(
     reservation_id: int,
     data: ReservationUpdate,
@@ -553,7 +554,7 @@ def update_admin_reservation(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.post("/reservations/{reservation_id}/extend", response_model=ReservationRead)
+@router.post("/reservations/{reservation_id}/extend", response_model=ReservationRead, dependencies=[Depends(requires_feature("reservations"))])
 def extend_reservation(
     reservation_id: int,
     data: ReservationExtend,
@@ -567,7 +568,7 @@ def extend_reservation(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.patch("/reservations/{reservation_id}/status", response_model=ReservationRead)
+@router.patch("/reservations/{reservation_id}/status", response_model=ReservationRead, dependencies=[Depends(requires_feature("reservations"))])
 def update_reservation_status(
     reservation_id: int,
     data: ReservationStatusUpdate,

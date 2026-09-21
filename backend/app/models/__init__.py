@@ -1,7 +1,9 @@
 """ORM model exports."""
 
 from app.models.address import Address
+from app.models.audit_log import AuditLog
 from app.models.category import Category
+from app.models.feature_override import FeatureOverride
 from app.models.job import Job
 from app.models.menu_item import MenuItem
 from app.models.menu_item_modifier import MenuItemModifier
@@ -22,7 +24,9 @@ from app.models.user import User
 
 __all__ = [
     "Address",
+    "AuditLog",
     "Category",
+    "FeatureOverride",
     "Job",
     "MenuItem",
     "MenuItemModifier",

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.tenancy import ensure_customer_of
+from app.services.feature_service import FeatureService
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
 from app.core.rate_limit import rate_limit
@@ -47,8 +48,10 @@ def reservation_availability(
     duration_minutes: int = Query(default=DEFAULT_DURATION_MINUTES, ge=30, le=240),
 ) -> AvailabilityResponse:
     try:
+        restaurant_id = _restaurant_id(identifier, db)
+        FeatureService(db).require(restaurant_id, "reservations")
         return service.get_availability(
-            _restaurant_id(identifier, db),
+            restaurant_id,
             starts_at=starts_at,
             party_size=party_size,
             duration_minutes=duration_minutes,
@@ -72,6 +75,7 @@ def create_reservation(
 ) -> ReservationRead:
     try:
         restaurant_id = _restaurant_id(identifier, db)
+        FeatureService(db).require(restaurant_id, "reservations")
         ensure_customer_of(user, restaurant_id)
         return service.create_reservation(restaurant_id, payload, user)
     except (AppError, NotFoundError) as exc:

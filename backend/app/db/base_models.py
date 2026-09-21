@@ -3,7 +3,9 @@
 from app.db.base import Base
 from app.models import (  # noqa: F401
     Address,
+    AuditLog,
     Category,
+    FeatureOverride,
     Job,
     MenuItem,
     MenuItemModifier,

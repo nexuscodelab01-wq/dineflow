@@ -27,3 +27,9 @@ class RestaurantRead(BaseModel):
     delivery_fee: Decimal
     reservation_buffer_minutes: int = 15
     is_active: bool
+
+
+class TenantRead(RestaurantRead):
+    """What a restaurant's own site needs on load: its details plus which features are switched on."""
+
+    features: dict[str, bool] = {}
