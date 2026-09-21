@@ -90,7 +90,7 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 **A2 Platform plumbing (2–3 wk)**
 - [ ] Object storage (S3-compatible) + image resize/WebP; per-tenant prefixes.
 - [ ] Transactional email + template system; background job runner (Redis queue or Postgres-backed).
-- [ ] **SSE real-time channel** with per-tenant topics (used later by kitchen, guests, waiters).
+- [x] **SSE real-time channel** with per-tenant topics — Postgres `LISTEN/NOTIFY` fan-out (works across workers, delivers only on commit), fetch-based client with reconnect/watchdog. **Kitchen screen is live** (315 ms order → screen in a 2-worker test). Next: reuse it for guests, waiters and the floor view.
 
 **A3 Multi-tenant core (3–4 wk)**
 - [ ] `tenant_id` audit on every tenant-owned table; backfill Bella Vista as tenant #1 (expand/contract migrations).

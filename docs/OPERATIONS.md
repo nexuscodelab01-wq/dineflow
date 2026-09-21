@@ -28,6 +28,22 @@ Per client IP: login 20/min (and 8 per 10 min per account), sign-up 10 per 10 mi
 - The limiter is **per process**. With several workers the effective limit multiplies; move it to Redis when scaling out.
 - Behind a reverse proxy set `TRUST_PROXY_HEADERS=true`, otherwise every visitor looks like the proxy's IP. Never enable it when the API is exposed directly.
 
+## Live updates (kitchen screen)
+The kitchen screen updates the moment an order is placed, using Server-Sent Events (`GET /api/v1/admin/kitchen/stream`, staff only).
+
+**How it works.** Order code calls `publish(...)`, which sends a Postgres `NOTIFY` inside the same transaction — so it is delivered **only if the order commits**. Every API worker keeps one `LISTEN` connection and forwards events to the browsers connected to *it*. This is why it works with several workers or servers without Redis. Events are hints ("something changed"); the screen refetches, so a missed event never leaves it wrong.
+
+**Behind a reverse proxy** (nginx, Caddy, a load balancer) the stream must not be buffered or cut:
+- nginx: `proxy_buffering off; proxy_read_timeout 3600s;` (the API already sends `X-Accel-Buffering: no`)
+- any proxy/LB: idle timeout above ~30 s (the server sends a heartbeat every 15 s)
+
+**Limits and safety nets**
+- Each worker holds at most `REALTIME_MAX_STREAMS` (default 200) open streams, then answers 503.
+- The browser reconnects with backoff, detects a silently dead connection (no heartbeat for 45 s), and refetches on every reconnect.
+- The page also polls: every 60 s while live, every 15 s while not — so a broken stream degrades to slower updates, never to a stale screen.
+
+**Debugging**: `docker logs <backend> | grep "Realtime listener"` shows connects/losses. The screen's badge reads *Live* / *Reconnecting…* / *Offline*. Open connections count against Postgres `max_connections` (one per worker for LISTEN, not one per browser).
+
 ## Backups
 ```sh
 scripts/backup-db.sh                                   # -> backups/dineflow-<utc time>.sql.gz
@@ -46,4 +62,4 @@ FORCE_LIVE=1 scripts/restore-db.sh backups/<file>.sql.gz "$POSTGRES_DB"   # OVER
 Restoring over the live database needs `FORCE_LIVE=1` and the exact database name on purpose. Stop the backend first, restore, run `alembic upgrade head`, start it again.
 
 ## Still to do (roadmap stage A1/A2)
-Off-site backup automation, a staging environment, Redis-backed rate limiting, object storage for uploads, transactional email.
+Off-site backup automation, a staging environment, Redis-backed rate limiting, object storage for uploads, transactional email, a job runner.
