@@ -6,6 +6,7 @@ import { resolveMediaUrl } from '~/utils/media'
 
 const route = useRoute()
 const cart = useCartStore()
+const restaurant = useRestaurantStore()
 const ui = useUiStore()
 
 const itemId = computed(() => Number(route.params.id))
@@ -20,7 +21,9 @@ const heroImage = computed(() => resolveMediaUrl(item.value?.image_url))
 
 onMounted(async () => {
   try {
-    item.value = await fetchMenuItem(itemId.value)
+    const current = await restaurant.load()
+    if (!current) throw new Error('Restaurant not found')
+    item.value = await fetchMenuItem(itemId.value, current.id)
     for (const modifier of item.value.modifiers) {
       const defaults = modifier.options.filter(o => o.is_default).map(o => o.id)
       selectedOptions.value[modifier.id] = modifier.max_selections === 1

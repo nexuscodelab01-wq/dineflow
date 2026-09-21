@@ -55,6 +55,7 @@
 definePageMeta({ middleware: ['guest'] })
 
 const auth = useAuthStore()
+const restaurant = useRestaurantStore()
 const route = useRoute()
 
 const form = reactive({
@@ -66,7 +67,8 @@ const error = ref('')
 async function handleSubmit() {
   error.value = ''
   try {
-    await auth.login(form)
+    await restaurant.load()
+    await auth.login({ ...form, restaurant_id: restaurant.id })
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/profile'
     await navigateTo(redirect)
   }

@@ -11,6 +11,7 @@ export type Role = {
 }
 
 export type User = {
+  restaurant_id?: number | null
   id: number
   email: string
   first_name: string
@@ -29,9 +30,12 @@ export type TokenResponse = {
 export type LoginPayload = {
   email: string
   password: string
+  /** The restaurant site being signed in to (omit for platform-level sign-in). */
+  restaurant_id?: number | null
 }
 
 export type RegisterPayload = {
+  restaurant_id: number
   email: string
   password: string
   first_name: string

@@ -31,6 +31,7 @@ async function handleLogout() {
   loggingOut.value = true
   try {
     await auth.logout()
+    admin.reset()
     await router.push('/login')
   }
   finally {

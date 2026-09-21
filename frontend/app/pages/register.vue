@@ -83,6 +83,7 @@
 definePageMeta({ middleware: ['guest'] })
 
 const auth = useAuthStore()
+const restaurant = useRestaurantStore()
 
 const form = reactive({
   email: '',
@@ -96,8 +97,11 @@ const error = ref('')
 async function handleSubmit() {
   error.value = ''
   try {
+    const current = await restaurant.load()
+    if (!current) throw new Error('This site has no restaurant to sign up to.')
     await auth.register({
       ...form,
+      restaurant_id: current.id,
       phone: form.phone || undefined,
     })
     await navigateTo('/profile')

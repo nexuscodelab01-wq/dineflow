@@ -1,8 +1,14 @@
 import type { Category, MenuFilters, MenuItemDetail, MenuListResponse, Restaurant, RestaurantTable } from '~/types/menu'
 import { apiFetch } from '~/services/http'
 
-export function fetchRestaurants() {
-  return apiFetch<Restaurant[]>('/api/v1/restaurants', { auth: false })
+/** The restaurant whose site is at this address (host, e.g. "pizza.dineflow.app"). */
+export function fetchTenant(host: string) {
+  return apiFetch<Restaurant>(`/api/v1/tenant?host=${encodeURIComponent(host)}`, { auth: false })
+}
+
+/** Restaurants the signed-in account can manage (memberships; every restaurant for platform admins). */
+export function fetchMyRestaurants() {
+  return apiFetch<Restaurant[]>('/api/v1/auth/my-restaurants')
 }
 
 export function fetchRestaurant(identifier: string) {
@@ -28,8 +34,8 @@ export function fetchMenu(restaurantId: number, filters: MenuFilters = {}) {
   return apiFetch<MenuListResponse>(`/api/v1/menu?${params}`, { auth: false })
 }
 
-export function fetchMenuItem(itemId: number) {
-  return apiFetch<MenuItemDetail>(`/api/v1/menu/${itemId}`, { auth: false })
+export function fetchMenuItem(itemId: number, restaurantId: number) {
+  return apiFetch<MenuItemDetail>(`/api/v1/menu/${itemId}?restaurant_id=${restaurantId}`, { auth: false })
 }
 
 export function fetchRestaurantTables(identifier: string, availableOnly = true) {

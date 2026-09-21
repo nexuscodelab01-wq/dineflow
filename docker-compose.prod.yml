@@ -57,7 +57,6 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:-http://localhost:8000}
-        NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG: ${NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG:-bella-vista-kitchen}
     container_name: dineflow-frontend-prod
     restart: unless-stopped
     environment:

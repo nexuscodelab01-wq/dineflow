@@ -28,7 +28,6 @@ export default defineNuxtConfig({
     public: {
       // Browser-facing API URL (e.g. http://localhost:8000)
       apiUrl: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8000',
-      defaultRestaurantSlug: process.env.NUXT_PUBLIC_DEFAULT_RESTAURANT_SLUG || 'bella-vista-kitchen',
     },
   },
 
