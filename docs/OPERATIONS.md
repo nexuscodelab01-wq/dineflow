@@ -130,6 +130,9 @@ Switch it on per restaurant: `python -m app.cli features <slug> qr_table_orderin
 - **Policy:** `restaurants.qr_access_policy` is `SEATED` (default) or `OPEN` (anyone with the code can order at any time). There is no settings screen for it yet; change it in the database.
 - **Limits:** one round can't exceed `QR_MAX_ORDER_TOTAL` (default 500); guests are rate-limited per IP.
 
+## Testing on a phone (same Wi-Fi)
+`localhost` and `<slug>.localhost` only exist on your computer, so a phone can't open them. Run `scripts/lan-dev.sh on luigis` (any restaurant slug): it points the site and API at your computer's Wi-Fi address, allows that origin, and makes that restaurant the default one there. Then open `http://<your-ip>:3000` on the phone. Open the admin **Table ordering** page from that same address so the printed QR codes carry it. `scripts/lan-dev.sh off` restores your `.env`. If the phone can't connect, allow incoming connections for Docker in the macOS firewall. This is for development only: with a real domain, tenants are found by subdomain (see *Tenants* above).
+
 ## Feature flags
 Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
 ```sh
