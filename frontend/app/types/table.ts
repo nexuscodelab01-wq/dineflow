@@ -67,3 +67,27 @@ export type ServiceRequest = {
   asked_by?: string | null
   created_at: string
 }
+
+export type WaiterSession = {
+  session_id: number
+  opened_at: string
+  guests: number
+  rounds: number
+  /** Rounds the kitchen has finished that nobody has served yet. */
+  ready_rounds: number
+  total: string
+  requests: string[]
+  waiting_since?: string | null
+}
+
+export type WaiterTable = {
+  table_id: number
+  table_number: string
+  capacity: number
+  zone?: string | null
+  shape: string
+  pos_x?: number | null
+  pos_y?: number | null
+  status: string
+  session: WaiterSession | null
+}

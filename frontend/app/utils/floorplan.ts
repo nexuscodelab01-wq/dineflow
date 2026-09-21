@@ -37,6 +37,8 @@ export type PlanTable = {
   selectable?: boolean
   /** Tooltip / screen-reader detail. */
   note?: string
+  /** Short text drawn under the table number instead of the seat count (e.g. a tab total). */
+  badge?: string
 }
 
 export function normalizeShape(shape?: string | null): TableShape {
@@ -160,6 +162,7 @@ export const STATE_LABELS: Record<string, string> = {
   TOO_SMALL: 'Too small',
   RESERVED: 'Reserved',
   OCCUPIED: 'Occupied',
+  ATTENTION: 'Needs you',
   CLEANING: 'Cleaning',
   INACTIVE: 'Out of service',
   NEUTRAL: 'Table',
@@ -170,6 +173,7 @@ export const STATE_STYLES: Record<string, { fill: string, stroke: string, text: 
   UNAVAILABLE: { fill: '#fef3c7', stroke: '#d97706', text: '#78350f' },
   RESERVED: { fill: '#fef3c7', stroke: '#d97706', text: '#78350f' },
   OCCUPIED: { fill: '#fee2e2', stroke: '#dc2626', text: '#7f1d1d' },
+  ATTENTION: { fill: '#fde047', stroke: '#b45309', text: '#422006' },
   CLEANING: { fill: '#e2e8f0', stroke: '#64748b', text: '#334155' },
   TOO_SMALL: { fill: '#f3f4f6', stroke: '#9ca3af', text: '#6b7280', opacity: 0.65 },
   INACTIVE: { fill: '#f3f4f6', stroke: '#9ca3af', text: '#6b7280', opacity: 0.6, dashed: true },

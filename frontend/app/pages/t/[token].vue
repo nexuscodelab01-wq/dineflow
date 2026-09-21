@@ -35,6 +35,23 @@ async function start() {
     info.value = await fetchTableInfo(tableToken.value, current.id)
   }
   catch (err) {
+    // The code on the table was replaced (the tab moved to another table, say) but this phone still holds a valid
+    // pass for the open tab: carry on ordering instead of showing "invalid".
+    const saved = err instanceof ApiError && err.status === 404 ? loadPass(localStorage, tableToken.value, current.id) : null
+    if (saved) {
+      pass.value = saved
+      try {
+        await refreshSession()
+        info.value = { restaurant_id: current.id, restaurant_name: current.name, table_number: session.value!.table_number, ordering_open: true }
+        phase.value = 'ordering'
+        return void beginOrdering()
+      }
+      catch {
+        clearPass(localStorage)
+        pass.value = null
+        if (phase.value === 'ended') return // the tab really is over: say so, not "invalid"
+      }
+    }
     phase.value = err instanceof ApiError && err.status === 403 ? 'unavailable' : 'invalid'
     if (phase.value === 'invalid' && !(err instanceof ApiError && err.status === 404)) problem.value = 'We could not reach the restaurant. Check your connection and try again.'
     return

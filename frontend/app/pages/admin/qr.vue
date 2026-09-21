@@ -158,7 +158,7 @@ const printName = computed(() => branding.name.value ?? restaurantSite.current?.
                 <h3 class="font-semibold">Table {{ s.table_number }}<span v-if="s.requests.includes('BILL')" class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Bill requested</span></h3>
                 <span class="text-sm text-ink-muted">{{ s.guests }} guest{{ s.guests === 1 ? '' : 's' }} · {{ s.rounds }} round{{ s.rounds === 1 ? '' : 's' }}</span>
               </div>
-              <p class="mt-1 text-sm">Running total <strong>{{ formatCurrency(Number(s.total)) }}</strong> <span class="text-ink-subtle">(no tax)</span></p>
+              <p class="mt-1 text-sm">Running total <strong>{{ formatCurrency(Number(s.total)) }}</strong> <span class="text-ink-subtle">(with tax)</span></p>
               <AppButton class="mt-3" :disabled="busy === s.session_id" @click="close(s)">Close tab &amp; clean table</AppButton>
             </li>
           </ul>

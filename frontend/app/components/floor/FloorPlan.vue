@@ -61,7 +61,7 @@ const laid = computed(() => withLayout(props.tables).map((t) => {
 
 const legend = computed(() => {
   const states = new Set(props.tables.map(t => t.state))
-  const order = ['AVAILABLE', 'UNAVAILABLE', 'RESERVED', 'OCCUPIED', 'CLEANING', 'TOO_SMALL', 'INACTIVE']
+  const order = ['AVAILABLE', 'UNAVAILABLE', 'RESERVED', 'OCCUPIED', 'ATTENTION', 'CLEANING', 'TOO_SMALL', 'INACTIVE']
   return order.filter(s => states.has(s)).map(s => ({ state: s, label: STATE_LABELS[s], style: STATE_STYLES[s]! }))
 })
 
@@ -236,7 +236,7 @@ function onKeydown(event: KeyboardEvent, t: (typeof laid.value)[number]) {
           :fill="t.selected ? '#dceee5' : t.style.text"
           opacity="0.8"
           pointer-events="none"
-        >{{ t.capacity }} seats</text>
+        >{{ t.badge ?? `${t.capacity} seats` }}</text>
       </g>
     </svg>
 

@@ -36,6 +36,7 @@ const allNav = [
   { to: '/admin/tables', label: 'Tables' },
   { to: '/admin/floor-plan', label: 'Floor plan', adminOnly: true },
   { to: '/admin/reservations', label: 'Reservations', feature: 'reservations' },
+  { to: '/admin/waiter', label: 'Waiter view', feature: 'qr_table_ordering' },
   { to: '/admin/qr', label: 'Table ordering', feature: 'qr_table_ordering' },
   { to: '/admin/customers', label: 'Customers' },
   { to: '/admin/settings', label: 'Settings', adminOnly: true },
@@ -115,7 +116,7 @@ async function handleLogout() {
             active-class="bg-brand-100 text-brand-900"
           >
             {{ item.label }}
-            <span v-if="item.to === '/admin/qr' && waiting" class="ml-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white" :aria-label="`${waiting} waiting`">{{ waiting }}</span>
+            <span v-if="(item.to === '/admin/qr' || item.to === '/admin/waiter') && waiting" class="ml-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white" :aria-label="`${waiting} waiting`">{{ waiting }}</span>
           </NuxtLink>
           <NuxtLink
             to="/"
@@ -146,7 +147,7 @@ async function handleLogout() {
             active-class="bg-brand-100 text-brand-900"
           >
             {{ item.label }}
-            <span v-if="item.to === '/admin/qr' && waiting" class="ml-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white" :aria-label="`${waiting} waiting`">{{ waiting }}</span>
+            <span v-if="(item.to === '/admin/qr' || item.to === '/admin/waiter') && waiting" class="ml-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white" :aria-label="`${waiting} waiting`">{{ waiting }}</span>
           </NuxtLink>
           <div class="my-3 border-t border-brand-100" />
           <NuxtLink

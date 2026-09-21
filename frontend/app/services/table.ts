@@ -1,4 +1,4 @@
-import type { JoinResponse, OpenTableSession, QrTable, ServiceRequest, SessionRound, TableInfo, TableSessionView } from '~/types/table'
+import type { JoinResponse, OpenTableSession, QrTable, ServiceRequest, SessionRound, TableInfo, TableSessionView, WaiterTable } from '~/types/table'
 import { apiFetch } from '~/services/http'
 
 const json = (body: unknown) => JSON.stringify(body)
@@ -55,4 +55,27 @@ export function fetchServiceRequests(restaurantId: number) {
 
 export function finishServiceRequest(restaurantId: number, requestId: number) {
   return apiFetch<void>(`/api/v1/admin/service-requests/${requestId}/done?restaurant_id=${restaurantId}`, { method: 'POST' })
+}
+
+// ---- waiter view ---------------------------------------------------------------------------------
+
+export function fetchWaiterFloor(restaurantId: number) {
+  return apiFetch<WaiterTable[]>(`/api/v1/admin/waiter/floor?restaurant_id=${restaurantId}`)
+}
+
+export function fetchTabDetail(restaurantId: number, sessionId: number) {
+  return apiFetch<TableSessionView>(`/api/v1/admin/table-sessions/${sessionId}?restaurant_id=${restaurantId}`)
+}
+
+/** A waiter sends a round on the table's behalf. */
+export function sendStaffRound(restaurantId: number, sessionId: number, payload: unknown, key: string) {
+  return apiFetch<SessionRound>(`/api/v1/admin/table-sessions/${sessionId}/orders?restaurant_id=${restaurantId}`, {
+    method: 'POST', body: json(payload), headers: { 'Idempotency-Key': key },
+  })
+}
+
+export function transferTab(restaurantId: number, sessionId: number, tableId: number) {
+  return apiFetch<void>(`/api/v1/admin/table-sessions/${sessionId}/transfer?restaurant_id=${restaurantId}`, {
+    method: 'POST', body: json({ table_id: tableId }),
+  })
 }

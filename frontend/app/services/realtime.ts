@@ -9,7 +9,7 @@ export type KitchenHandlers = {
   onStatus?: (status: SseStatus) => void
 }
 
-const RELEVANT = new Set(['ready', 'order.created', 'order.status', 'resync', 'request.created', 'request.done', 'session.closed', 'ticket.updated', 'menu.changed'])
+const RELEVANT = new Set(['ready', 'order.created', 'order.status', 'resync', 'request.created', 'request.done', 'session.closed', 'ticket.updated', 'menu.changed', 'session.opened', 'session.transferred'])
 
 /** Live updates for one restaurant's kitchen screen. Returns a handle; call close() when leaving. */
 export function subscribeKitchen(restaurantId: number, handlers: KitchenHandlers) {
