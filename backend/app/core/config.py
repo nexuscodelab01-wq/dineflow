@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     API_V1_PREFIX: str = "/api/v1"
 
+    # The database the *running app* connects as. Point it at the restricted `dineflow_app` role (see docs/OPERATIONS.md,
+    # "Row-level security") and PostgreSQL itself keeps each restaurant's rows apart. Empty = use DATABASE_URL (the owner,
+    # which bypasses row-level security). Migrations, the seed and the operator CLI always use DATABASE_URL.
+    APP_DATABASE_URL: str = ""
     DATABASE_URL: str = (
         "postgresql+psycopg://dineflow:dineflow_dev_password@localhost:5432/dineflow"
     )
@@ -96,6 +100,14 @@ class Settings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
     @property
+    def runtime_database_url(self) -> str:
+        return self.APP_DATABASE_URL or self.DATABASE_URL
+
+    @property
+    def rls_enforced(self) -> bool:
+        return bool(self.APP_DATABASE_URL) and self.APP_DATABASE_URL != self.DATABASE_URL
+
+    @property
     def reserved_subdomains(self) -> set[str]:
         return {s.strip().lower() for s in self.RESERVED_SUBDOMAINS.split(",") if s.strip()}
 
@@ -116,6 +128,8 @@ class Settings(BaseSettings):
             problems.append("JWT_SECRET and JWT_REFRESH_SECRET must differ")
         if "dineflow_dev_password" in self.DATABASE_URL:
             problems.append("DATABASE_URL still uses the development database password")
+        if "dineflow_app_dev_password" in self.APP_DATABASE_URL:
+            problems.append("APP_DATABASE_URL still uses the development password for the restricted role")
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 

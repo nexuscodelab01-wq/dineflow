@@ -33,6 +33,8 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}
+      # Set APP_DB_PASSWORD to make the running app connect as a restricted role (row-level security); empty = not enforced.
+      APP_DATABASE_URL: ${APP_DB_PASSWORD:+postgresql+psycopg://dineflow_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}}
       ENVIRONMENT: production
       RUN_SEED: ${RUN_SEED:-false}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}

@@ -4,6 +4,9 @@ set -e
 echo "Running database migrations..."
 alembic upgrade head
 
+echo "Preparing the restricted database role (row-level security)..."
+python -m app.db.roles
+
 if [ "${RUN_SEED:-false}" = "true" ]; then
   echo "Seeding database..."
   python -m app.db.seed

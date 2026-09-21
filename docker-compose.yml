@@ -29,6 +29,8 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD:-dineflow_dev_password}@postgres:5432/${POSTGRES_DB:-dineflow}
+      # The running app connects as a restricted role so PostgreSQL enforces per-restaurant row-level security.
+      APP_DATABASE_URL: postgresql+psycopg://dineflow_app:${APP_DB_PASSWORD:-dineflow_app_dev_password}@postgres:5432/${POSTGRES_DB:-dineflow}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -39,6 +41,7 @@ services:
         condition: service_healthy
     command: >
       sh -c "alembic upgrade head &&
+             python -m app.db.roles &&
              python -m app.db.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --timeout-graceful-shutdown 5"
     networks:

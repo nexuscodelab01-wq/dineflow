@@ -58,6 +58,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
     (UPLOADS_ROOT / "menu").mkdir(parents=True, exist_ok=True)
     logger.info("Starting DineFlow API (env=%s)", settings.ENVIRONMENT)
+    if settings.rls_enforced:
+        logger.info("Row-level security is enforced (the app connects as the restricted database role)")
+    else:
+        logger.warning("Row-level security is NOT enforced: set APP_DATABASE_URL to the restricted role (see docs/OPERATIONS.md)")
     install_shutdown_hook()  # so open live streams never block a restart
     start_listener()  # live updates + job wake-ups: one LISTEN connection per worker
     if settings.RUN_JOB_WORKER:
