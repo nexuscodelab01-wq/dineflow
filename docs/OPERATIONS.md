@@ -123,6 +123,13 @@ docker compose exec backend python -m app.cli create-tenant \
 It creates the restaurant with a starter menu, tables and hours, an admin account (a random password is printed once), turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
 A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
 
+## Kitchen screen (stations, bump, 86)
+Open **Kitchen** in the admin area (works full screen on a cheap tablet: use the *Full screen* button). Pick a station tab — *All stations*, *Kitchen*, *Bar* or *Dessert* — and the screen remembers it. Each dish has a station, set on the dish in **Menu → Made at** (new restaurants get sensible defaults: drinks → Bar, desserts → Dessert). A ticket shows only that station's dishes.
+- **Bump:** tap a dish when it is done (tap again to recall it). When every dish is bumped the order becomes *Ready* by itself, and the customer or table sees it live. *Bump all* bumps a ticket (only this station's dishes on a station screen). In the *All stations* view, *Served — clear* finishes a ready order.
+- **Timers:** each ticket counts up from when it was placed, turning amber after 8 minutes and red after 15 (`WARN_MINUTES` / `LATE_MINUTES` in `frontend/app/utils/kitchen.ts`).
+- **Sound:** *Sound on* plays a ding for each new ticket. Browsers only allow sound after a tap, so after reloading a tablet touch the screen once.
+- **86:** the *Still to make* list shows what is open across the tickets shown; **86** takes a dish off every menu and QR ordering at once (guests already at the table get a clear "unavailable" message if they send it). *Sold out* lists dishes that are off, with *Bring back*. Kitchen staff may 86; editing the menu itself stays admin-only.
+
 ## Live updates (customers and guests)
 Besides the kitchen screen, a signed-in customer's order page (`GET /api/v1/orders/{id}/stream`, owner only) and a table's guests (`GET /api/v1/table-session/stream`, table pass only) follow their order over the same SSE channel. Status changes, new rounds and closing a tab reach them immediately; the pages also re-fetch every 30–60 s in case the connection dropped. Each open stream counts toward `REALTIME_MAX_STREAMS`.
 

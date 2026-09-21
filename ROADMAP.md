@@ -123,13 +123,15 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 - [x] Call waiter / ask for the bill from the table (one open request per kind, live to staff with a nav badge, cleared when staff answer or the tab closes).
 - [ ] Still to do in B1: PIN and staff-approved policies (no admin setting for the policy yet), table moved/merged mid-session, PDF/PNG tent export, QR ordering inside opening hours, station routing.
 
-**B2 Live kitchen screen v2 (2–3 wk)** — §7.5
-- [ ] Real-time tickets (SSE), stations (kitchen/bar/dessert), timers and urgency colors, bump/recall, sound.
-- [ ] Item-level status, allergen/notes highlighting, "86" an item live, all-day counts.
+**B2 Live kitchen screen v2 (2–3 wk)** — §7.5 · *first slice built*
+- [x] Real-time tickets (SSE), stations (Kitchen / Bar / Dessert; each dish has a station, each screen shows only its own dishes), timers with amber (8 min) and red (15 min) escalation, oldest first, sound on a new ticket (toggle, remembered), full-screen button; a screen remembers its station.
+- [x] Item-level status: tap a dish to bump it, tap again to recall; the order turns PREPARING/READY on its own as dishes are bumped (customers and guests follow it live); "Bump all"; "Served — clear".
+- [x] Notes and options in bold; **86** a dish live from the "Still to make" all-day counts (gone from every menu and QR ordering at once, with a Bring back list); all-day counts.
+- [ ] Still to do in B2: per-tenant custom stations and thresholds, course firing, a wall-mounted "expo" view (ready-to-pass across stations), sound choices, allergen tags on dishes, kitchen stats (average ticket time).
 
 **B3 Front of house (1–2 wk)**
-- [ ] Guest phone shows live status (Received → Preparing → Ready/Served).
-- [ ] **Service requests**: call waiter, request bill, water/napkins → waiter alert.
+- [x] Guest phone shows live status (Received → Preparing → Ready/Served). *(done in B1)*
+- [x] **Service requests**: call waiter, request bill → staff queue and badge. *(done in B1; water/napkins and sound alerts still to do)*
 - [ ] Waiter view: table map with session totals, open orders, requests; add items on behalf of guests; transfer/merge tables; void/comp with reason.
 
 **B4 Pay at table (2–3 wk)**

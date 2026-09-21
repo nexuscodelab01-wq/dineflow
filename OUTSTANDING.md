@@ -24,6 +24,12 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - A guest's pass lasts 12 h and is bound to one session; it is kept in `localStorage`, so a second phone must scan the code itself (intended).
 - Login rate limit (8 attempts / 10 min per account) is in-process: repeated automated test logins lock the account until the backend restarts.
 
+### 5. Kitchen screen follow-ups
+- Guests' open menu pages don't hide a dish the moment it is 86'd; their send is refused with a clear message. Publish a restaurant-wide "menu changed" event to the QR pages.
+- Stations and the amber/red thresholds are fixed (three stations, 8/15 min); make them per-restaurant settings.
+- An "expo" view (everything ready to pass, across stations), course firing, allergen tags, average ticket time.
+- The kitchen screen refreshes the whole board on every event (fine for a restaurant's volume; switch to applying small updates if boards get very large).
+
 ## Done
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.
 - Customer order page and table guests did not update live: they now follow their order over SSE (`GET /orders/{id}/stream`, `GET /table-session/stream`), with a slow poll only as a fallback. Status changes show in well under a second.
