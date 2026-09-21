@@ -1,6 +1,7 @@
 """Application entrypoint."""
 
 import logging
+import mimetypes
 import re
 import time
 import uuid
@@ -19,6 +20,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import request_id_var, setup_logging
 from app.core.realtime import install_shutdown_hook, start_listener, stop_listener
+from app.core.storage import UPLOADS_ROOT
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -47,7 +49,6 @@ def _init_sentry() -> None:
 
 _init_sentry()
 
-UPLOADS_ROOT = Path(__file__).resolve().parents[1] / "uploads"
 
 
 @asynccontextmanager
@@ -144,5 +145,20 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "Retry-After"],
 )
 
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT)), name="uploads")
+class UploadsFiles(StaticFiles):
+    """Serves uploaded files. Tenant uploads have unique names and never change, so browsers and CDNs
+    may cache them for a year; without this every menu image would be re-validated on each visit."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200 and path.startswith("tenants/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
+# Slim containers ship no system MIME table and Python's built-in one doesn't know WebP, so files
+# were served as text/plain — which browsers refuse to render as images under `nosniff`.
+mimetypes.add_type("image/webp", ".webp")
+
+app.mount("/uploads", UploadsFiles(directory=str(UPLOADS_ROOT)), name="uploads")
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

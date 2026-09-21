@@ -53,6 +53,11 @@ class MenuItemCreate(BaseModel):
     description: str | None = None
     price: Decimal = Field(gt=0)
     image_url: str | None = None
+
+    @field_validator("image_url")
+    @classmethod
+    def _check_image_url(cls, value: str | None) -> str | None:
+        return _media_url(value)
     is_available: bool = True
     preparation_time_minutes: int = Field(default=15, ge=1)
     is_vegetarian: bool = False
@@ -68,6 +73,11 @@ class MenuItemUpdate(BaseModel):
     description: str | None = None
     price: Decimal | None = Field(default=None, gt=0)
     image_url: str | None = None
+
+    @field_validator("image_url")
+    @classmethod
+    def _check_image_url(cls, value: str | None) -> str | None:
+        return _media_url(value)
     is_available: bool | None = None
     preparation_time_minutes: int | None = Field(default=None, ge=1)
     is_vegetarian: bool | None = None
@@ -122,6 +132,18 @@ class AdminOrderFilters(BaseModel):
     search: str | None = None
     page: int = 1
     page_size: int = 20
+
+
+def _media_url(value: str | None) -> str | None:
+    """An image field may hold an uploaded path (/uploads/…) or an http(s) URL — nothing else."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    if len(value) > 500 or any(ch.isspace() or ord(ch) < 32 for ch in value):
+        raise ValueError("Image address is invalid")
+    if not (value.startswith("/uploads/") or value.startswith(("https://", "http://"))):
+        raise ValueError("Image must be an uploaded file or an http(s) link")
+    return value
 
 
 def _clean_zone(value: str | None) -> str | None:
@@ -226,6 +248,11 @@ class RestaurantSettingsUpdate(BaseModel):
     tax_rate: Decimal | None = Field(default=None, ge=0, le=1)
     delivery_fee: Decimal | None = Field(default=None, ge=0)
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _check_logo_url(cls, value: str | None) -> str | None:
+        return _media_url(value)
 
 
 class CustomerSummary(BaseModel):

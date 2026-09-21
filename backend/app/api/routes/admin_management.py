@@ -1,14 +1,17 @@
 """Admin API routes."""
 
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated
 import uuid
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
+from app.core.images import THUMB_SIDE, InvalidImage, process_image
+from app.core.storage import get_storage, tenant_prefix, thumb_key
 from app.db.session import get_db
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
@@ -52,9 +55,6 @@ from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
 
-UPLOAD_DIR = Path(__file__).resolve().parents[3] / "uploads" / "menu"
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def get_admin_service(db: Annotated[Session, Depends(get_db)]) -> AdminService:
@@ -216,33 +216,46 @@ def delete_menu_item(
         raise raise_http_for_app_error(exc) from exc
 
 
+async def _store_image(
+    file: UploadFile, restaurant_id: int, kind: str, *, max_side: int, with_thumb: bool
+) -> dict[str, str | None]:
+    """Validate, optimise and store an uploaded image under this tenant's prefix."""
+    limit = settings.MAX_UPLOAD_BYTES
+    data = await file.read(limit + 1)  # never pull an unbounded upload into memory
+    try:
+        image = await run_in_threadpool(
+            process_image, data, max_side=max_side, thumb_side=THUMB_SIDE if with_thumb else None, max_bytes=limit
+        )
+    except InvalidImage as exc:
+        raise raise_http_for_app_error(AppError(str(exc))) from exc
+
+    storage = get_storage()
+    key = f"{tenant_prefix(restaurant_id, kind)}/{uuid.uuid4().hex}{image.extension}"
+    url = await run_in_threadpool(storage.save, key, image.main, image.content_type)
+    thumb_url = None
+    if image.thumb is not None and (sibling := thumb_key(key)) is not None:
+        thumb_url = await run_in_threadpool(storage.save, sibling, image.thumb, image.content_type)
+    return {"url": url, "thumb_url": thumb_url}
+
+
 @router.post("/uploads/menu-image")
 async def upload_menu_image(
     _: AdminUser,
     restaurant_id: RestaurantId,
     file: UploadFile = File(...),
-) -> dict[str, str]:
-    content_type = file.content_type or ""
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise raise_http_for_app_error(AppError("Only JPEG, PNG, WebP, or GIF images are allowed"))
+) -> dict[str, str | None]:
+    """Menu photo: checked by content, scaled, re-encoded as WebP, with a small thumbnail."""
+    return await _store_image(file, restaurant_id, "menu", max_side=settings.IMAGE_MAX_SIDE, with_thumb=True)
 
-    data = await file.read()
-    if not data:
-        raise raise_http_for_app_error(AppError("Empty file"))
-    if len(data) > MAX_IMAGE_BYTES:
-        raise raise_http_for_app_error(AppError("Image must be 5MB or smaller"))
 
-    ext = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-        "image/gif": ".gif",
-    }[content_type]
-
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"r{restaurant_id}-{uuid.uuid4().hex}{ext}"
-    (UPLOAD_DIR / filename).write_bytes(data)
-    return {"url": f"/uploads/menu/{filename}"}
+@router.post("/uploads/logo")
+async def upload_logo(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    file: UploadFile = File(...),
+) -> dict[str, str | None]:
+    """Restaurant logo (transparency is kept). Save the returned url via PATCH /admin/settings."""
+    return await _store_image(file, restaurant_id, "branding", max_side=800, with_thumb=False)
 
 
 @router.get("/modifiers", response_model=list[MenuModifierRead])

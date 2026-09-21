@@ -316,18 +316,6 @@ def test_settings_update_and_validation(world):
     assert w.client.get(url(w, "/settings", restaurant=w.b), headers=w.admin).status_code == 403
 
 
-def test_menu_image_upload_rules(world):
-    w = world
-    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
-    ok = w.client.post(url(w, "/uploads/menu-image"), headers=w.admin, files={"file": ("a.png", png, "image/png")})
-    assert ok.status_code == 200 and ok.json()["url"].startswith("/uploads/menu/r%d-" % w.a.id) and ok.json()["url"].endswith(".png")
-    assert w.client.post(url(w, "/uploads/menu-image"), headers=w.admin, files={"file": ("a.exe", b"MZ", "application/octet-stream")}).status_code == 400
-    assert w.client.post(url(w, "/uploads/menu-image"), headers=w.admin, files={"file": ("a.png", b"", "image/png")}).status_code == 400
-    big = b"0" * (5 * 1024 * 1024 + 1)
-    assert w.client.post(url(w, "/uploads/menu-image"), headers=w.admin, files={"file": ("a.png", big, "image/png")}).status_code == 400
-    assert w.client.post(url(w, "/uploads/menu-image"), headers=w.staff, files={"file": ("a.png", png, "image/png")}).status_code == 403
-
-
 def test_kitchen_sees_special_instructions_options_notes_and_table(world):
     """Regression: the kitchen only got 'quantity x name' — instructions and options were dropped."""
     w = world

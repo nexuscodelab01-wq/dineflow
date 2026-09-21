@@ -172,7 +172,17 @@ export function deleteCategory(restaurantId: number, categoryId: number) {
 export function uploadMenuImage(restaurantId: number, file: File) {
   const body = new FormData()
   body.append('file', file)
-  return apiFetch<{ url: string }>(q(restaurantId, '/uploads/menu-image'), {
+  return apiFetch<{ url: string, thumb_url?: string | null }>(q(restaurantId, '/uploads/menu-image'), {
+    method: 'POST',
+    body,
+  })
+}
+
+/** Restaurant logo (transparency kept). The returned url is saved on the restaurant by the caller. */
+export function uploadLogo(restaurantId: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return apiFetch<{ url: string }>(q(restaurantId, '/uploads/logo'), {
     method: 'POST',
     body,
   })

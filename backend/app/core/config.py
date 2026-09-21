@@ -45,6 +45,20 @@ class Settings(BaseSettings):
     # otherwise anyone can spoof their IP and dodge the limits.
     TRUST_PROXY_HEADERS: bool = False
 
+    # File storage. "local" writes to backend/uploads (fine for one server / development);
+    # "s3" uses any S3-compatible service (AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces).
+    STORAGE_BACKEND: str = "local"
+    # Public base URL files are served from (bucket/CDN URL). Required for "s3"; for "local" the
+    # default "/uploads" (served by this API) is used.
+    STORAGE_PUBLIC_URL: str = ""
+    S3_BUCKET: str = ""
+    S3_ENDPOINT_URL: str = ""  # blank for AWS; set for R2 / MinIO / Spaces
+    S3_REGION: str = "auto"
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
+    IMAGE_MAX_SIDE: int = 1600  # uploaded photos are scaled down to this many pixels on the long side
+
     # Live-update connections (SSE) one worker will hold open before shedding load.
     REALTIME_MAX_STREAMS: int = 200
 

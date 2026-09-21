@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency } from '~/utils/format'
-import { resolveMediaUrl } from '~/utils/media'
+import { resolveMediaUrl, thumbnailUrl } from '~/utils/media'
 
 const props = defineProps<{
   name: string
@@ -16,7 +16,11 @@ const props = defineProps<{
 
 defineEmits<{ click: [] }>()
 
-const resolvedImage = computed(() => resolveMediaUrl(props.imageUrl))
+// Cards are small: load the thumbnail, and fall back to the full image if it is missing.
+const thumbFailed = ref(false)
+const resolvedImage = computed(() =>
+  resolveMediaUrl(thumbFailed.value ? props.imageUrl : thumbnailUrl(props.imageUrl)),
+)
 </script>
 
 <template>
@@ -32,6 +36,7 @@ const resolvedImage = computed(() => resolveMediaUrl(props.imageUrl))
         :alt="name"
         class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
         loading="lazy"
+        @error="thumbFailed = true"
       >
       <span v-else class="flex h-full items-center justify-center font-display text-3xl text-brand-700/40">
         {{ name.charAt(0) }}

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.realtime import kitchen_topic, publish
+from app.core.storage import delete_owned_url
 from app.models.category import Category
 from app.models.enums import OrderStatus, TableStatus
 from app.models.menu_item import MenuItem
@@ -135,6 +136,7 @@ class AdminService:
     def update_menu_item(self, item_id: int, data: MenuItemUpdate, restaurant_id: int) -> MenuItemDetailRead:
         item = self._get_menu_item(item_id, restaurant_id)
         payload = data.model_dump(exclude_unset=True, exclude={"modifier_ids"})
+        old_image = item.image_url
         if "category_id" in payload:
             self._get_category(payload["category_id"], restaurant_id)
         for key, value in payload.items():
@@ -143,6 +145,8 @@ class AdminService:
             self._validate_modifiers(restaurant_id, data.modifier_ids)
             self.menu.set_item_modifiers(item, data.modifier_ids)
         self.db.commit()
+        if "image_url" in payload and old_image != item.image_url:
+            delete_owned_url(old_image, restaurant_id)  # the replaced upload is no longer referenced
         return self.menu_reader.get_item(item.id)
 
     def delete_menu_item(self, item_id: int, restaurant_id: int) -> None:
@@ -152,8 +156,10 @@ class AdminService:
                 f"“{item.name}” appears in past orders, so it can't be deleted. "
                 "Mark it unavailable instead to hide it from the menu."
             )
+        image = item.image_url
         self.menu.delete_item(item)
         self.db.commit()
+        delete_owned_url(image, restaurant_id)
 
     # Modifiers
     def list_modifiers(self, restaurant_id: int) -> list[MenuModifierRead]:
@@ -407,9 +413,12 @@ class AdminService:
         restaurant = self.restaurants.get_by_id(restaurant_id)
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
+        old_logo = restaurant.logo_url
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(restaurant, key, value)
         self.db.commit()
+        if old_logo and old_logo != restaurant.logo_url:
+            delete_owned_url(old_logo, restaurant_id)
         return RestaurantRead.model_validate(restaurant)
 
     # Helpers

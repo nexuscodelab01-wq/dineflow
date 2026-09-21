@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Restaurant } from '~/types/menu'
-import { fetchAdminSettings, updateAdminSettings } from '~/services/admin'
+import { fetchAdminSettings, updateAdminSettings, uploadLogo } from '~/services/admin'
+import { resolveMediaUrl } from '~/utils/media'
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
@@ -9,6 +10,10 @@ const settings = ref<Restaurant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
 const message = ref('')
+
+const logoUrl = ref<string | null>(null)
+const uploadingLogo = ref(false)
+const logoError = ref('')
 
 const form = reactive({
   name: '',
@@ -30,6 +35,7 @@ onMounted(async () => {
   await admin.initialize()
   if (admin.restaurantId) {
     settings.value = await fetchAdminSettings(admin.restaurantId)
+    logoUrl.value = settings.value.logo_url ?? null
     Object.assign(form, {
       name: settings.value.name,
       description: settings.value.description || '',
@@ -48,6 +54,51 @@ onMounted(async () => {
   }
   loading.value = false
 })
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024
+
+async function onLogoSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // let the same file be picked again
+  if (!file || !admin.restaurantId) return
+  logoError.value = ''
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    logoError.value = 'Use a PNG, JPEG, WebP or GIF image'
+    return
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    logoError.value = 'The image must be 5MB or smaller'
+    return
+  }
+  uploadingLogo.value = true
+  try {
+    const { url } = await uploadLogo(admin.restaurantId, file)
+    // Attach it right away so an uploaded logo is never left orphaned.
+    const updated = await updateAdminSettings(admin.restaurantId, { logo_url: url })
+    logoUrl.value = updated.logo_url ?? null
+    message.value = 'Logo updated'
+  }
+  catch (err) {
+    logoError.value = err instanceof Error ? err.message : 'Upload failed'
+  }
+  finally {
+    uploadingLogo.value = false
+  }
+}
+
+async function removeLogo() {
+  if (!admin.restaurantId) return
+  logoError.value = ''
+  try {
+    const updated = await updateAdminSettings(admin.restaurantId, { logo_url: null })
+    logoUrl.value = updated.logo_url ?? null
+    message.value = 'Logo removed'
+  }
+  catch (err) {
+    logoError.value = err instanceof Error ? err.message : 'Could not remove the logo'
+  }
+}
 
 async function save() {
   if (!admin.restaurantId) return
@@ -78,6 +129,25 @@ async function save() {
     <div v-if="loading" class="mt-6 h-64 animate-pulse rounded-2xl bg-brand-100/60" />
 
     <form v-else class="mt-6 max-w-2xl space-y-6" @submit.prevent="save">
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">Logo</h2>
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-brand-100 bg-white">
+            <img v-if="resolveMediaUrl(logoUrl)" :src="resolveMediaUrl(logoUrl)!" alt="Restaurant logo" class="max-h-full max-w-full object-contain" data-testid="logo-preview">
+            <span v-else class="px-2 text-center text-xs text-ink-subtle">No logo</span>
+          </div>
+          <div class="space-y-2">
+            <label class="inline-block cursor-pointer rounded-lg border border-brand-200 px-3 py-2 text-sm font-medium hover:bg-brand-50">
+              {{ uploadingLogo ? 'Uploading…' : logoUrl ? 'Replace logo' : 'Upload logo' }}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" :disabled="uploadingLogo" data-testid="logo-input" @change="onLogoSelected">
+            </label>
+            <button v-if="logoUrl" type="button" class="ml-3 text-sm text-red-600 hover:underline" @click="removeLogo">Remove</button>
+            <p class="text-xs text-ink-subtle">PNG with a transparent background works best. Max 5MB.</p>
+          </div>
+        </div>
+        <p v-if="logoError" class="text-sm text-red-600" role="alert">{{ logoError }}</p>
+      </section>
+
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
         <h2 class="font-semibold">Profile</h2>
         <input v-model="form.name" required class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="Restaurant name">
