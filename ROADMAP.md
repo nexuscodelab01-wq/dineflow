@@ -106,9 +106,10 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 **Exit:** two seeded tenants on one deployment; isolation suite green; Bella Vista unchanged; a flag can turn a module off for one tenant in the API *and* UI.
 
 ### Stage A½ — Demo kit · ~1 week
-- [ ] `create-tenant` CLI: name, slug, logo, primary color, cuisine template (starter menu, tables, hours), owner invite.
-- [ ] Palette generation from one color + contrast check; SSR-injected CSS variables, favicon, title.
-- **Exit:** in ~10 minutes you can show a prospect a site with *their* name, logo and colors.
+- [x] `python -m app.cli create-tenant`: name, slug, logo, brand colour, cuisine template (generic / pizzeria / cafe: starter menu, tables, hours), owner admin account; switches on `custom_branding`; audited. Prints the site address and a one-time password.
+- [x] Palette generated from one colour with a contrast check (brand-600 is darkened just enough for white text to reach WCAG AA); CSS variables, page title and favicon rendered on the server, so there is no flash of the default theme. Only when the restaurant's `custom_branding` flag is on. Logo shown in the header.
+- [ ] Not yet: owner *invite email* / password reset (the script prints a one-time password for now, see OUTSTANDING.md), a settings-page colour picker and logo uploader, branding on the admin area and emails.
+- **Exit:** ~10 minutes from nothing to a prospect's site with *their* name, logo and colours. Try it: `docker compose exec backend python -m app.cli create-tenant --name "Luigi's" --slug luigis --owner owner@luigis.demo --color "#c0392b" --template pizzeria`.
 
 ### Stage B — Hero experience · ~8–12 weeks
 Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_table`…).

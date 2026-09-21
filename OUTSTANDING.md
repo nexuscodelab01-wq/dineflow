@@ -20,5 +20,13 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - **Cause:** the session token lives in localStorage, so the server renders the signed-out header and the browser then renders the signed-in one.
 - **Plan:** render auth-dependent UI client-only (`<ClientOnly>` or an `isClient` flag) in the header/layout. Harmless for users today, but it hides real hydration problems.
 
+### 3. Owner invite and password reset
+- **Seen:** `create-tenant` prints a one-time password, and there is no way for anyone to change their password or reset a forgotten one.
+- **Plan:** password-reset flow (emailed single-use token via the job queue, rate-limited) and use it for a "welcome, set your password" invite email from `create-tenant`; a change-password page for signed-in users. Needed before the first real client.
+
+### 4. Branding gaps
+- Colour picker and logo uploader on the admin settings page (the API already accepts `primary_color` and logo uploads).
+- Apply branding to the admin area, emails (logo/colour in the templates) and the landing page (`pages/index.vue` still says "DineFlow").
+
 ## Done
 - (nothing yet)

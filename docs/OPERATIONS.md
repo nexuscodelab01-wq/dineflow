@@ -114,6 +114,15 @@ A restaurant's site is `<slug>.PLATFORM_DOMAIN`, or its own `custom_domain` (set
 - Customers are per restaurant (the same email can sign up at two restaurants); staff and platform admins are global. Access tokens carry a `tenant` claim, so **everyone is signed out once when this ships** (old tokens have none).
 - Restrict the database role before onboarding a real client: RLS is not enforced while the app connects as a superuser (see ROADMAP A3).
 
+## Creating a restaurant (demo or real)
+```sh
+docker compose exec backend python -m app.cli create-tenant \
+  --name "Luigi's Trattoria" --slug luigis --owner owner@luigis.com --owner-name "Luigi Rossi" \
+  --color "#c0392b" --logo /path/to/logo.png --template pizzeria     # templates: generic | pizzeria | cafe
+```
+It creates the restaurant with a starter menu, tables and hours, an admin account (a random password is printed once), turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
+A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
+
 ## Feature flags
 Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
 ```sh
