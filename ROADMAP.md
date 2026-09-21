@@ -114,11 +114,12 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 ### Stage B — Hero experience · ~8–12 weeks
 Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_table`…).
 
-**B1 Table sessions & QR (2–3 wk)** — §7.4
-- [ ] Table QR tokens; printable branded QR table tents (PDF/PNG); regenerate/rotate.
-- [ ] Table sessions (a "tab" shared by everyone at the table), guest join by scanning.
-- [ ] Guest ordering without an account; multiple rounds; items attach to the table.
-- [ ] Access policy: seated-only (default), PIN, staff-approved, open.
+**B1 Table sessions & QR (2–3 wk)** — §7.4 · *first slice built, flag `qr_table_ordering`*
+- [x] Table QR tokens (random, rotatable, replaced when a tab closes); printable branded table tents (browser print, one card per table); "Replace code" per table.
+- [x] Table sessions (one shared tab per table, race-safe), guests join by scanning, each device holds a table pass that is not a login.
+- [x] Guest ordering without an account; multiple rounds (each appears on the kitchen screen as "table N"); retry-safe sends (`Idempotency-Key`); refused rounds leave nothing behind; max round value.
+- [x] Access policy: seated-only (default) or open, per restaurant (`restaurants.qr_access_policy`).
+- [ ] Still to do in B1: PIN and staff-approved policies (no admin setting for the policy yet), live status to the guest over SSE (polls every 6 s now, see OUTSTANDING.md), call-waiter / request-bill, table moved/merged mid-session, PDF/PNG tent export, QR ordering inside opening hours, station routing.
 
 **B2 Live kitchen screen v2 (2–3 wk)** — §7.5
 - [ ] Real-time tickets (SSE), stations (kitchen/bar/dessert), timers and urgency colors, bump/recall, sound.

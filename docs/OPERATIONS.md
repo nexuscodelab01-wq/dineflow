@@ -123,6 +123,13 @@ docker compose exec backend python -m app.cli create-tenant \
 It creates the restaurant with a starter menu, tables and hours, an admin account (a random password is printed once), turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
 A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
 
+## QR table ordering
+Switch it on per restaurant: `python -m app.cli features <slug> qr_table_ordering on`. Then, in the admin area, open **Table ordering** *from the restaurant's own address* (the printed codes use the address you are on): **Print table tents** prints one card per table with the restaurant's logo and a QR code. Put the cards on the tables.
+- **How a table works:** a guest scans the code → by default ordering is open only while staff have marked the table **Occupied** (Tables page) → the guest starts a shared tab (name optional), picks dishes and taps *Send to kitchen*. Each send is a round that shows on the kitchen screen as a table order. Everyone at the table sees the same tab and total. Payment is settled with staff at the end (pay-at-table comes later).
+- **Closing:** when the party leaves, click **Close tab & clean table** (Table ordering page). Guest phones stop working, the table goes to *Cleaning*, and its QR code is replaced, so a photo of the old code is useless. **Replace code** does the same for one table without closing anything (lost tent, suspected abuse); reprint afterwards.
+- **Policy:** `restaurants.qr_access_policy` is `SEATED` (default) or `OPEN` (anyone with the code can order at any time). There is no settings screen for it yet; change it in the database.
+- **Limits:** one round can't exceed `QR_MAX_ORDER_TOTAL` (default 500); guests are rate-limited per IP.
+
 ## Feature flags
 Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
 ```sh

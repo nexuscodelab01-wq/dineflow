@@ -28,5 +28,11 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - Colour picker and logo uploader on the admin settings page (the API already accepts `primary_color` and logo uploads).
 - Apply branding to the admin area, emails (logo/colour in the templates) and the landing page (`pages/index.vue` still says "DineFlow").
 
+### 5. QR ordering follow-ups
+- Guest status updates poll every 6 s. Share the fix with item 1: one SSE stream per table session (`session:{id}` topic) for guests, published wherever an order's status or a round changes.
+- Settings screen for `qr_access_policy`; PIN and staff-approved modes; call-waiter / request-bill; table tents as a downloadable PDF.
+- A guest's pass lasts 12 h and is bound to one session; it is kept in `localStorage`, so a second phone must scan the code itself (intended).
+- Login rate limit (8 attempts / 10 min per account) is in-process: repeated automated test logins lock the account until the backend restarts.
+
 ## Done
 - (nothing yet)
