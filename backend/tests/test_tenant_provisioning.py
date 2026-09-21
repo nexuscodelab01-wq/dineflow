@@ -5,7 +5,6 @@ import pytest
 from app import cli
 from app.core import storage
 from app.core.exceptions import AppError, ConflictError
-from app.core.security import verify_password
 from app.core.storage import LocalStorage
 from app.db.session import get_db
 from app.main import app
@@ -48,7 +47,7 @@ def test_creates_a_complete_restaurant(db):
     assert FeatureService(db).resolve(rest.id)["custom_branding"] is True
 
     assert (owner.first_name, owner.last_name, owner.restaurant_id) == ("Luigi", "Rossi", None)
-    assert r.owner_password and verify_password(r.owner_password, owner.hashed_password)
+    assert r.invite_link and "/reset-password?token=" in r.invite_link                      # no password is ever shown
     assert db.query(AuditLog).filter_by(restaurant_id=rest.id, action="tenant.create").count() == 1
 
 
@@ -57,7 +56,9 @@ def test_the_new_owner_can_sign_in_and_only_reach_their_own_restaurant(db, clien
     try:
         other = make_tenant(db, "Alpha")
         r = create(db)
-        login = client.post(f"{API}/auth/login", json={"email": r.owner_email, "password": r.owner_password})
+        token = r.invite_link.split("token=")[1]
+        assert client.post(f"{API}/auth/reset-password", json={"token": token, "password": "Sturdy-Pass9"}).status_code == 200
+        login = client.post(f"{API}/auth/login", json={"email": r.owner_email, "password": "Sturdy-Pass9"})
         assert login.status_code == 200
         h = {"Authorization": f"Bearer {login.json()['access_token']}"}
         assert client.get(f"{API}/admin/menu", params={"restaurant_id": r.restaurant_id}, headers=h).status_code == 200
@@ -70,7 +71,7 @@ def test_the_new_owner_can_sign_in_and_only_reach_their_own_restaurant(db, clien
 def test_an_existing_admin_can_own_several_restaurants(db):
     first = create(db)
     second = create(db, name="Second Place", slug="second-place", owner_email=first.owner_email)
-    assert second.owner_email == first.owner_email and second.owner_password is None
+    assert second.owner_email == first.owner_email and second.invite_link is None
     owner = db.query(User).filter_by(email=first.owner_email).one()
     assert db.query(RestaurantUser).filter_by(user_id=owner.id).count() == 2
 
@@ -137,6 +138,6 @@ def test_cli_creates_a_tenant_and_prints_the_login(db, monkeypatch, capsys):
     assert cli.main(["create-tenant", "--name", "Cli Cafe", "--slug", "cli-cafe", "--owner", "boss@cli-cafe-demo.com",
                      "--color", "#2c6f53", "--template", "cafe"]) == 0
     out = capsys.readouterr().out
-    assert "Created 'Cli Cafe'" in out and "boss@cli-cafe-demo.com /" in out
+    assert "Created 'Cli Cafe'" in out and "boss@cli-cafe-demo.com" in out and "/reset-password?token=" in out
     with pytest.raises(SystemExit, match="already exists"):
         cli.main(["create-tenant", "--name", "Again", "--slug", "cli-cafe", "--owner", "x@cli-cafe-demo.com"])

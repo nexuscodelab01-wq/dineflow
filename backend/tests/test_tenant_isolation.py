@@ -48,7 +48,8 @@ PUBLIC = {
     ("GET", "/tenant"),
 }
 # Identity routes: tenant comes from the credentials / an explicit restaurant, see test_tenancy_auth.py.
-AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout"), ("GET", "/auth/me"), ("GET", "/auth/my-restaurants")}
+AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout"), ("GET", "/auth/me"), ("GET", "/auth/my-restaurants"),
+        ("POST", "/auth/forgot-password"), ("POST", "/auth/reset-password"), ("POST", "/auth/change-password")}
 # Signed-in customer routes, always scoped to the caller's own tenant and rows.
 CUSTOMER = {
     ("GET", "/orders"), ("POST", "/orders"), ("GET", "/orders/{order_id}"), ("GET", "/orders/{order_id}/stream"),
