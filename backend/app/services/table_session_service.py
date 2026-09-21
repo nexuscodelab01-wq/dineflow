@@ -1,0 +1,250 @@
+"""QR table ordering: scanning a table's code, joining its shared tab, ordering in rounds, closing it."""
+
+import secrets
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
+
+from app.core.config import settings
+from app.core.exceptions import AppError, ForbiddenError, NotFoundError, UnauthorizedError
+from app.core.realtime import kitchen_topic, publish
+from app.core.security import create_guest_token
+from app.models.enums import OrderStatus, OrderType, TableStatus
+from app.models.order import Order
+from app.models.order_item import OrderItem
+from app.models.order_status_history import OrderStatusHistory
+from app.models.restaurant import Restaurant
+from app.models.restaurant_table import RestaurantTable
+from app.models.table_session import CLOSED, OPEN, SessionGuest, TableSession
+from app.schemas.table_session import (
+    JoinResponse,
+    OpenSessionRead,
+    QrTableRead,
+    RoundCreate,
+    SessionItemRead,
+    SessionRead,
+    SessionRoundRead,
+    TableInfo,
+)
+from app.services.feature_service import FeatureService
+from app.services.order_service import OrderService
+
+FEATURE = "qr_table_ordering"
+CLOSED_STATUSES = {OrderStatus.CANCELLED}
+
+
+class TableSessionService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    # ------------------------------------------------------------------ scanning
+
+    def resolve_table(self, token: str, restaurant_id: int | None = None) -> tuple[RestaurantTable, Restaurant]:
+        """The table behind a QR token. Unknown/rotated tokens, inactive tables and a mismatching site all look the
+        same (404), so a token reveals nothing to someone who guesses."""
+        table = self.db.scalar(select(RestaurantTable).where(RestaurantTable.qr_token == token))
+        if table is None or not table.is_active or (restaurant_id is not None and table.restaurant_id != restaurant_id):
+            raise NotFoundError("This QR code is not valid")
+        restaurant = self.db.get(Restaurant, table.restaurant_id)
+        if restaurant is None or not restaurant.is_active:
+            raise NotFoundError("This QR code is not valid")
+        FeatureService(self.db).require(restaurant.id, FEATURE)
+        return table, restaurant
+
+    def _closed_reason(self, table: RestaurantTable, restaurant: Restaurant) -> str | None:
+        if restaurant.qr_access_policy == "OPEN" or table.status == TableStatus.OCCUPIED:
+            return None
+        return "Ordering opens once your host has seated you. Please ask a member of staff, then scan again."
+
+    def info(self, token: str, restaurant_id: int | None = None) -> TableInfo:
+        table, restaurant = self.resolve_table(token, restaurant_id)
+        reason = self._closed_reason(table, restaurant)
+        return TableInfo(
+            restaurant_id=restaurant.id, restaurant_name=restaurant.name, table_number=table.table_number,
+            ordering_open=reason is None, reason=reason,
+        )
+
+    def join(self, token: str, name: str | None, restaurant_id: int | None = None) -> JoinResponse:
+        table, restaurant = self.resolve_table(token, restaurant_id)
+        reason = self._closed_reason(table, restaurant)
+        if reason is not None:
+            raise ForbiddenError(reason)
+        session = self._open_session(table)
+        guest = SessionGuest(session_id=session.id, name=(name or "").strip() or None)
+        self.db.add(guest)
+        self.db.flush()
+        self.db.commit()
+        return JoinResponse(
+            access_token=create_guest_token(guest.id, session.id, restaurant.id), session_id=session.id, guest_id=guest.id
+        )
+
+    def _open_session(self, table: RestaurantTable) -> TableSession:
+        """The table's open session, created if this is the first scan. Two phones scanning at once end up in the same one."""
+        existing = self.db.scalar(select(TableSession).where(TableSession.table_id == table.id, TableSession.state == OPEN))
+        if existing is not None:
+            return existing
+        try:
+            with self.db.begin_nested():
+                session = TableSession(restaurant_id=table.restaurant_id, table_id=table.id)
+                self.db.add(session)
+                self.db.flush()
+            return session
+        except IntegrityError:  # someone else opened it between our read and our insert
+            return self.db.scalar(select(TableSession).where(TableSession.table_id == table.id, TableSession.state == OPEN))
+
+    # ------------------------------------------------------------------ the guest's view
+
+    def authenticate(self, guest_id: int, session_id: int, restaurant_id: int) -> tuple[SessionGuest, TableSession]:
+        guest = self.db.get(SessionGuest, guest_id)
+        session = self.db.get(TableSession, session_id)
+        if guest is None or session is None or guest.session_id != session.id or session.restaurant_id != restaurant_id:
+            raise UnauthorizedError("Invalid table pass")
+        if session.state != OPEN:
+            raise UnauthorizedError("This table session has ended")
+        return guest, session
+
+    def view(self, session: TableSession) -> SessionRead:
+        table = session.table
+        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        orders = list(self.db.scalars(
+            select(Order).options(selectinload(Order.items).selectinload(OrderItem.modifiers))
+            .where(Order.table_session_id == session.id).order_by(Order.round_no, Order.id)
+        ).all())
+        names = {g.id: g.name for g in self.db.scalars(select(SessionGuest).where(SessionGuest.session_id == session.id))}
+        rounds = [
+            SessionRoundRead(
+                order_id=o.id, order_number=o.order_number, round_no=o.round_no, status=o.status.value, total=o.total,
+                ordered_by=names.get(o.session_guest_id), created_at=o.created_at,
+                items=[
+                    SessionItemRead(
+                        name=i.item_name, quantity=i.quantity, line_total=i.line_total,
+                        special_instructions=i.special_instructions, options=[m.option_name for m in i.modifiers],
+                    ) for i in o.items
+                ],
+            ) for o in orders
+        ]
+        total = sum((o.total for o in orders if o.status not in CLOSED_STATUSES), Decimal("0.00"))
+        return SessionRead(
+            session_id=session.id, restaurant_id=session.restaurant_id, restaurant_name=restaurant.name,
+            table_number=table.table_number, guests=[n for n in names.values() if n], rounds=rounds, total=total,
+        )
+
+    # ------------------------------------------------------------------ ordering
+
+    def place_round(self, guest: SessionGuest, session: TableSession, data: RoundCreate, client_token: str | None) -> SessionRoundRead:
+        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        FeatureService(self.db).require(restaurant.id, FEATURE)
+
+        # Serialise rounds of one table so round numbers never repeat.
+        self.db.execute(select(TableSession.id).where(TableSession.id == session.id).with_for_update())
+        # After the lock, so two simultaneous taps of one button can't both get past this check.
+        if client_token:  # a repeated tap or a retry after a dropped connection returns the original round
+            again = self.db.scalar(select(Order).where(Order.table_session_id == session.id, Order.client_token == client_token))
+            if again is not None:
+                return self._round_read(again.id, session)
+
+        round_no = (self.db.scalar(select(func.max(Order.round_no)).where(Order.table_session_id == session.id)) or 0) + 1
+
+        # All-or-nothing: a refused round (sold out, too large…) leaves no order, no lines and no used order number.
+        with self.db.begin_nested():
+            orders = OrderService(self.db)
+            item_ids = [line.menu_item_id for line in data.items]
+            menu_items = orders.menu.get_items_by_ids(item_ids, restaurant.id)
+            items_by_id = {item.id: item for item in menu_items}
+            if len(items_by_id) != len(set(item_ids)):
+                raise AppError("One or more menu items are invalid for this restaurant")
+
+            guest_name = guest.name or f"Table {session.table.table_number}"
+            order = Order(
+                user_id=None, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
+                order_type=OrderType.DINE_IN, status=OrderStatus.PENDING,
+                subtotal=Decimal("0.00"), tax=Decimal("0.00"), delivery_fee=Decimal("0.00"), discount=Decimal("0.00"), total=Decimal("0.00"),
+                customer_name=guest_name, customer_email=None, table_id=session.table_id,
+                table_session_id=session.id, session_guest_id=guest.id, round_no=round_no,
+                client_token=client_token, notes=data.notes,
+            )
+            orders.orders.add(order)
+            subtotal, _ = orders._add_lines(order, data.items, items_by_id)
+            tax = (subtotal * restaurant.tax_rate).quantize(Decimal("0.01"))
+            total = (subtotal + tax).quantize(Decimal("0.01"))
+            if total > Decimal(str(settings.QR_MAX_ORDER_TOTAL)):
+                raise AppError("That round is too large to send from a table. Please ask a member of staff.")
+            order.subtotal, order.tax, order.total = subtotal, tax, total
+
+            self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=None))
+            order.status = OrderStatus.CONFIRMED  # paid at the end of the meal, so nothing to wait for
+            self.db.add(OrderStatusHistory(
+                order_id=order.id, previous_status=OrderStatus.PENDING, new_status=OrderStatus.CONFIRMED,
+                changed_by_user_id=None, notes=f"Sent from table {session.table.table_number} (round {round_no})",
+            ))
+
+        order_id = order.id
+        publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order_id, "order_number": order.order_number})
+        self.db.commit()
+        return self._round_read(order_id, session)
+
+    def _round_read(self, order_id: int, session: TableSession) -> SessionRoundRead:
+        return next(r for r in self.view(session).rounds if r.order_id == order_id)
+
+    # ------------------------------------------------------------------ staff
+
+    def qr_tables(self, restaurant_id: int) -> list[QrTableRead]:
+        tables = list(self.db.scalars(
+            select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.is_active.is_(True))
+            .order_by(RestaurantTable.table_number)
+        ).all())
+        open_ids = set(self.db.scalars(select(TableSession.table_id).where(TableSession.restaurant_id == restaurant_id, TableSession.state == OPEN)))
+        for table in tables:
+            if not table.qr_token:  # tables made before QR ordering existed
+                table.qr_token = secrets.token_urlsafe(16)
+        self.db.commit()
+        return [QrTableRead(table_id=t.id, table_number=t.table_number, zone=t.zone, qr_token=t.qr_token, has_open_session=t.id in open_ids) for t in tables]
+
+    def rotate_token(self, table_id: int, restaurant_id: int) -> QrTableRead:
+        table = self._table(table_id, restaurant_id)
+        table.qr_token = secrets.token_urlsafe(16)
+        self.db.commit()
+        has_open = self.db.scalar(select(TableSession.id).where(TableSession.table_id == table.id, TableSession.state == OPEN)) is not None
+        return QrTableRead(table_id=table.id, table_number=table.table_number, zone=table.zone, qr_token=table.qr_token, has_open_session=has_open)
+
+    def open_sessions(self, restaurant_id: int) -> list[OpenSessionRead]:
+        sessions = list(self.db.scalars(
+            select(TableSession).options(selectinload(TableSession.table))
+            .where(TableSession.restaurant_id == restaurant_id, TableSession.state == OPEN).order_by(TableSession.opened_at)
+        ).all())
+        out = []
+        for s in sessions:
+            guests = self.db.scalar(select(func.count()).select_from(SessionGuest).where(SessionGuest.session_id == s.id)) or 0
+            rounds = self.db.execute(select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(
+                Order.table_session_id == s.id, Order.status.notin_(CLOSED_STATUSES))).one()
+            out.append(OpenSessionRead(
+                session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
+                guests=guests, rounds=rounds[0], total=Decimal(rounds[1]),
+            ))
+        return out
+
+    def close_session(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+        """End the tab: every guest pass stops working, the table goes to cleaning and its QR code is replaced,
+        so a photo of the old code is worthless."""
+        session = self.db.get(TableSession, session_id)
+        if session is None or session.restaurant_id != restaurant_id:
+            raise NotFoundError("Session not found")
+        if session.state != OPEN:
+            raise AppError("This session is already closed")
+        session.state = CLOSED
+        session.closed_at = datetime.now(UTC)
+        session.closed_by_user_id = staff_user_id
+        table = session.table
+        table.status = TableStatus.CLEANING
+        table.qr_token = secrets.token_urlsafe(16)
+        publish(self.db, kitchen_topic(restaurant_id), "session.closed", {"table_id": table.id})
+        self.db.commit()
+
+    def _table(self, table_id: int, restaurant_id: int) -> RestaurantTable:
+        table = self.db.get(RestaurantTable, table_id)
+        if table is None or table.restaurant_id != restaurant_id:
+            raise NotFoundError("Table not found")
+        return table

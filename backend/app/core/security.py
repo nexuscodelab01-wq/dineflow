@@ -27,6 +27,29 @@ def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> s
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+GUEST_TOKEN_HOURS = 12
+
+
+def create_guest_token(guest_id: int, session_id: int, restaurant_id: int) -> str:
+    """A device's pass to one open table session. Its `type` differs from an account token, so it can never be
+    used as a login: `decode_access_token` refuses it, and this one refuses account tokens."""
+    payload = {
+        "sub": str(guest_id), "type": "guest", "sess": session_id, "tenant": restaurant_id,
+        "exp": datetime.now(UTC) + timedelta(hours=GUEST_TOKEN_HOURS),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_guest_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid guest token") from exc
+    if payload.get("type") != "guest":
+        raise ValueError("Invalid token type")
+    return payload
+
+
 def create_refresh_token_value() -> str:
     return secrets.token_urlsafe(48)
 

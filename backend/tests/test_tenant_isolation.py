@@ -40,6 +40,7 @@ def two(client, db):
 # Routes that intentionally serve any visitor. Nothing here may return another tenant's PRIVATE data;
 # each one is covered by a test below or reads only public storefront data.
 PUBLIC = {
+    ("GET", "/t/{token}"), ("POST", "/t/{token}/join"),
     ("GET", "/health"), ("GET", "/health/ready"),
     ("GET", "/categories"), ("GET", "/menu"), ("GET", "/menu/{item_id}"),
     ("GET", "/restaurants/{identifier}"), ("GET", "/restaurants/{identifier}/tables"),
@@ -54,6 +55,8 @@ CUSTOMER = {
     ("GET", "/reservations/me"), ("POST", "/reservations/{reservation_id}/confirm"),
     ("POST", "/reservations/{reservation_id}/cancel"), ("POST", "/restaurants/{identifier}/reservations"),
 }
+# Guests at a table: a table pass (not an account) bound to one restaurant's open session; see test_table_ordering.py.
+GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders")}
 # Platform-only.
 PLATFORM = {
     ("GET", "/restaurants"),
@@ -74,7 +77,7 @@ def all_routes():
 
 
 def test_every_route_is_classified_for_isolation():
-    known = PUBLIC | AUTH | CUSTOMER | PLATFORM
+    known = PUBLIC | AUTH | CUSTOMER | GUEST | PLATFORM
     unclassified = [(m, p) for m, p in all_routes() if not p.startswith("/admin") and (m, p) not in known]
     assert not unclassified, (
         f"New API route(s) without an isolation decision: {unclassified}. Add each to PUBLIC, AUTH, CUSTOMER or "

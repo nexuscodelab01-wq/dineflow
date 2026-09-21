@@ -80,8 +80,6 @@ class OrderService:
         if len(items_by_id) != len(set(item_ids)):
             raise AppError("One or more menu items are invalid for this restaurant")
 
-        subtotal = Decimal("0.00")
-        email_lines: list[dict] = []  # what the confirmation email will list
         order = Order(
             user_id=user.id,
             restaurant_id=restaurant.id,
@@ -115,43 +113,7 @@ class OrderService:
 
         self.orders.add(order)
 
-        for line in data.items:
-            menu_item = items_by_id[line.menu_item_id]
-            if not menu_item.is_available:
-                raise AppError(f"{menu_item.name} is currently unavailable")
-
-            unit_price, selected_modifiers = self._validate_modifiers(menu_item, line.modifier_option_ids)
-            line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
-            subtotal += line_total
-            email_lines.append({
-                "quantity": line.quantity,
-                "name": menu_item.name,
-                "options": [mod.name for mod in selected_modifiers],
-                "instructions": line.special_instructions,
-            })
-
-            order_item = OrderItem(
-                order_id=order.id,
-                menu_item_id=menu_item.id,
-                item_name=menu_item.name,
-                quantity=line.quantity,
-                unit_price=unit_price,
-                line_total=line_total,
-                special_instructions=line.special_instructions,
-            )
-            self.db.add(order_item)
-            self.db.flush()
-
-            for mod in selected_modifiers:
-                self.db.add(
-                    OrderItemModifier(
-                        order_item_id=order_item.id,
-                        modifier_option_id=mod.id,
-                        modifier_name=mod.modifier.name,
-                        option_name=mod.name,
-                        price_adjustment=mod.price_adjustment,
-                    )
-                )
+        subtotal, email_lines = self._add_lines(order, data.items, items_by_id)
 
         delivery_fee = restaurant.delivery_fee if data.order_type == OrderType.DELIVERY else Decimal("0.00")
         taxable = max(subtotal - order.discount, Decimal("0.00"))
@@ -209,6 +171,50 @@ class OrderService:
         if refreshed is None:
             raise AppError("Order could not be loaded after creation")
         return OrderRead.model_validate(refreshed)
+
+    def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem]) -> tuple[Decimal, list[dict]]:
+        """Add the ordered lines to `order` (checking availability and modifiers). Returns the subtotal and
+        the lines as the confirmation email lists them."""
+        subtotal = Decimal("0.00")
+        email_lines: list[dict] = []  # what the confirmation email will list
+        for line in lines:
+            menu_item = items_by_id[line.menu_item_id]
+            if not menu_item.is_available:
+                raise AppError(f"{menu_item.name} is currently unavailable")
+
+            unit_price, selected_modifiers = self._validate_modifiers(menu_item, line.modifier_option_ids)
+            line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
+            subtotal += line_total
+            email_lines.append({
+                "quantity": line.quantity,
+                "name": menu_item.name,
+                "options": [mod.name for mod in selected_modifiers],
+                "instructions": line.special_instructions,
+            })
+
+            order_item = OrderItem(
+                order_id=order.id,
+                menu_item_id=menu_item.id,
+                item_name=menu_item.name,
+                quantity=line.quantity,
+                unit_price=unit_price,
+                line_total=line_total,
+                special_instructions=line.special_instructions,
+            )
+            self.db.add(order_item)
+            self.db.flush()
+
+            for mod in selected_modifiers:
+                self.db.add(
+                    OrderItemModifier(
+                        order_item_id=order_item.id,
+                        modifier_option_id=mod.id,
+                        modifier_name=mod.modifier.name,
+                        option_name=mod.name,
+                        price_adjustment=mod.price_adjustment,
+                    )
+                )
+        return subtotal, email_lines
 
     def get_order(self, order_id: int, user: User) -> OrderRead:
         order = self.orders.get_by_id_for_user(order_id, user.id)

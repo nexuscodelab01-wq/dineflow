@@ -16,6 +16,8 @@ from app.db.session import get_db
 from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
+from app.schemas.table_session import OpenSessionRead, QrTableRead
+from app.services.table_session_service import TableSessionService
 from app.schemas.admin import (
     CategoryCreate,
     CategoryReorder,
@@ -55,6 +57,10 @@ from app.services.reservation_service import ReservationService
 from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
+
+
+def get_table_session_service(db: Annotated[Session, Depends(get_db)]) -> TableSessionService:
+    return TableSessionService(db)
 
 
 
@@ -478,6 +484,38 @@ def update_table_status(
         "cancelled_reservations": cancelled,
         "completed_reservations": completed,
     }
+
+
+QR_GATE = [Depends(requires_feature("qr_table_ordering"))]
+
+
+@router.get("/qr/tables", response_model=list[QrTableRead], dependencies=QR_GATE)
+def list_qr_tables(_: AdminUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[QrTableRead]:
+    """Every table with its QR token, for printing table tents."""
+    return service.qr_tables(restaurant_id)
+
+
+@router.post("/tables/{table_id}/qr/rotate", response_model=QrTableRead, dependencies=QR_GATE)
+def rotate_qr(table_id: int, _: AdminUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> QrTableRead:
+    """Replace a table's QR code (e.g. it was photographed or the tent was lost). Old links stop working."""
+    try:
+        return service.rotate_token(table_id, restaurant_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/table-sessions", response_model=list[OpenSessionRead], dependencies=QR_GATE)
+def list_table_sessions(_: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[OpenSessionRead]:
+    return service.open_sessions(restaurant_id)
+
+
+@router.post("/table-sessions/{session_id}/close", status_code=status.HTTP_204_NO_CONTENT, dependencies=QR_GATE)
+def close_table_session(session_id: int, user: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> None:
+    """End a table's tab: guest passes stop working, the table goes to cleaning and its QR code is replaced."""
+    try:
+        service.close_session(session_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
