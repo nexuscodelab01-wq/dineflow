@@ -5,11 +5,9 @@ import type {
   User,
 } from '~/types/auth'
 import { apiFetch, getApiBaseUrl } from '~/services/http'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '~/utils/session-refresh'
 
 export { apiFetch, getApiBaseUrl }
-
-const ACCESS_TOKEN_KEY = 'dineflow_access_token'
-const REFRESH_TOKEN_KEY = 'dineflow_refresh_token'
 
 export function getStoredAccessToken(): string | null {
   if (import.meta.server) return null

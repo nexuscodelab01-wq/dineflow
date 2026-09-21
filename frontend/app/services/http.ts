@@ -1,6 +1,5 @@
 import { ApiError, parseApiErrorBody } from '~/utils/api-error'
-
-const ACCESS_TOKEN_KEY = 'dineflow_access_token'
+import { ACCESS_TOKEN_KEY, refreshSession } from '~/utils/session-refresh'
 
 export function getApiBaseUrl(): string {
   const config = useRuntimeConfig()
@@ -18,8 +17,9 @@ function getAccessToken(): string | null {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit & { auth?: boolean } = {},
+  options: RequestInit & { auth?: boolean, retried?: boolean } = {},
 ): Promise<T> {
+  const { retried, ...fetchOptions } = options
   const base = getApiBaseUrl()
   const headers = new Headers(options.headers)
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
@@ -34,7 +34,7 @@ export async function apiFetch<T>(
 
   let response: Response
   try {
-    response = await fetch(`${base}${path}`, { ...options, headers })
+    response = await fetch(`${base}${path}`, { ...fetchOptions, headers })
   }
   catch {
     throw new ApiError('Unable to reach the server. Check your connection and try again.', 0)
@@ -48,6 +48,13 @@ export async function apiFetch<T>(
     catch { /* ignore */ }
 
     const error = parseApiErrorBody(body, response.status)
+
+    // Expired access token: quietly get a new one and replay the request once.
+    if (error.isUnauthorized && options.auth !== false && !retried && import.meta.client) {
+      if (await refreshSession({ baseUrl: base, storage: localStorage })) {
+        return apiFetch<T>(path, { ...options, retried: true })
+      }
+    }
 
     if (error.isUnauthorized && import.meta.client) {
       const auth = useAuthStore()

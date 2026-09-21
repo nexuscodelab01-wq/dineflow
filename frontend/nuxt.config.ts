@@ -32,6 +32,19 @@ export default defineNuxtConfig({
     },
   },
 
+  // Baseline security headers for every page (a full Content-Security-Policy comes later, once
+  // per-tenant themes and third-party embeds are settled).
+  routeRules: {
+    '/**': {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      },
+    },
+  },
+
   typescript: {
     strict: true,
     typeCheck: false,
