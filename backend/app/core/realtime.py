@@ -43,6 +43,24 @@ def kitchen_topic(restaurant_id: int) -> str:
     return f"restaurant:{restaurant_id}:kitchen"
 
 
+def order_topic(order_id: int) -> str:
+    """One order, for the customer who placed it."""
+    return f"order:{order_id}"
+
+
+def session_topic(session_id: int) -> str:
+    """One table session (a shared tab), for the guests sitting at it."""
+    return f"session:{session_id}"
+
+
+def publish_order_change(db: Session, order, event_type: str = "order.status", data: dict[str, Any] | None = None) -> None:
+    """Tell everyone who follows this order: the customer's order page and, for table orders, the whole table."""
+    payload = {"order_id": order.id, **(data or {})}
+    publish(db, order_topic(order.id), event_type, payload)
+    if getattr(order, "table_session_id", None):
+        publish(db, session_topic(order.table_session_id), event_type, payload)
+
+
 @dataclass(eq=False)
 class Subscription:
     topic: str

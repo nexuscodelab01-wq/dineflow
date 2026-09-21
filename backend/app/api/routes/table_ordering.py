@@ -2,10 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.routes.realtime import sse_response
 from app.core.exceptions import AppError, raise_http_for_app_error
+from app.core.realtime import session_topic
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.dependencies.guest import CurrentGuest
@@ -60,3 +63,9 @@ def send_round(
         return service.place_round(guest.guest, guest.session, data, idempotency_key)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/table-session/stream", summary="Live updates for your table's tab (text/event-stream)")
+async def table_stream(request: Request, guest: CurrentGuest) -> StreamingResponse:
+    """Sends `round.created`, `order.status` and `session.closed` events for the table the pass belongs to."""
+    return sse_response(request, session_topic(guest.session.id))

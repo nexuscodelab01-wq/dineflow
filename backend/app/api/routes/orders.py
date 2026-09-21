@@ -2,12 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
+from app.api.routes.realtime import sse_response
 from app.core.rate_limit import rate_limit
+from app.core.realtime import order_topic
 from app.dependencies.auth import CurrentUser
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.order_service import OrderService
@@ -56,3 +59,18 @@ def get_order(
         return service.get_order(order_id, user)
     except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/{order_id}/stream", summary="Live updates for one of your orders (text/event-stream)")
+async def order_stream(
+    order_id: int,
+    request: Request,
+    user: CurrentUser,
+    service: Annotated[OrderService, Depends(get_order_service)],
+) -> StreamingResponse:
+    """Sends an `order.status` event whenever the restaurant changes this order. Only its owner may listen."""
+    try:
+        service.get_order(order_id, user)  # 404 unless it is the caller's own order
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return sse_response(request, order_topic(order_id))

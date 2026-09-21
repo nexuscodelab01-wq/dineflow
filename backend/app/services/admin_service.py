@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
-from app.core.realtime import kitchen_topic, publish
+from app.core.realtime import kitchen_topic, publish, publish_order_change
 from app.core.storage import delete_owned_url
 from app.models.category import Category
 from app.models.enums import OrderStatus, TableStatus
@@ -272,6 +272,7 @@ class AdminService:
             notes=data.notes,
         )
         publish(self.db, kitchen_topic(restaurant_id), "order.status", {"order_id": order.id, "status": data.status.value})
+        publish_order_change(self.db, order, "order.status", {"status": data.status.value})
         self.db.commit()
         logger.info("Order status updated: %s -> %s by user %s", previous.value, data.status.value, user.id)
         return self.get_order(order_id, restaurant_id)

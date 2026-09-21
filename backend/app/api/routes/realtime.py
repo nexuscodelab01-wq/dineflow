@@ -42,13 +42,12 @@ async def _event_stream(request: Request, topic: str) -> AsyncIterator[str]:
         broker.unsubscribe(sub)
 
 
-@router.get("/kitchen/stream", summary="Live kitchen events (text/event-stream)")
-async def kitchen_stream(request: Request, _: StaffUser, restaurant_id: RestaurantId) -> StreamingResponse:
-    """Streams `order.created`, `order.status` and `resync` events for this restaurant's kitchen."""
+def sse_response(request: Request, topic: str) -> StreamingResponse:
+    """A live event stream for one topic (shared by the kitchen, customer and table streams)."""
     if broker.count() >= settings.REALTIME_MAX_STREAMS:
         raise HTTPException(status_code=503, detail="Too many live connections right now. Retrying shortly is fine.")
     return StreamingResponse(
-        _event_stream(request, kitchen_topic(restaurant_id)),
+        _event_stream(request, topic),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
@@ -56,3 +55,9 @@ async def kitchen_stream(request: Request, _: StaffUser, restaurant_id: Restaura
             "Connection": "keep-alive",
         },
     )
+
+
+@router.get("/kitchen/stream", summary="Live kitchen events (text/event-stream)")
+async def kitchen_stream(request: Request, _: StaffUser, restaurant_id: RestaurantId) -> StreamingResponse:
+    """Streams `order.created`, `order.status` and `resync` events for this restaurant's kitchen."""
+    return sse_response(request, kitchen_topic(restaurant_id))

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.exceptions import AppError, ForbiddenError, NotFoundError, UnauthorizedError
-from app.core.realtime import kitchen_topic, publish
+from app.core.realtime import kitchen_topic, publish, publish_order_change, session_topic
 from app.core.security import create_guest_token
 from app.models.enums import OrderStatus, OrderType, TableStatus
 from app.models.order import Order
@@ -183,6 +183,7 @@ class TableSessionService:
 
         order_id = order.id
         publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order_id, "order_number": order.order_number})
+        publish_order_change(self.db, order, "round.created", {"round_no": round_no})
         self.db.commit()
         return self._round_read(order_id, session)
 
@@ -241,6 +242,7 @@ class TableSessionService:
         table.status = TableStatus.CLEANING
         table.qr_token = secrets.token_urlsafe(16)
         publish(self.db, kitchen_topic(restaurant_id), "session.closed", {"table_id": table.id})
+        publish(self.db, session_topic(session.id), "session.closed", {"table_id": table.id})
         self.db.commit()
 
     def _table(self, table_id: int, restaurant_id: int) -> RestaurantTable:
