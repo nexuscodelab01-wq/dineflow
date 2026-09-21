@@ -3,6 +3,8 @@
 from datetime import datetime
 from decimal import Decimal
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.order import OrderItemCreate
@@ -60,6 +62,7 @@ class SessionRead(BaseModel):
     guests: list[str]
     rounds: list[SessionRoundRead]
     total: Decimal  # everything ordered so far, excluding cancelled rounds
+    requests: list[str] = Field(default_factory=list)  # kinds the table has asked for and staff haven't answered yet
 
 
 # ---- staff -------------------------------------------------------------------------------------
@@ -80,3 +83,18 @@ class OpenSessionRead(BaseModel):
     guests: int
     rounds: int
     total: Decimal
+    requests: list[str] = Field(default_factory=list)
+
+
+class RequestCreate(BaseModel):
+    kind: Literal["WAITER", "BILL"]
+
+
+class ServiceRequestStaffRead(BaseModel):
+    id: int
+    session_id: int
+    table_id: int
+    table_number: str
+    kind: str
+    asked_by: str | None
+    created_at: datetime

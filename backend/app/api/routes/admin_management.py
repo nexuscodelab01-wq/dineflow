@@ -16,7 +16,7 @@ from app.db.session import get_db
 from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
-from app.schemas.table_session import OpenSessionRead, QrTableRead
+from app.schemas.table_session import OpenSessionRead, QrTableRead, ServiceRequestStaffRead
 from app.services.table_session_service import TableSessionService
 from app.schemas.admin import (
     CategoryCreate,
@@ -514,6 +514,20 @@ def close_table_session(session_id: int, user: StaffUser, restaurant_id: Restaur
     """End a table's tab: guest passes stop working, the table goes to cleaning and its QR code is replaced."""
     try:
         service.close_session(session_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/service-requests", response_model=list[ServiceRequestStaffRead], dependencies=QR_GATE)
+def list_service_requests(_: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[ServiceRequestStaffRead]:
+    """Tables waiting for a waiter or the bill, oldest first."""
+    return service.open_requests(restaurant_id)
+
+
+@router.post("/service-requests/{request_id}/done", status_code=status.HTTP_204_NO_CONTENT, dependencies=QR_GATE)
+def finish_service_request(request_id: int, user: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> None:
+    try:
+        service.resolve_request(request_id, restaurant_id, user.id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

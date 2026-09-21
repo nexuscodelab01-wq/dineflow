@@ -18,12 +18,15 @@ from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
 from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
+from app.models.service_request import BILL, DONE, KINDS, ServiceRequest
+from app.models.service_request import OPEN as REQUEST_OPEN
 from app.models.table_session import CLOSED, OPEN, SessionGuest, TableSession
 from app.schemas.table_session import (
     JoinResponse,
     OpenSessionRead,
     QrTableRead,
     RoundCreate,
+    ServiceRequestStaffRead,
     SessionItemRead,
     SessionRead,
     SessionRoundRead,
@@ -127,9 +130,12 @@ class TableSessionService:
             ) for o in orders
         ]
         total = sum((o.total for o in orders if o.status not in CLOSED_STATUSES), Decimal("0.00"))
+        requests = list(self.db.scalars(select(ServiceRequest.kind).where(
+            ServiceRequest.table_session_id == session.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
         return SessionRead(
             session_id=session.id, restaurant_id=session.restaurant_id, restaurant_name=restaurant.name,
             table_number=table.table_number, guests=[n for n in names.values() if n], rounds=rounds, total=total,
+            requests=requests,
         )
 
     # ------------------------------------------------------------------ ordering
@@ -221,9 +227,11 @@ class TableSessionService:
             guests = self.db.scalar(select(func.count()).select_from(SessionGuest).where(SessionGuest.session_id == s.id)) or 0
             rounds = self.db.execute(select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(
                 Order.table_session_id == s.id, Order.status.notin_(CLOSED_STATUSES))).one()
+            asked = list(self.db.scalars(select(ServiceRequest.kind).where(
+                ServiceRequest.table_session_id == s.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
             out.append(OpenSessionRead(
                 session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
-                guests=guests, rounds=rounds[0], total=Decimal(rounds[1]),
+                guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked,
             ))
         return out
 
@@ -238,12 +246,72 @@ class TableSessionService:
         session.state = CLOSED
         session.closed_at = datetime.now(UTC)
         session.closed_by_user_id = staff_user_id
+        self._resolve_open_requests(session.id, staff_user_id)  # nobody is waiting for a table that has left
         table = session.table
         table.status = TableStatus.CLEANING
         table.qr_token = secrets.token_urlsafe(16)
         publish(self.db, kitchen_topic(restaurant_id), "session.closed", {"table_id": table.id})
         publish(self.db, session_topic(session.id), "session.closed", {"table_id": table.id})
         self.db.commit()
+
+    # ------------------------------------------------------------------ calling the waiter / asking for the bill
+
+    def ask(self, guest: SessionGuest, session: TableSession, kind: str) -> list[str]:
+        """A guest asks for the waiter or the bill. Asking again while it is still open changes nothing."""
+        if kind not in KINDS:
+            raise AppError("Unknown request")
+        FeatureService(self.db).require(session.restaurant_id, FEATURE)
+        if kind == BILL and not self.db.scalar(select(Order.id).where(Order.table_session_id == session.id).limit(1)):
+            raise AppError("There is nothing on your table's tab yet")
+        already = self.db.scalar(select(ServiceRequest.id).where(
+            ServiceRequest.table_session_id == session.id, ServiceRequest.kind == kind, ServiceRequest.state == REQUEST_OPEN))
+        if already is None:
+            try:
+                with self.db.begin_nested():
+                    self.db.add(ServiceRequest(
+                        restaurant_id=session.restaurant_id, table_session_id=session.id, table_id=session.table_id,
+                        guest_id=guest.id, kind=kind))
+                    self.db.flush()
+            except IntegrityError:  # another phone at the table asked at the same moment
+                already = True
+            if already is None:
+                data = {"table_id": session.table_id, "kind": kind}
+                publish(self.db, kitchen_topic(session.restaurant_id), "request.created", data)
+                publish(self.db, session_topic(session.id), "request.created", data)
+        self.db.commit()
+        return self.view(session).requests
+
+    def open_requests(self, restaurant_id: int) -> list[ServiceRequestStaffRead]:
+        rows = self.db.execute(
+            select(ServiceRequest, RestaurantTable.table_number, SessionGuest.name)
+            .join(RestaurantTable, RestaurantTable.id == ServiceRequest.table_id)
+            .outerjoin(SessionGuest, SessionGuest.id == ServiceRequest.guest_id)
+            .where(ServiceRequest.restaurant_id == restaurant_id, ServiceRequest.state == REQUEST_OPEN)
+            .order_by(ServiceRequest.created_at, ServiceRequest.id)
+        ).all()
+        return [
+            ServiceRequestStaffRead(id=r.id, session_id=r.table_session_id, table_id=r.table_id, table_number=number, kind=r.kind, asked_by=name, created_at=r.created_at)
+            for r, number, name in rows
+        ]
+
+    def resolve_request(self, request_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+        request = self.db.get(ServiceRequest, request_id)
+        if request is None or request.restaurant_id != restaurant_id:
+            raise NotFoundError("Request not found")
+        if request.state == DONE:
+            return  # two waiters tapped Done: fine
+        request.state, request.resolved_at, request.resolved_by_user_id = DONE, datetime.now(UTC), staff_user_id
+        data = {"table_id": request.table_id, "kind": request.kind}
+        publish(self.db, kitchen_topic(restaurant_id), "request.done", data)
+        publish(self.db, session_topic(request.table_session_id), "request.done", data)
+        self.db.commit()
+
+    def _resolve_open_requests(self, session_id: int, staff_user_id: int | None) -> None:
+        self.db.execute(
+            update(ServiceRequest)
+            .where(ServiceRequest.table_session_id == session_id, ServiceRequest.state == REQUEST_OPEN)
+            .values(state=DONE, resolved_at=datetime.now(UTC), resolved_by_user_id=staff_user_id)
+        )
 
     def _table(self, table_id: int, restaurant_id: int) -> RestaurantTable:
         table = self.db.get(RestaurantTable, table_id)

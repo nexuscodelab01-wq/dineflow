@@ -20,6 +20,7 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
 from app.models.role import Role
+from app.models.service_request import ServiceRequest
 from app.models.table_session import SessionGuest, TableSession
 from app.models.user import User
 
@@ -44,6 +45,7 @@ __all__ = [
     "RestaurantTable",
     "RestaurantUser",
     "Role",
+    "ServiceRequest",
     "SessionGuest",
     "TableSession",
     "User",

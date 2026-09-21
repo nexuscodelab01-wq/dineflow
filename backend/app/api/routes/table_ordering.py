@@ -12,7 +12,7 @@ from app.core.realtime import session_topic
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.dependencies.guest import CurrentGuest
-from app.schemas.table_session import JoinRequest, JoinResponse, RoundCreate, SessionRead, SessionRoundRead, TableInfo
+from app.schemas.table_session import JoinRequest, JoinResponse, RequestCreate, RoundCreate, SessionRead, SessionRoundRead, TableInfo
 from app.services.table_session_service import TableSessionService
 
 router = APIRouter()
@@ -69,3 +69,12 @@ def send_round(
 async def table_stream(request: Request, guest: CurrentGuest) -> StreamingResponse:
     """Sends `round.created`, `order.status` and `session.closed` events for the table the pass belongs to."""
     return sse_response(request, session_topic(guest.session.id))
+
+
+@router.post("/table-session/requests", response_model=list[str], dependencies=[rate_limit("qr-request", 30, 600)])
+def ask_for_service(data: RequestCreate, guest: CurrentGuest, service: Service) -> list[str]:
+    """Call the waiter or ask for the bill. Returns what this table is currently waiting for."""
+    try:
+        return service.ask(guest.guest, guest.session, data.kind)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
