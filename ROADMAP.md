@@ -101,7 +101,7 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 - [ ] Known gap: signed-in direct page loads log a Vue hydration warning (session lives in localStorage, so SSR renders signed-out). Harmless; fix by rendering auth-dependent UI client-only.
 
 **A4 Minimal feature flags (~1 wk)**
-- [ ] Code-declared registry + DB overrides per tenant; server-enforced `requires_feature(...)`; `useFeature()` on the frontend from SSR config; audit log. (UI can be a script for now.)
+- [x] Code-declared registry (`app/core/features.py`) + per-restaurant DB overrides; server-enforced `requires_feature(...)` (staff routes) / `FeatureService.require` (customer routes); flags delivered with `GET /tenant` and read with `useFeature()` on the frontend; audit log of every change. First gated feature: `reservations`. Operate with `python -m app.cli` or the `/platform` API (platform admins only); a UI can come later.
 
 **Exit:** two seeded tenants on one deployment; isolation suite green; Bella Vista unchanged; a flag can turn a module off for one tenant in the API *and* UI.
 

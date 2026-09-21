@@ -114,5 +114,14 @@ A restaurant's site is `<slug>.PLATFORM_DOMAIN`, or its own `custom_domain` (set
 - Customers are per restaurant (the same email can sign up at two restaurants); staff and platform admins are global. Access tokens carry a `tenant` claim, so **everyone is signed out once when this ships** (old tokens have none).
 - Restrict the database role before onboarding a real client: RLS is not enforced while the app connects as a superuser (see ROADMAP A3).
 
+## Feature flags
+Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
+```sh
+docker compose exec backend python -m app.cli features bella-vista-kitchen                 # list the flags
+docker compose exec backend python -m app.cli features bella-vista-kitchen kitchen_v2 on   # on | off | default
+docker compose exec backend python -m app.cli audit bella-vista-kitchen                    # who changed what
+```
+The same is available to platform admins over the API (`/api/v1/platform/restaurants/{id}/features`). Turning a flag off blocks the API for that restaurant only and hides the UI for it. When a feature is on for everyone, delete the flag and its checks.
+
 ## Still to do (roadmap stage A1/A2)
 Off-site backup automation, a staging environment, Redis-backed rate limiting.
