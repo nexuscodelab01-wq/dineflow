@@ -18,6 +18,7 @@ from app.models.order_item import OrderItem
 from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
+from app.core.realtime import kitchen_topic, publish
 from app.models.user import User
 from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
@@ -186,6 +187,8 @@ class OrderService:
         if reservation is not None:
             self.reservations.attach_to_order(reservation.id, order.id, user.id, restaurant.id)
 
+        # Delivered to kitchen screens only if this transaction commits.
+        publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order.id, "order_number": order.order_number})
         self.db.commit()
         logger.info("Order created: order_number=%s user_id=%s", order.order_number, user.id)
 

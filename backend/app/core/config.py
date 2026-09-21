@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # otherwise anyone can spoof their IP and dodge the limits.
     TRUST_PROXY_HEADERS: bool = False
 
+    # Live-update connections (SSE) one worker will hold open before shedding load.
+    REALTIME_MAX_STREAMS: int = 200
+
     # Observability
     LOG_FORMAT: str = "text"  # "text" (dev) or "json" (production log shippers)
     SENTRY_DSN: str = ""
