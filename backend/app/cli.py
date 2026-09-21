@@ -3,8 +3,11 @@
     python -m app.cli features <restaurant-slug>                 # show every flag for a restaurant
     python -m app.cli features <restaurant-slug> <flag> on|off|default
     python -m app.cli audit [<restaurant-slug>]                  # recent sensitive changes
+    python -m app.cli create-tenant --name "Luigi's" --slug luigis --owner owner@luigis.com \\
+        [--color "#c0392b"] [--logo path/to/logo.png] [--template generic|pizzeria|cafe] [--owner-name "Luigi Rossi"] [--no-branding]
 """
 
+import argparse
 import sys
 
 from app.core.exceptions import AppError
@@ -22,7 +25,49 @@ def _restaurant(db, slug: str):
     return restaurant
 
 
+def create_tenant(argv: list[str]) -> int:
+    from pathlib import Path
+
+    from app.core.config import settings
+    from app.services.tenant_provisioning import TEMPLATES, provision_tenant
+
+    parser = argparse.ArgumentParser(prog="python -m app.cli create-tenant")
+    parser.add_argument("--name", required=True)
+    parser.add_argument("--slug", required=True)
+    parser.add_argument("--owner", required=True, help="email of the restaurant's admin")
+    parser.add_argument("--owner-name", default="Owner")
+    parser.add_argument("--color", help="brand colour, e.g. #c0392b")
+    parser.add_argument("--logo", help="path to a PNG/JPEG/WebP logo")
+    parser.add_argument("--template", default="generic", choices=sorted(TEMPLATES))
+    parser.add_argument("--no-branding", action="store_true", help="don't switch on custom branding")
+    args = parser.parse_args(argv)
+
+    logo = None
+    if args.logo:
+        path = Path(args.logo)
+        if not path.is_file():
+            sys.exit(f"Logo file not found: {args.logo}")
+        logo = path.read_bytes()
+    with SessionLocal() as db:
+        try:
+            result = provision_tenant(
+                db, name=args.name, slug=args.slug, owner_email=args.owner, owner_name=args.owner_name, color=args.color,
+                logo=logo, template=args.template, branding=not args.no_branding,
+            )
+        except AppError as exc:
+            sys.exit(exc.message)
+    domain = settings.PLATFORM_DOMAIN
+    print(f"Created '{result.name}' (id {result.restaurant_id}, orders {result.order_prefix}-1001…)")
+    if domain:
+        port = ":3000" if domain == "localhost" else ""
+        print(f"  Site:    http://{args.slug}.{domain}{port}")
+    print(f"  Admin:   {result.owner_email}" + (f" / {result.owner_password}   (shown once: save it)" if result.owner_password else "   (existing account, same password)"))
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "create-tenant":
+        return create_tenant(argv[1:])
     if len(argv) < 2 or argv[0] not in {"features", "audit"}:
         print(USAGE)
         return 2
