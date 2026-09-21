@@ -93,11 +93,12 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 - [x] **SSE real-time channel** with per-tenant topics — Postgres `LISTEN/NOTIFY` fan-out (works across workers, delivers only on commit), fetch-based client with reconnect/watchdog. **Kitchen screen is live** (315 ms order → screen in a 2-worker test). Next: reuse it for guests, waiters and the floor view.
 
 **A3 Multi-tenant core (3–4 wk)**
-- [ ] `tenant_id` audit on every tenant-owned table; backfill Bella Vista as tenant #1 (expand/contract migrations).
-- [ ] `current_tenant` from Host; tenant claim in JWT; tenant-scoped repositories; **RLS** with `SET LOCAL app.tenant_id`.
-- [ ] Per-tenant customers; `PLATFORM_ADMIN` role; per-tenant order-number sequences; dynamic CORS.
-- [ ] Frontend bootstrap: tenant from Host in SSR; drop the baked-in slug.
-- [ ] **Isolation test suite** (tenant A's token vs tenant B's ids on every endpoint) in CI forever.
+- [x] Schema audit + expand/contract migration `0006`: customers belong to a restaurant (`users.restaurant_id`, per-tenant unique email), `custom_domain`, per-tenant order-number counters; Bella Vista is tenant #1.
+- [x] Tenant from the Host (`<slug>.PLATFORM_DOMAIN`, custom domains, dev fallback) via `GET /tenant`; **tenant claim in the JWT**, checked on every request; customers cannot act in another restaurant; `/restaurants` directory is platform-admin only; `/auth/my-restaurants` for staff; per-tenant sequential order numbers (`BV-1001`); dynamic CORS.
+- [x] Frontend bootstrap: tenant from the address in SSR, baked-in slug removed, clear "no restaurant here" page, restaurant-scoped sign-in/sign-up. Also upgraded pinia 2→3 (2.x crashed SSR on any error page).
+- [x] **Isolation test suite** (`backend/tests/test_tenant_isolation.py`): every route must be classified, every `/admin` route swept with wrong-tenant/staff/customer tokens, IDOR table, customer attacks, and a full-data snapshot proving nothing changed.
+- [ ] **Row-level security** as a second net: needs a non-superuser app DB role (the current `dineflow` role bypasses RLS), `SET LOCAL app.tenant_id` per request, and explicit bypass for trusted jobs. Do before the first real client.
+- [ ] Known gap: signed-in direct page loads log a Vue hydration warning (session lives in localStorage, so SSR renders signed-out). Harmless; fix by rendering auth-dependent UI client-only.
 
 **A4 Minimal feature flags (~1 wk)**
 - [ ] Code-declared registry + DB overrides per tenant; server-enforced `requires_feature(...)`; `useFeature()` on the frontend from SSR config; audit log. (UI can be a script for now.)

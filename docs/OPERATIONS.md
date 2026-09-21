@@ -107,5 +107,12 @@ FORCE_LIVE=1 scripts/restore-db.sh backups/<file>.sql.gz "$POSTGRES_DB"   # OVER
 ```
 Restoring over the live database needs `FORCE_LIVE=1` and the exact database name on purpose. Stop the backend first, restore, run `alembic upgrade head`, start it again.
 
+## Tenants (one site per restaurant)
+A restaurant's site is `<slug>.PLATFORM_DOMAIN`, or its own `custom_domain` (set on the restaurant row; point the domain's DNS at the frontend and add it to `CORS_ORIGINS`). The frontend asks `GET /api/v1/tenant?host=…` once per page load.
+- Dev: `PLATFORM_DOMAIN=localhost` and `DEFAULT_TENANT_SLUG=bella-vista-kitchen` → `http://localhost:3000` and `http://bella-vista-kitchen.localhost:3000` both work.
+- Production: set `PLATFORM_DOMAIN` to your domain, add a wildcard DNS record + wildcard TLS certificate, and leave `DEFAULT_TENANT_SLUG` empty (unknown hosts then show a "no restaurant here" page). `RESERVED_SUBDOMAINS` (www, admin, api…) never resolve to a restaurant.
+- Customers are per restaurant (the same email can sign up at two restaurants); staff and platform admins are global. Access tokens carry a `tenant` claim, so **everyone is signed out once when this ships** (old tokens have none).
+- Restrict the database role before onboarding a real client: RLS is not enforced while the app connects as a superuser (see ROADMAP A3).
+
 ## Still to do (roadmap stage A1/A2)
 Off-site backup automation, a staging environment, Redis-backed rate limiting.
