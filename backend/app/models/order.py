@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -23,7 +23,14 @@ if TYPE_CHECKING:
 
 class Order(TimestampMixin, Base):
     __tablename__ = "orders"
-    __table_args__ = (UniqueConstraint("restaurant_id", "order_number", name="uq_orders_restaurant_number"),)
+    __table_args__ = (
+        UniqueConstraint("restaurant_id", "order_number", name="uq_orders_restaurant_number"),
+        # Retry-safe table orders: the same client token in the same session can only ever create one order.
+        Index(
+            "uq_orders_session_client_token", "table_session_id", "client_token", unique=True,
+            postgresql_where=text("client_token IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
@@ -43,7 +50,7 @@ class Order(TimestampMixin, Base):
     discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    customer_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    customer_email: Mapped[str | None] = mapped_column(String(255), nullable=True)  # guests at a table have none
     customer_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     delivery_address_id: Mapped[int | None] = mapped_column(
         ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True
@@ -51,6 +58,10 @@ class Order(TimestampMixin, Base):
     table_id: Mapped[int | None] = mapped_column(
         ForeignKey("restaurant_tables.id", ondelete="SET NULL"), nullable=True
     )
+    table_session_id: Mapped[int | None] = mapped_column(ForeignKey("table_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_guest_id: Mapped[int | None] = mapped_column(ForeignKey("session_guests.id", ondelete="SET NULL"), nullable=True)
+    round_no: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1, 2, 3… within the table session
+    client_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_instructions: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

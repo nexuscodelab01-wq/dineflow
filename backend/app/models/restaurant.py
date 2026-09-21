@@ -50,6 +50,8 @@ class Restaurant(TimestampMixin, Base):
     # Order numbers are "<prefix>-<n>", counted per restaurant.
     order_prefix: Mapped[str] = mapped_column(String(8), default="DF", server_default="DF", nullable=False)
     next_order_number: Mapped[int] = mapped_column(Integer, default=1001, server_default="1001", nullable=False)
+    # Who may open a table's QR menu: SEATED (only while the table is occupied) or OPEN (any time).
+    qr_access_policy: Mapped[str] = mapped_column(String(10), default="SEATED", server_default="SEATED", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

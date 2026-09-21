@@ -22,6 +22,8 @@ from app.models import (  # noqa: F401
     RestaurantTable,
     RestaurantUser,
     Role,
+    SessionGuest,
+    TableSession,
     User,
 )
 

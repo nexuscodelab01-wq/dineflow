@@ -1,5 +1,6 @@
 """Restaurant table ORM model."""
 
+import secrets
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
@@ -31,6 +32,8 @@ class RestaurantTable(TimestampMixin, Base):
         Enum(TableStatus, name="table_status"), default=TableStatus.AVAILABLE, nullable=False
     )
     # Seating area ("Window", "Bar", "Patio"…), free text so each restaurant names its own.
+    # Random, rotatable secret in the table's QR link (/t/<token>). Never the table id, and rotated when a session closes.
+    qr_token: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True, default=lambda: secrets.token_urlsafe(16))
     zone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # ROUND | SQUARE | RECT — how the table is drawn on the floor plan.
     shape: Mapped[str] = mapped_column(String(10), default="SQUARE", server_default="SQUARE", nullable=False)

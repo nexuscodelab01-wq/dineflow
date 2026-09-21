@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     DEFAULT_TENANT_SLUG: str = ""
     RESERVED_SUBDOMAINS: str = "www,admin,api,app,static,assets,cdn,mail,status,docs,platform"
 
+    # QR table ordering: a single round can't exceed this total (stops prank/remote orders).
+    QR_MAX_ORDER_TOTAL: float = 500.0
+
     # Abuse protection. The limiter is in-process (per worker); move it to Redis when we run
     # several workers/instances (roadmap stage A2).
     RATE_LIMIT_ENABLED: bool = True

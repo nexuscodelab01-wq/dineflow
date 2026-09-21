@@ -92,7 +92,7 @@ class OrderRead(BaseModel):
     discount: Decimal
     total: Decimal
     customer_name: str
-    customer_email: EmailStr
+    customer_email: EmailStr | None = None
     customer_phone: str | None = None
     delivery_instructions: str | None = None
     notes: str | None = None
