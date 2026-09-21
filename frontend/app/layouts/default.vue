@@ -6,7 +6,8 @@
     <header class="border-b border-brand-100/80 bg-surface-elevated/80 backdrop-blur-sm">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <NuxtLink to="/" class="font-display text-2xl font-semibold tracking-tight text-brand-800">
-          DineFlow
+          <img v-if="branding.logo.value" :src="branding.logo.value" :alt="branding.name.value ?? 'Home'" class="h-10 w-auto max-w-[12rem] object-contain">
+          <template v-else>{{ branding.name.value ?? 'DineFlow' }}</template>
         </NuxtLink>
 
         <button
@@ -77,7 +78,7 @@
     </main>
 
     <footer class="border-t border-brand-100/80 py-6 text-center text-sm text-ink-subtle">
-      © {{ year }} DineFlow
+      © {{ year }} {{ branding.name.value ?? 'DineFlow' }}
     </footer>
 
     <FloatingCartBar />
@@ -89,6 +90,7 @@ const year = new Date().getFullYear()
 const auth = useAuthStore()
 const cart = useCartStore()
 const reservations = useFeature('reservations')
+const branding = useBranding()
 const mobileOpen = ref(false)
 const route = useRoute()
 
