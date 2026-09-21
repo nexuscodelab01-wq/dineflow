@@ -70,3 +70,4 @@ backend/uploads/
 
 # database backups (contain personal data)
 backups/
+.env.lan-backup
