@@ -53,6 +53,11 @@ class Order(TimestampMixin, Base):
     delivery_instructions: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    @property
+    def table_number(self) -> str | None:
+        """The table's name for dine-in orders (what the kitchen calls out)."""
+        return self.table.table_number if self.table is not None else None
+
     user: Mapped["User | None"] = relationship("User", back_populates="orders")
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="orders")
     delivery_address: Mapped["Address | None"] = relationship("Address", back_populates="orders")

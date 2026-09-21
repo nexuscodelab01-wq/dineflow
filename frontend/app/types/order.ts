@@ -40,6 +40,8 @@ export type Order = {
   order_number: string
   restaurant_id: number
   order_type: OrderType
+  /** Table name for dine-in orders. */
+  table_number?: string | null
   status: OrderStatus
   subtotal: string
   tax: string

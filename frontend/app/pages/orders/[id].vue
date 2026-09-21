@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useIntervalFn } from '@vueuse/core'
 import type { Order } from '~/types/order'
 import { fetchOrder } from '~/services/orders'
 import { formatCurrency } from '~/utils/format'
@@ -62,17 +63,7 @@ onUnmounted(pause)
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6">
         <h2 class="font-semibold text-ink">Items</h2>
-        <ul class="mt-4 space-y-3">
-          <li v-for="item in order.items" :key="item.id" class="flex justify-between gap-4 text-sm">
-            <div>
-              <p class="font-medium text-ink">{{ item.quantity }}× {{ item.item_name }}</p>
-              <ul v-if="item.modifiers.length" class="mt-1 text-ink-muted">
-                <li v-for="mod in item.modifiers" :key="mod.id">{{ mod.modifier_name }}: {{ mod.option_name }}</li>
-              </ul>
-            </div>
-            <span>{{ formatCurrency(Number(item.line_total)) }}</span>
-          </li>
-        </ul>
+        <OrderItemList class="mt-4" :items="order.items" show-prices />
         <div class="mt-4 space-y-1 border-t border-brand-100 pt-4 text-sm">
           <div class="flex justify-between"><span>Subtotal</span><span>{{ formatCurrency(Number(order.subtotal)) }}</span></div>
           <div class="flex justify-between"><span>Tax</span><span>{{ formatCurrency(Number(order.tax)) }}</span></div>

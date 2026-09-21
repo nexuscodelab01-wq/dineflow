@@ -1,5 +1,6 @@
 """Admin API: permissions, menu/category/modifier CRUD, orders, kitchen, customers, settings, isolation."""
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -10,9 +11,11 @@ from app.core.security import create_access_token, hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.category import Category
-from app.models.enums import RoleName
+from app.models.enums import ReservationStatus, RoleName, TableStatus
 from app.models.menu_item import MenuItem
+from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
+from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
 from app.models.role import Role
 from app.models.user import User
@@ -323,3 +326,48 @@ def test_menu_image_upload_rules(world):
     big = b"0" * (5 * 1024 * 1024 + 1)
     assert w.client.post(url(w, "/uploads/menu-image"), headers=w.admin, files={"file": ("a.png", big, "image/png")}).status_code == 400
     assert w.client.post(url(w, "/uploads/menu-image"), headers=w.staff, files={"file": ("a.png", png, "image/png")}).status_code == 403
+
+
+def test_kitchen_sees_special_instructions_options_notes_and_table(world):
+    """Regression: the kitchen only got 'quantity x name' — instructions and options were dropped."""
+    w = world
+    mod = w.client.post(url(w, "/modifiers"), headers=w.admin, json={
+        "restaurant_id": w.a.id, "name": "Size", "options": [{"name": "Small"}, {"name": "Large", "price_adjustment": "2.00"}]}).json()
+    w.client.put(url(w, f"/menu/{w.item.id}"), headers=w.admin, json={"modifier_ids": [mod["id"]]})
+
+    pickup = place_order(w, notes="Birthday — bring candle", items=[{
+        "menu_item_id": w.item.id, "quantity": 2, "modifier_option_ids": [mod["options"][1]["id"]],
+        "special_instructions": "No onions, extra crispy"}])
+    assert pickup.status_code == 201, pickup.text
+
+    table = RestaurantTable(restaurant_id=w.a.id, table_number="K7", capacity=4, status=TableStatus.AVAILABLE)
+    w.db.add(table)
+    w.db.flush()
+    now = datetime.now(timezone.utc)
+    reservation = Reservation(
+        restaurant_id=w.a.id, table_id=table.id, user_id=w.customer_user.id, party_size=2, guest_name="Cara",
+        starts_at=now - timedelta(minutes=1), ends_at=now + timedelta(minutes=89), status=ReservationStatus.CONFIRMED)
+    w.db.add(reservation)
+    w.db.flush()
+    dine_in = place_order(w, order_type="DINE_IN", reservation_id=reservation.id, items=[{
+        "menu_item_id": w.item.id, "quantity": 1, "modifier_option_ids": [mod["options"][0]["id"]]}])
+    assert dine_in.status_code == 201, dine_in.text
+
+    board = w.client.get(url(w, "/kitchen"), headers=w.staff).json()
+    by_id = {o["id"]: o for o in board["new_orders"]}
+
+    a = by_id[pickup.json()["id"]]
+    assert a["notes"] == "Birthday — bring candle" and a["order_type"] == "PICKUP" and a["table_number"] is None
+    line = a["items"][0]
+    assert line["special_instructions"] == "No onions, extra crispy"
+    assert [(m["modifier_name"], m["option_name"]) for m in line["modifiers"]] == [("Size", "Large")]
+
+    b = by_id[dine_in.json()["id"]]
+    assert b["order_type"] == "DINE_IN" and b["table_number"] == "K7"
+    assert b["items"][0]["special_instructions"] is None
+
+    # The same details reach the order detail and the customer's own view.
+    detail = w.client.get(url(w, f"/orders/{dine_in.json()['id']}"), headers=w.staff).json()
+    assert detail["table_number"] == "K7"
+    mine = w.client.get(f"/api/v1/orders/{pickup.json()['id']}", headers=w.customer).json()
+    assert mine["items"][0]["special_instructions"] == "No onions, extra crispy"

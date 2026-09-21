@@ -61,12 +61,10 @@ async function setStatus(status: OrderStatus) {
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6">
         <h2 class="font-semibold">Items</h2>
-        <ul class="mt-3 space-y-2 text-sm">
-          <li v-for="item in order.items" :key="item.id" class="flex justify-between">
-            <span>{{ item.quantity }}× {{ item.item_name }}</span>
-            <span>{{ formatCurrency(Number(item.line_total)) }}</span>
-          </li>
-        </ul>
+        <OrderItemList class="mt-3" :items="order.items" show-prices />
+        <p v-if="order.notes" class="mt-4 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-950">
+          <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
+        </p>
         <p class="mt-4 font-semibold">Total: {{ formatCurrency(Number(order.total)) }}</p>
       </section>
     </div>

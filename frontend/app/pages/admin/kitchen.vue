@@ -5,6 +5,7 @@ import type { Order, OrderStatus } from '~/types/order'
 import { fetchKitchenBoard, updateOrderStatus } from '~/services/admin'
 import { subscribeKitchen } from '~/services/realtime'
 import type { SseStatus } from '~/utils/sse'
+import { formatTime } from '~/utils/datetime'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -70,6 +71,11 @@ async function advance(order: Order, status: OrderStatus) {
   }
 }
 
+function orderTypeLabel(order: Order) {
+  if (order.order_type === 'DINE_IN') return order.table_number ? `Dine-in · Table ${order.table_number}` : 'Dine-in'
+  return order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup'
+}
+
 function nextStatus(order: Order): OrderStatus | null {
   if (order.status === 'CONFIRMED') return 'PREPARING'
   if (order.status === 'PREPARING') return 'READY'
@@ -103,10 +109,19 @@ function nextStatus(order: Order): OrderStatus | null {
         <h2 class="mb-4 font-semibold text-brand-900">{{ key }} ({{ column.length }})</h2>
         <div class="space-y-3">
           <article v-for="order in column" :key="order.id" class="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
-            <p class="font-semibold">{{ order.order_number }}</p>
-            <ul class="mt-2 space-y-1 text-sm text-ink-muted">
-              <li v-for="item in order.items" :key="item.id">{{ item.quantity }}× {{ item.item_name }}</li>
-            </ul>
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <p class="font-semibold">{{ order.order_number }}</p>
+              <span class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-900">{{ orderTypeLabel(order) }}</span>
+            </div>
+            <p class="mt-0.5 text-xs text-ink-subtle">{{ order.customer_name }} · placed {{ formatTime(order.created_at) }}</p>
+            <OrderItemList class="mt-3" :items="order.items" variant="kitchen" />
+            <p
+              v-if="order.notes"
+              class="mt-3 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-950"
+              data-testid="order-note"
+            >
+              <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
+            </p>
             <AppButton
               v-if="nextStatus(order)"
               class="mt-3 w-full"

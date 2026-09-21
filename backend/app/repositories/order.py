@@ -20,6 +20,7 @@ class OrderRepository:
                 selectinload(Order.items).selectinload(OrderItem.modifiers),
                 selectinload(Order.status_history),
                 selectinload(Order.payments),
+                joinedload(Order.table),
             )
             .where(Order.id == order_id)
         )
@@ -45,6 +46,7 @@ class OrderRepository:
                 selectinload(Order.items).selectinload(OrderItem.modifiers),
                 selectinload(Order.status_history),
                 selectinload(Order.payments),
+                joinedload(Order.table),
             )
             .order_by(Order.created_at.desc())
             .offset((page - 1) * page_size)

@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.enums import OrderStatus, OrderType
 from app.models.order import Order
@@ -51,6 +51,7 @@ class AdminOrderRepository:
                 selectinload(Order.items).selectinload(OrderItem.modifiers),
                 selectinload(Order.status_history),
                 selectinload(Order.payments),
+                joinedload(Order.table),
             )
             .order_by(Order.created_at.desc())
             .offset((page - 1) * page_size)
@@ -65,6 +66,7 @@ class AdminOrderRepository:
                 selectinload(Order.items).selectinload(OrderItem.modifiers),
                 selectinload(Order.status_history),
                 selectinload(Order.payments),
+                joinedload(Order.table),
             )
             .where(Order.id == order_id, Order.restaurant_id == restaurant_id)
         )
@@ -78,7 +80,7 @@ class AdminOrderRepository:
         ]
         stmt = (
             select(Order)
-            .options(selectinload(Order.items).selectinload(OrderItem.modifiers))
+            .options(selectinload(Order.items).selectinload(OrderItem.modifiers), joinedload(Order.table))
             .where(Order.restaurant_id == restaurant_id, Order.status.in_(active_statuses))
             .order_by(Order.created_at.asc())
         )

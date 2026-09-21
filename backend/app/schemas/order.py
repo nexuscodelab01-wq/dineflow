@@ -84,6 +84,7 @@ class OrderRead(BaseModel):
     order_number: str
     restaurant_id: int
     order_type: OrderType
+    table_number: str | None = None
     status: OrderStatus
     subtotal: Decimal
     tax: Decimal
