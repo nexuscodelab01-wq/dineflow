@@ -30,6 +30,11 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - An access token already issued keeps working until it expires (30 minutes) after a password change or reset; only refresh tokens are revoked. Add a "password changed at" check to the access token if this needs to be immediate.
 - Other pages that read browser-only state directly (orders, checkout…) may still log hydration warnings; gate them with `useHydrated()` when found.
 
+### 6. Row-level security follow-ups
+- Unbound paths (sign-in, public menus/availability, QR lookups, jobs, CLI) rely on code filters. Bind more of them (a public menu could be bound by its `restaurant_id`) and consider a fail-closed default once every path is classified.
+- CI should run the suite once through the restricted role (see docs/OPERATIONS.md) so a new query that only works as the owner is caught.
+- `restaurants` is only bound to its own row in tenant mode; platform-admin routes run unbound.
+
 ## Done
 - Password reset, change-password and owner invite links (no more printed passwords); header, sidebar and profile no longer show labels over the wrong links after a page load.
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.
