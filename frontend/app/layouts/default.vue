@@ -26,16 +26,16 @@
           <NuxtLink to="/cart" class="relative hover:text-brand-700">
             Cart
             <span
-              v-if="cart.itemCount"
+              v-if="cartCount"
               class="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-700 px-1 text-[10px] font-bold text-white"
             >
-              {{ cart.itemCount }}
+              {{ cartCount }}
             </span>
           </NuxtLink>
-          <template v-if="auth.isAuthenticated">
+          <template v-if="signedIn">
             <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
-            <NuxtLink v-if="auth.isStaff" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
+            <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="hover:text-brand-700">Sign in</NuxtLink>
@@ -58,12 +58,12 @@
           <NuxtLink to="/menu" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Menu</NuxtLink>
           <NuxtLink v-if="reservations" to="/reserve" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Reserve</NuxtLink>
           <NuxtLink to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">
-            Cart<span v-if="cart.itemCount"> ({{ cart.itemCount }})</span>
+            Cart<span v-if="cartCount"> ({{ cartCount }})</span>
           </NuxtLink>
-          <template v-if="auth.isAuthenticated">
+          <template v-if="signedIn">
             <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Orders</NuxtLink>
             <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Profile</NuxtLink>
-            <NuxtLink v-if="auth.isStaff" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Admin</NuxtLink>
+            <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Admin</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Sign in</NuxtLink>
@@ -94,10 +94,19 @@ const branding = useBranding()
 const mobileOpen = ref(false)
 const route = useRoute()
 
+// Who is signed in and what is in the cart live in the browser, so the server cannot draw them. Both sides draw the
+// signed-out header first and it is filled in once the page is live; drawing them differently made the browser keep
+// the server's link targets under the wrong labels.
+const ready = ref(false)
+onMounted(() => { ready.value = true })
+const signedIn = computed(() => ready.value && auth.isAuthenticated)
+const staffIn = computed(() => ready.value && auth.isStaff)
+const cartCount = computed(() => (ready.value ? cart.itemCount : 0))
+
 const hiddenCartBarRoutes = new Set(['/cart', '/checkout'])
 
 const showCartPad = computed(() => {
-  if (cart.isEmpty) return false
+  if (!ready.value || cart.isEmpty) return false
   const path = route.path.replace(/\/$/, '') || '/'
   return !hiddenCartBarRoutes.has(path)
 })
