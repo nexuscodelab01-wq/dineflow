@@ -2,6 +2,7 @@
 import type { Category, MenuItem, MenuItemDetail } from '~/types/menu'
 import type { TableInfo, TableSessionView } from '~/types/table'
 import { fetchCategories, fetchMenu, fetchMenuItem } from '~/services/menu'
+import { subscribeTableSession } from '~/services/realtime'
 import { fetchTableInfo, fetchTableSession, joinTable, sendRound } from '~/services/table'
 import { ApiError } from '~/utils/api-error'
 import { formatCurrency } from '~/utils/format'
@@ -79,6 +80,7 @@ async function join() {
 
 const session = ref<TableSessionView | null>(null)
 let poller: ReturnType<typeof setInterval> | null = null
+let live: { close: () => void } | null = null
 
 async function refreshSession() {
   if (!pass.value) return
@@ -102,15 +104,25 @@ function endSession() {
 function stopPolling() {
   if (poller) clearInterval(poller)
   poller = null
+  live?.close()
+  live = null
 }
 
-// The kitchen changes statuses and other guests add rounds; refresh often but only while the page is visible.
+// The kitchen changes statuses and other guests add rounds: those arrive instantly over a live connection.
+// The slow refresh only covers a connection that has dropped, and only runs while the page is visible.
 function beginOrdering() {
   stopPolling()
   void loadMenu()
+  if (pass.value) {
+    live = subscribeTableSession(pass.value.token, {
+      onChange: () => void refreshSession().catch(() => {}),
+      // The server refuses a pass whose tab has ended; asking for the tab makes that known to the page.
+      onStatus: (status) => { if (status === 'closed') void refreshSession().catch(() => {}) },
+    })
+  }
   poller = setInterval(() => {
     if (document.visibilityState === 'visible') refreshSession().catch(() => {})
-  }, 6000)
+  }, 30000)
 }
 
 onMounted(start)

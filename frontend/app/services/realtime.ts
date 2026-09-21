@@ -24,3 +24,35 @@ export function subscribeKitchen(restaurantId: number, handlers: KitchenHandlers
     },
   })
 }
+
+export type LiveHandlers = {
+  /** Something about this order / table changed (or we just (re)connected): refetch it. */
+  onChange: () => void
+  onStatus?: (status: SseStatus) => void
+}
+
+/** Live status for one of the signed-in customer's orders. */
+export function subscribeOrder(orderId: number, handlers: LiveHandlers) {
+  const base = getApiBaseUrl()
+  return connectSse({
+    url: `${base}/api/v1/orders/${orderId}/stream`,
+    getToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
+    onAuthExpired: () => refreshSession({ baseUrl: base, storage: localStorage }),
+    onStatus: handlers.onStatus,
+    onEvent: (type) => {
+      if (type === 'ready' || type === 'order.status' || type === 'resync') handlers.onChange()
+    },
+  })
+}
+
+/** Live updates for a table's shared tab, using the device's table pass (not an account). */
+export function subscribeTableSession(passToken: string, handlers: LiveHandlers) {
+  return connectSse({
+    url: `${getApiBaseUrl()}/api/v1/table-session/stream`,
+    getToken: () => passToken,
+    onStatus: handlers.onStatus,
+    onEvent: (type) => {
+      if (['ready', 'round.created', 'order.status', 'session.closed', 'resync'].includes(type)) handlers.onChange()
+    },
+  })
+}

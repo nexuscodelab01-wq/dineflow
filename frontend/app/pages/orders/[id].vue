@@ -2,6 +2,7 @@
 import { useIntervalFn } from '@vueuse/core'
 import type { Order } from '~/types/order'
 import { fetchOrder } from '~/services/orders'
+import { subscribeOrder } from '~/services/realtime'
 import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ middleware: ['auth'] })
@@ -26,11 +27,18 @@ async function loadOrder() {
   }
 }
 
-onMounted(loadOrder)
+// Status changes arrive instantly over a live connection; the slow poll only covers a connection that has dropped.
+let live: { close: () => void } | null = null
+onMounted(() => {
+  void loadOrder()
+  live = subscribeOrder(Number(route.params.id), { onChange: () => void loadOrder() })
+})
 
-// Refresh every 30s for live tracking
-const { pause } = useIntervalFn(loadOrder, 30000)
-onUnmounted(pause)
+const { pause } = useIntervalFn(loadOrder, 60000)
+onUnmounted(() => {
+  pause()
+  live?.close()
+})
 </script>
 
 <template>
