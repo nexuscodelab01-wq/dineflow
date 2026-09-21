@@ -212,6 +212,7 @@ GOOD = dict(
     JWT_SECRET="a" * 40,
     JWT_REFRESH_SECRET="b" * 40,
     DATABASE_URL="postgresql+psycopg://app:s3cret-prod@db:5432/app",
+    APP_DATABASE_URL="postgresql+psycopg://app_restricted:s3cret-prod-2@db:5432/app",   # not the environment's
 )
 
 
@@ -223,6 +224,18 @@ def test_production_refuses_placeholder_secrets() -> None:
         Settings(**{**GOOD, "JWT_REFRESH_SECRET": GOOD["JWT_SECRET"]}).assert_production_ready()
     with pytest.raises(RuntimeError, match="development database password"):
         Settings(**{**GOOD, "DATABASE_URL": "postgresql+psycopg://dineflow:dineflow_dev_password@db/x"}).assert_production_ready()
+
+
+def test_production_refuses_the_development_password_for_the_restricted_role() -> None:
+    with pytest.raises(RuntimeError) as exc:
+        Settings(**{**GOOD, "APP_DATABASE_URL": "postgresql+psycopg://dineflow_app:dineflow_app_dev_password@db/x"}).assert_production_ready()
+    assert "restricted role" in str(exc.value)
+
+
+def test_row_level_security_is_reported_as_enforced_only_with_a_different_restricted_role() -> None:
+    assert Settings(**GOOD).rls_enforced is True
+    assert Settings(**{**GOOD, "APP_DATABASE_URL": ""}).rls_enforced is False
+    assert Settings(**{**GOOD, "APP_DATABASE_URL": GOOD["DATABASE_URL"]}).rls_enforced is False     # same role: nothing restricted
 
 
 def test_production_accepts_real_config_and_development_is_unrestricted() -> None:
