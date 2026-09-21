@@ -67,3 +67,6 @@ docker-data/
 coverage/
 .turbo/
 backend/uploads/
+
+# database backups (contain personal data)
+backups/
