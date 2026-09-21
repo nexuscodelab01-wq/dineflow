@@ -13,6 +13,19 @@ _COMMON_PASSWORDS = {
 }
 
 
+def password_problem(password: str, email: str | None = None) -> str | None:
+    """Why a password is not acceptable, or None. One rule set for sign-up, reset and change."""
+    if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+        return "Password must include at least one letter and one number"
+    if password.lower() in _COMMON_PASSWORDS:
+        return "That password is too common — please choose another"
+    if email:
+        local_part = email.split("@", 1)[0].lower()
+        if len(local_part) >= 4 and local_part in password.lower():
+            return "Password must not contain your email name"
+    return None
+
+
 class UserRegister(BaseModel):
     # Customers belong to one restaurant (the site they sign up on).
     restaurant_id: int
@@ -25,17 +38,16 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def _strong_enough(cls, value: str) -> str:
-        if not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
-            raise ValueError("Password must include at least one letter and one number")
-        if value.lower() in _COMMON_PASSWORDS:
-            raise ValueError("That password is too common — please choose another")
+        problem = password_problem(value)
+        if problem:
+            raise ValueError(problem)
         return value
 
     @model_validator(mode="after")
     def _not_derived_from_identity(self) -> "UserRegister":
-        local_part = str(self.email).split("@", 1)[0].lower()
-        if len(local_part) >= 4 and local_part in self.password.lower():
-            raise ValueError("Password must not contain your email name")
+        problem = password_problem(self.password, str(self.email))
+        if problem:
+            raise ValueError(problem)
         return self
 
 
@@ -79,3 +91,19 @@ class UserRead(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+    # The restaurant site the request comes from (omit for platform sign-in).
+    restaurant_id: int | None = None
+
+
+class ResetPassword(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class ChangePassword(BaseModel):
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

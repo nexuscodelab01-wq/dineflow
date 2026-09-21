@@ -15,6 +15,7 @@ from app.models import (  # noqa: F401
     OrderItem,
     OrderItemModifier,
     OrderStatusHistory,
+    PasswordResetToken,
     Payment,
     RefreshToken,
     Reservation,

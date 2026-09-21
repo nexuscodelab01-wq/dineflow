@@ -79,3 +79,18 @@ def origin_regex() -> str | None:
     if not platform:
         return None
     return rf"^https?://([a-z0-9-]+\.)?{re.escape(platform)}(:\d+)?$"
+
+
+def site_url(restaurant) -> str:
+    """The address of a restaurant's own site, for links in emails (`https://pizza.dineflow.app`, or its custom
+    domain). Falls back to PUBLIC_SITE_URL when the restaurant has no address of its own (or there is no restaurant)."""
+    from urllib.parse import urlsplit
+
+    base = urlsplit(settings.PUBLIC_SITE_URL)
+    port = f":{base.port}" if base.port else ""
+    if restaurant is not None and getattr(restaurant, "custom_domain", None):
+        return f"{base.scheme}://{restaurant.custom_domain}{port if base.scheme == 'http' else ''}"
+    platform = normalize_host(settings.PLATFORM_DOMAIN) if settings.PLATFORM_DOMAIN else ""
+    if restaurant is not None and platform:
+        return f"{base.scheme}://{restaurant.slug}.{platform}{port}"
+    return settings.PUBLIC_SITE_URL.rstrip("/")

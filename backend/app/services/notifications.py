@@ -128,3 +128,62 @@ def notify_reservation_cancelled(db: Session, restaurant, reservation, table_num
         f'<p>We\'d love to see you another time — <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">book a table</a>.</p>'
     )
     _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "Reservation cancelled", body), f"email:reservation:{reservation.id}:cancelled")
+
+
+# ---------------------------------------------------------------------------------- accounts
+
+class _Platform:
+    """Stands in for a restaurant when an email is not about one (e.g. a platform admin resetting a password)."""
+
+    id = None
+    name = "DineFlow"
+    logo_url = None
+    phone = None
+    address = None
+    email = None
+    custom_domain = None
+    slug = ""
+
+
+def _button(link: str, label: str) -> str:
+    return (
+        f'<p><a href="{escape(link, quote=True)}" style="display:inline-block;background:{DEFAULT_COLOR};color:#ffffff;'
+        f'padding:10px 18px;border-radius:8px;text-decoration:none">{escape(label)}</a></p>'
+        f'<p style="font-size:12px;color:#6b6f6c;word-break:break-all">If the button does not work, copy this address into your browser:<br>{escape(link)}</p>'
+    )
+
+
+def notify_password_reset(db: Session, restaurant, to: str, first_name: str, link: str, token_id: int, *, invite: bool = False, hours: int = 1) -> None:
+    restaurant = restaurant or _Platform()
+    valid = f"{hours} hour{'s' if hours != 1 else ''}" if hours < 48 else f"{hours // 24} days"
+    if invite:
+        subject, heading = f"Set your password — {restaurant.name}", "Welcome! Set your password"
+        intro = f"Your {restaurant.name} account is ready. Choose a password to sign in."
+    else:
+        subject, heading = f"Reset your password — {restaurant.name}", "Reset your password"
+        intro = "We received a request to reset your password. If it was you, choose a new one with the link below."
+    text = f"Hi {first_name},\n\n{intro}\n\n{link}\n\nThis link works once and expires in {valid}."
+    if not invite:
+        text += "\nIf you did not ask for this, you can ignore this email: your password stays the same."
+    html = _layout(
+        restaurant, heading,
+        f"<p>Hi {escape(first_name)},</p><p>{escape(intro)}</p>{_button(link, 'Set your password' if invite else 'Choose a new password')}"
+        f"<p style=\"font-size:13px\">This link works once and expires in {escape(valid)}."
+        f"{'' if invite else ' If you did not ask for this, ignore this email: your password stays the same.'}</p>",
+    )
+    _queue_email(db, restaurant, to, subject, text, html, dedupe_key=f"pwreset:{token_id}")
+
+
+def notify_password_changed(db: Session, restaurant, to: str, first_name: str, event_id: str) -> None:
+    restaurant = restaurant or _Platform()
+    subject = f"Your password was changed — {restaurant.name}"
+    text = (
+        f"Hi {first_name},\n\nThe password for your {restaurant.name} account was just changed, and you were signed out "
+        "everywhere. If this was you, nothing more to do. If it was not, reset your password straight away."
+    )
+    html = _layout(
+        restaurant, "Your password was changed",
+        f"<p>Hi {escape(first_name)},</p><p>The password for your {escape(restaurant.name)} account was just changed, and you were "
+        "signed out everywhere.</p><p>If this was you, there is nothing more to do. <strong>If it was not, reset your password straight away.</strong></p>",
+    )
+    _queue_email(db, restaurant, to, subject, text, html, dedupe_key=f"pwchanged:{event_id}")

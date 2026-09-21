@@ -30,6 +30,7 @@ from app.models.role import Role
 from app.models.user import User
 from app.repositories.user import UserRepository
 from app.services.feature_service import FeatureService
+from app.services.password_service import PasswordService
 
 SLUG = re.compile(r"^[a-z0-9]([a-z0-9-]{0,60}[a-z0-9])?$")
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -81,7 +82,7 @@ class Provisioned:
     slug: str
     order_prefix: str
     owner_email: str
-    owner_password: str | None  # None when the owner already had an account
+    invite_link: str | None  # a one-time link to choose a password; None when the owner already had an account
 
 
 def order_prefix(name: str) -> str:
@@ -101,6 +102,7 @@ def provision_tenant(
     template: str = "generic",
     owner_name: str = "Owner",
     branding: bool = True,
+    send_invite: bool = False,
 ) -> Provisioned:
     name = name.strip()
     if not name:
@@ -146,7 +148,7 @@ def provision_tenant(
         db.add(RestaurantTable(
             restaurant_id=restaurant.id, table_number=number, capacity=seats, zone=zone, pos_x=x, pos_y=y, status=TableStatus.AVAILABLE))
 
-    owner, password = _owner(db, owner_email, owner_name)
+    owner, is_new = _owner(db, owner_email, owner_name)
     restaurant_id = restaurant.id
     db.add(RestaurantUser(restaurant_id=restaurant_id, user_id=owner.id))
     db.add(AuditLog(
@@ -154,20 +156,21 @@ def provision_tenant(
         details={"template": template, "color": color, "owner": owner.email},
     ))
     prefix, owner_email = restaurant.order_prefix, owner.email
+    invite_link = PasswordService(db).issue_link(owner, restaurant, invite=True, send=send_invite) if is_new else None
     db.commit()
 
     if branding:  # commits on its own; the tenant already exists either way
         FeatureService(db).set(restaurant.id, "custom_branding", True, None, actor_label="cli")
-    return Provisioned(restaurant_id, name, slug, prefix, owner_email, password)
+    return Provisioned(restaurant_id, name, slug, prefix, owner_email, invite_link)
 
 
-def _owner(db: Session, email: str, full_name: str) -> tuple[User, str | None]:
+def _owner(db: Session, email: str, full_name: str) -> tuple[User, bool]:
     users = UserRepository(db)
     existing = users.get_by_email(email)  # a global identity (staff): reuse it, e.g. an agency running many restaurants
     if existing is not None:
-        return existing, None
+        return existing, False
     role = db.scalar(select(Role).where(Role.name == RoleName.RESTAURANT_ADMIN.value))
     first, _, last = full_name.strip().partition(" ")
-    password = secrets.token_urlsafe(9)
-    user = users.create(email=email, hashed_password=hash_password(password), first_name=first or "Owner", last_name=last or "-", role_id=role.id)
-    return user, password
+    # The owner never sees a password: this one is random and thrown away, and they set their own from the invite link.
+    user = users.create(email=email, hashed_password=hash_password(secrets.token_urlsafe(32)), first_name=first or "Owner", last_name=last or "-", role_id=role.id)
+    return user, True

@@ -94,6 +94,9 @@ class AuthService:
             raise NotFoundError("Restaurant not found")
         return restaurant
 
+    def issue_tokens(self, user: User) -> TokenResponse:
+        return self._issue_tokens(user)
+
     def _issue_tokens(self, user: User) -> TokenResponse:
         access_token = create_access_token(
             str(user.id),

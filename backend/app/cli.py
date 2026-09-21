@@ -4,7 +4,7 @@
     python -m app.cli features <restaurant-slug> <flag> on|off|default
     python -m app.cli audit [<restaurant-slug>]                  # recent sensitive changes
     python -m app.cli create-tenant --name "Luigi's" --slug luigis --owner owner@luigis.com \\
-        [--color "#c0392b"] [--logo path/to/logo.png] [--template generic|pizzeria|cafe] [--owner-name "Luigi Rossi"] [--no-branding]
+        [--color "#c0392b"] [--logo path/to/logo.png] [--template generic|pizzeria|cafe] [--owner-name "Luigi Rossi"] [--no-branding] [--send-invite]
 """
 
 import argparse
@@ -40,6 +40,7 @@ def create_tenant(argv: list[str]) -> int:
     parser.add_argument("--logo", help="path to a PNG/JPEG/WebP logo")
     parser.add_argument("--template", default="generic", choices=sorted(TEMPLATES))
     parser.add_argument("--no-branding", action="store_true", help="don't switch on custom branding")
+    parser.add_argument("--send-invite", action="store_true", help="email the owner their set-password link (needs email configured)")
     args = parser.parse_args(argv)
 
     logo = None
@@ -52,7 +53,7 @@ def create_tenant(argv: list[str]) -> int:
         try:
             result = provision_tenant(
                 db, name=args.name, slug=args.slug, owner_email=args.owner, owner_name=args.owner_name, color=args.color,
-                logo=logo, template=args.template, branding=not args.no_branding,
+                logo=logo, template=args.template, branding=not args.no_branding, send_invite=args.send_invite,
             )
         except AppError as exc:
             sys.exit(exc.message)
@@ -61,7 +62,12 @@ def create_tenant(argv: list[str]) -> int:
     if domain:
         port = ":3000" if domain == "localhost" else ""
         print(f"  Site:    http://{args.slug}.{domain}{port}")
-    print(f"  Admin:   {result.owner_email}" + (f" / {result.owner_password}   (shown once: save it)" if result.owner_password else "   (existing account, same password)"))
+    print(f"  Admin:   {result.owner_email}")
+    if result.invite_link:
+        print(f"  Set password (one-time link, valid 7 days): {result.invite_link}")
+        print("           Sent by email too." if args.send_invite else "           Send that link to the owner (or re-run with --send-invite next time).")
+    else:
+        print("           (existing account: it keeps its password and now also manages this restaurant)")
     return 0
 
 

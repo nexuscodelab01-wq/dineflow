@@ -13,6 +13,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
+from app.models.password_reset_token import PasswordResetToken
 from app.models.payment import Payment
 from app.models.refresh_token import RefreshToken
 from app.models.reservation import Reservation
@@ -38,6 +39,7 @@ __all__ = [
     "OrderItem",
     "OrderItemModifier",
     "OrderStatusHistory",
+    "PasswordResetToken",
     "Payment",
     "RefreshToken",
     "Reservation",

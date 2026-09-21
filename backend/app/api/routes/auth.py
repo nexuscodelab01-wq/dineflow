@@ -12,6 +12,9 @@ from app.dependencies.auth import CurrentUser
 from app.dependencies.restaurant import list_accessible_restaurants
 from app.schemas.restaurant import RestaurantRead
 from app.schemas.auth import (
+    ChangePassword,
+    ForgotPassword,
+    ResetPassword,
     MessageResponse,
     TokenRefresh,
     TokenResponse,
@@ -20,6 +23,7 @@ from app.schemas.auth import (
     UserRegister,
 )
 from app.services.auth_service import AuthService
+from app.services.password_service import PasswordService
 
 router = APIRouter(prefix="/auth")
 
@@ -92,3 +96,44 @@ def my_restaurants(
     """The restaurants this account can manage: all of them for platform admins, memberships for staff,
     nothing for customers."""
     return [RestaurantRead.model_validate(r) for r in list_accessible_restaurants(db, user)]
+
+
+def get_password_service(db: Annotated[Session, Depends(get_db)]) -> PasswordService:
+    return PasswordService(db)
+
+
+@router.post("/forgot-password", response_model=MessageResponse, dependencies=[rate_limit("forgot", 8, 600)])
+def forgot_password(
+    data: ForgotPassword,
+    request: Request,
+    service: Annotated[PasswordService, Depends(get_password_service)],
+) -> MessageResponse:
+    """Email a reset link if the account exists. The answer is always the same, so this cannot be used to find out
+    who has an account."""
+    limiter.enforce(f"forgot-account:{data.email.lower()}", 4, 3600)
+    service.request_reset(data.email, data.restaurant_id)
+    return MessageResponse(message="If that email has an account, we have sent a link to reset the password.")
+
+
+@router.post("/reset-password", response_model=MessageResponse, dependencies=[rate_limit("reset", 15, 600)])
+def reset_password(data: ResetPassword, service: Annotated[PasswordService, Depends(get_password_service)]) -> MessageResponse:
+    try:
+        service.reset(data.token, data.password)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return MessageResponse(message="Your password has been changed. Please sign in.")
+
+
+@router.post("/change-password", response_model=TokenResponse, dependencies=[rate_limit("change-password", 10, 600)])
+def change_password(
+    data: ChangePassword,
+    user: CurrentUser,
+    service: Annotated[PasswordService, Depends(get_password_service)],
+    auth: Annotated[AuthService, Depends(get_auth_service)],
+) -> TokenResponse:
+    """Change the password while signed in. Every other session is signed out; this one continues with fresh tokens."""
+    try:
+        service.change(user, data.current_password, data.new_password)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return auth.issue_tokens(user)
