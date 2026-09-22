@@ -30,7 +30,7 @@ onMounted(load)
 // ---- creating a restaurant --------------------------------------------------------------------------
 
 const form = reactive({
-  name: '', slug: '', ownerEmail: '', ownerName: '', color: '#2c6f53', template: 'generic', timezone: 'UTC',
+  name: '', slug: '', ownerEmail: '', ownerName: '', color: '#2c6f53', secondaryColor: '', template: 'generic', timezone: 'UTC',
   customDomain: '', branding: true, sendInvite: false,
 })
 const slugTouched = ref(false)
@@ -63,7 +63,7 @@ function onLogoSelected(event: Event) {
 }
 
 function resetForm() {
-  Object.assign(form, { name: '', slug: '', ownerEmail: '', ownerName: '', color: '#2c6f53', template: 'generic', timezone: 'UTC', customDomain: '', branding: true, sendInvite: false })
+  Object.assign(form, { name: '', slug: '', ownerEmail: '', ownerName: '', color: '#2c6f53', secondaryColor: '', template: 'generic', timezone: 'UTC', customDomain: '', branding: true, sendInvite: false })
   slugTouched.value = false
   logoFile.value = null
   logoPreview.value = null
@@ -78,7 +78,7 @@ async function submit() {
   try {
     created.value = await createTenant({
       name: form.name.trim(), slug: form.slug, owner_email: form.ownerEmail.trim(), owner_name: form.ownerName.trim() || undefined,
-      color: form.color || undefined, template: form.template, timezone: form.timezone,
+      color: form.color || undefined, secondary_color: form.secondaryColor || undefined, template: form.template, timezone: form.timezone,
       custom_domain: form.customDomain.trim() || undefined, branding: form.branding, send_invite: form.sendInvite,
       logo: logoFile.value,
     })
@@ -172,13 +172,19 @@ async function verify(restaurant: Restaurant) {
         <div class="rounded-xl border border-brand-100 p-4">
           <h3 class="text-sm font-semibold">Branding</h3>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <label class="block text-sm font-medium">Brand colour
+            <label class="block text-sm font-medium">Primary colour <span class="font-normal text-ink-subtle">(buttons, links)</span>
               <div class="mt-1 flex items-center gap-2">
                 <input v-model="form.color" type="color" class="h-9 w-14 cursor-pointer rounded border">
                 <input v-model="form.color" type="text" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="#2c6f53">
               </div>
             </label>
-            <label class="block text-sm font-medium">Logo
+            <label class="block text-sm font-medium">Secondary colour <span class="font-normal text-ink-subtle">(badges, highlights — optional)</span>
+              <div class="mt-1 flex items-center gap-2">
+                <input v-model="form.secondaryColor" type="color" class="h-9 w-14 cursor-pointer rounded border">
+                <input v-model="form.secondaryColor" type="text" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="#f1c40f">
+              </div>
+            </label>
+            <label class="block text-sm font-medium sm:col-span-2">Logo
               <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="mt-1 block w-full text-sm" @change="onLogoSelected">
             </label>
           </div>

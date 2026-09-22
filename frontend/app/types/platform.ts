@@ -4,6 +4,7 @@ export type TenantCreatePayload = {
   owner_email: string
   owner_name?: string
   color?: string
+  secondary_color?: string
   template?: string
   timezone?: string
   custom_domain?: string

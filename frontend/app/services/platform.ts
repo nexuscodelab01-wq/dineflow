@@ -17,6 +17,7 @@ export function createTenant(payload: TenantCreatePayload) {
   form.set('owner_email', payload.owner_email)
   if (payload.owner_name) form.set('owner_name', payload.owner_name)
   if (payload.color) form.set('color', payload.color)
+  if (payload.secondary_color) form.set('secondary_color', payload.secondary_color)
   if (payload.template) form.set('template', payload.template)
   if (payload.timezone) form.set('timezone', payload.timezone)
   if (payload.custom_domain) form.set('custom_domain', payload.custom_domain)
