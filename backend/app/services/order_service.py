@@ -24,6 +24,9 @@ from app.models.user import User
 from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
+from datetime import UTC, datetime
+
+from app.core.hours import status_at
 from app.core.tenancy import ensure_customer_of
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.notifications import notify_order_placed
@@ -48,6 +51,9 @@ class OrderService:
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
         ensure_customer_of(user, restaurant.id)
+        open_now = status_at(restaurant, datetime.now(UTC))
+        if not open_now.open:
+            raise AppError(f"{restaurant.name} is closed right now ({open_now.reason}). Please try again during opening hours.")
 
         # The table always comes from the customer's reservation (dine-in), never from the request.
         table_id: int | None = None

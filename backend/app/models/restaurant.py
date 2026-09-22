@@ -37,6 +37,10 @@ class Restaurant(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     opening_hours: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # IANA name (e.g. "America/Los_Angeles"); a restaurant with no opening_hours is always open regardless.
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC", nullable=False)
+    # Whole extra days closed beyond the weekly hours: [{"date": "2026-12-25", "label": "Christmas"}].
+    closures: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
     delivery_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     pickup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     dine_in_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

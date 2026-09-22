@@ -21,6 +21,8 @@ class RestaurantRead(BaseModel):
     phone: str | None = None
     email: str | None = None
     opening_hours: dict[str, Any] | None = None
+    timezone: str = "UTC"
+    closures: list[dict[str, Any]] = []
     delivery_enabled: bool
     pickup_enabled: bool
     dine_in_enabled: bool

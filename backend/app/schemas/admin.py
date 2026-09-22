@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.hours import InvalidHours, validate_closures, validate_opening_hours, valid_timezone
 from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
@@ -267,6 +268,8 @@ class RestaurantSettingsUpdate(BaseModel):
     phone: str | None = None
     email: str | None = None
     opening_hours: dict[str, Any] | None = None
+    timezone: str | None = None
+    closures: list[dict[str, Any]] | None = None
     delivery_enabled: bool | None = None
     pickup_enabled: bool | None = None
     dine_in_enabled: bool | None = None
@@ -278,6 +281,37 @@ class RestaurantSettingsUpdate(BaseModel):
     @classmethod
     def _check_logo_url(cls, value: str | None) -> str | None:
         return _media_url(value)
+
+    @field_validator("opening_hours")
+    @classmethod
+    def _check_opening_hours(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        try:
+            validate_opening_hours(value)
+        except InvalidHours as exc:
+            raise ValueError(str(exc)) from exc
+        return value
+
+    @field_validator("timezone")
+    @classmethod
+    def _check_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not valid_timezone(value):
+            raise ValueError(f"'{value}' is not a known timezone (e.g. 'America/Los_Angeles', 'Europe/London', 'UTC')")
+        return value
+
+    @field_validator("closures")
+    @classmethod
+    def _check_closures(cls, value: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+        if value is None:
+            return None
+        try:
+            validate_closures(value)
+        except InvalidHours as exc:
+            raise ValueError(str(exc)) from exc
+        return value
 
     @field_validator("primary_color")
     @classmethod

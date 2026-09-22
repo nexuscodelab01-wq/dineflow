@@ -117,6 +117,16 @@ def mark_failed(db: Session, job: ClaimedJob, error: str) -> str:
     return "queued"
 
 
+def cancel_by_dedupe_key(db: Session, dedupe_key: str) -> bool:
+    """Cancel a not-yet-run job so a new one can be queued with the same key (e.g. a reservation reminder that
+    needs rescheduling, or one whose reservation was cancelled). Returns whether anything was cancelled."""
+    result = db.execute(
+        text("UPDATE jobs SET status = 'cancelled', finished_at = now() WHERE dedupe_key = :key AND status = 'queued'"),
+        {"key": dedupe_key},
+    )
+    return bool(result.rowcount)
+
+
 def requeue_stuck(db: Session, stuck_minutes: int) -> int:
     """Recover jobs whose worker died mid-run. Out-of-attempts jobs become `dead` instead of looping forever."""
     result = db.execute(

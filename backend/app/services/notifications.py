@@ -13,7 +13,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.jobs.queue import enqueue
+from app.core.hours import to_local
+from app.jobs.queue import cancel_by_dedupe_key, enqueue
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,12 @@ def _logo_url(restaurant) -> str | None:
     return url if url.startswith(("http://", "https://")) else f"{settings.PUBLIC_API_URL.rstrip('/')}{url}"
 
 
-def _when(value: datetime) -> str:
-    # Restaurants have no timezone yet (roadmap: stage B5), so be explicit rather than misleading.
+def _when(value: datetime, restaurant=None) -> str:
+    """A reservation time in the restaurant's own timezone (falls back to UTC when there is none to hand)."""
+    if restaurant is not None:
+        local = to_local(restaurant, value)
+        tz = getattr(restaurant, "timezone", None) or "UTC"
+        return local.strftime(f"%a, %b %d, %I:%M %p {tz}").replace(" 0", " ")
     return value.astimezone(timezone.utc).strftime("%a, %b %d, %I:%M %p UTC").replace(" 0", " ")
 
 
@@ -48,7 +53,9 @@ def _layout(restaurant, heading: str, body_html: str, footer: str = "") -> str:
 </table></td></tr></table></body></html>"""
 
 
-def _queue_email(db: Session, restaurant, to: str | None, subject: str, text: str, html: str, dedupe_key: str) -> None:
+def _queue_email(
+    db: Session, restaurant, to: str | None, subject: str, text: str, html: str, dedupe_key: str, *, run_at=None,
+) -> None:
     if not to:
         return
     enqueue(
@@ -64,6 +71,7 @@ def _queue_email(db: Session, restaurant, to: str | None, subject: str, text: st
         },
         restaurant_id=restaurant.id,
         dedupe_key=dedupe_key,  # the same event can never queue the same email twice
+        run_at=run_at,
     )
 
 
@@ -100,14 +108,14 @@ def notify_order_placed(db: Session, restaurant, order, lines: list[dict[str, An
 
 # ---------------------------------------------------------------------------------- reservations
 
-def _reservation_details(reservation, table_number: str | None) -> tuple[str, str]:
+def _reservation_details(reservation, table_number: str | None, restaurant=None) -> tuple[str, str]:
     table = f", table {table_number}" if table_number else ""
-    line = f"{_when(reservation.starts_at)} · party of {reservation.party_size}{table}"
+    line = f"{_when(reservation.starts_at, restaurant)} · party of {reservation.party_size}{table}"
     return line, escape(line)
 
 
 def notify_reservation_confirmed(db: Session, restaurant, reservation, table_number: str | None) -> None:
-    text_line, html_line = _reservation_details(reservation, table_number)
+    text_line, html_line = _reservation_details(reservation, table_number, restaurant)
     subject = f"Your table at {restaurant.name} is booked"
     text = f"Hi {reservation.guest_name},\n\nYour reservation is confirmed:\n{text_line}\n\nNeed to change it? Sign in at {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve or contact us.\n\n— {restaurant.name}"
     body = (
@@ -119,7 +127,7 @@ def notify_reservation_confirmed(db: Session, restaurant, reservation, table_num
 
 
 def notify_reservation_cancelled(db: Session, restaurant, reservation, table_number: str | None) -> None:
-    text_line, html_line = _reservation_details(reservation, table_number)
+    text_line, html_line = _reservation_details(reservation, table_number, restaurant)
     subject = f"Your reservation at {restaurant.name} was cancelled"
     text = f"Hi {reservation.guest_name},\n\nYour reservation has been cancelled:\n{text_line}\n\nWe'd love to see you another time: {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve\n\n— {restaurant.name}"
     body = (
@@ -187,3 +195,25 @@ def notify_password_changed(db: Session, restaurant, to: str, first_name: str, e
         "signed out everywhere.</p><p>If this was you, there is nothing more to do. <strong>If it was not, reset your password straight away.</strong></p>",
     )
     _queue_email(db, restaurant, to, subject, text, html, dedupe_key=f"pwchanged:{event_id}")
+
+
+def reminder_dedupe_key(reservation_id: int) -> str:
+    return f"email:reservation:{reservation_id}:reminder"
+
+
+def notify_reservation_reminder(db: Session, restaurant, reservation, table_number: str | None, run_at) -> None:
+    """Queued ahead of time (`run_at` = a few hours before the booking); the wording avoids "confirmed" since
+    this arrives long after that email did."""
+    text_line, html_line = _reservation_details(reservation, table_number, restaurant)
+    subject = f"See you soon — your table at {restaurant.name}"
+    text = f"Hi {reservation.guest_name},\n\nJust a reminder about your reservation:\n{text_line}\n\nWe're looking forward to it!\n\n— {restaurant.name}"
+    body = (
+        f"<p>Hi {escape(reservation.guest_name)}, just a reminder about your reservation:</p>"
+        f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px"><strong>{html_line}</strong></p>'
+        "<p>We're looking forward to it!</p>"
+    )
+    _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "See you soon", body), reminder_dedupe_key(reservation.id), run_at=run_at)
+
+
+def cancel_reservation_reminder(db: Session, reservation_id: int) -> None:
+    cancel_by_dedupe_key(db, reminder_dedupe_key(reservation_id))

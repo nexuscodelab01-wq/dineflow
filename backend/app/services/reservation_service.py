@@ -16,12 +16,18 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
+from app.core.hours import status_at
 from app.models.enums import ReservationStatus, TableStatus
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
 from app.repositories.restaurant import RestaurantRepository
-from app.services.notifications import notify_reservation_cancelled, notify_reservation_confirmed
+from app.services.notifications import (
+    cancel_reservation_reminder,
+    notify_reservation_cancelled,
+    notify_reservation_confirmed,
+    notify_reservation_reminder,
+)
 from app.schemas.reservation import (
     AdminAvailabilityResponse,
     AdminReservationCreate,
@@ -174,6 +180,7 @@ class ReservationService:
 
         starts_at = self._ensure_aware(starts_at)
         self._validate_start(starts_at)
+        self._require_open(restaurant, starts_at)
         ends_at = starts_at + timedelta(minutes=duration_minutes)
 
         tables = self._available_tables(restaurant_id, starts_at, ends_at, party_size)
@@ -298,6 +305,7 @@ class ReservationService:
         user: User | None,
         *,
         seat_immediately: bool = False,
+        enforce_hours: bool = True,
     ) -> ReservationRead:
         self.expire_holds(restaurant_id)
         restaurant = self._active_restaurant(restaurant_id)
@@ -317,6 +325,8 @@ class ReservationService:
         else:
             starts_at = self._ensure_aware(data.starts_at)
             self._validate_start(starts_at)
+            if enforce_hours:
+                self._require_open(restaurant, starts_at)
         ends_at = starts_at + timedelta(minutes=data.duration_minutes)
 
         # Lock the table row to serialise concurrent bookings of the same table.
@@ -368,6 +378,7 @@ class ReservationService:
             self._sync_table_floor_status(table.id, keep_occupied=True)
         if status == ReservationStatus.CONFIRMED:  # (walk-ins and short-lived holds aren't emailed)
             notify_reservation_confirmed(self.db, restaurant, reservation, table.table_number)
+            self._schedule_reminder(restaurant, reservation, table.table_number)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -379,6 +390,7 @@ class ReservationService:
             data,
             user,
             seat_immediately=data.seat_immediately,
+            enforce_hours=False,  # staff may book outside posted hours (private events, corrections)
         )
 
     # ------------------------------------------------------------------ read
@@ -472,7 +484,9 @@ class ReservationService:
         self._sync_table_floor_status(reservation.table_id, keep_occupied=True)
         restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
         if restaurant is not None and reservation.guest_email:
-            notify_reservation_confirmed(self.db, restaurant, reservation, reservation.table.table_number if reservation.table else None)
+            table_number = reservation.table.table_number if reservation.table else None
+            notify_reservation_confirmed(self.db, restaurant, reservation, table_number)
+            self._schedule_reminder(restaurant, reservation, table_number)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -522,6 +536,10 @@ class ReservationService:
                 reservation.hold_expires_at = None
             if target == ReservationStatus.CANCELLED:
                 self._email_cancellation(reservation)
+            elif current == ReservationStatus.CONFIRMED:
+                # Leaving CONFIRMED some other way (seated, completed): nobody needs a reminder about a visit
+                # that is already under way or over.
+                cancel_reservation_reminder(self.db, reservation.id)
         if data.notes:
             reservation.notes = data.notes
 
@@ -606,6 +624,11 @@ class ReservationService:
         self.db.flush()
         for table_id_to_sync in {old_table_id, reservation.table_id}:
             self._sync_table_floor_status(table_id_to_sync, keep_occupied=True)
+        if reservation.status == ReservationStatus.CONFIRMED:
+            # The time, table or contact details may have changed: replace whatever reminder was queued before.
+            restaurant = self.restaurants.get_by_id(restaurant_id)
+            new_table = self.db.get(RestaurantTable, reservation.table_id)
+            self._schedule_reminder(restaurant, reservation, new_table.table_number if new_table else None)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -723,7 +746,9 @@ class ReservationService:
     # ------------------------------------------------------------------ internals
 
     def _email_cancellation(self, reservation: Reservation, table: RestaurantTable | None = None) -> None:
-        """Tell the guest (if we have their email). Queued in the caller's transaction."""
+        """Tell the guest (if we have their email), and drop any reminder queued for this booking. Queued in the
+        caller's transaction."""
+        cancel_reservation_reminder(self.db, reservation.id)
         if not reservation.guest_email:
             return
         restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
@@ -736,6 +761,25 @@ class ReservationService:
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
         return restaurant
+
+    # A reminder is only worth sending if there is enough notice for it to add something beyond the
+    # confirmation email the guest already got.
+    REMINDER_LEAD_HOURS = 3
+
+    def _schedule_reminder(self, restaurant, reservation: Reservation, table_number: str | None) -> None:
+        if restaurant is None or not reservation.guest_email:
+            return
+        cancel_reservation_reminder(self.db, reservation.id)  # replace whatever was queued before, if anything
+        lead = reservation.starts_at - _utcnow()
+        if lead < timedelta(hours=self.REMINDER_LEAD_HOURS + 0.5):
+            return  # too soon for a separate reminder to be useful
+        run_at = reservation.starts_at - timedelta(hours=self.REMINDER_LEAD_HOURS)
+        notify_reservation_reminder(self.db, restaurant, reservation, table_number, run_at)
+
+    def _require_open(self, restaurant, starts_at: datetime) -> None:
+        status = status_at(restaurant, starts_at)
+        if not status.open:
+            raise AppError(f"{restaurant.name} is closed at that time ({status.reason}). Please choose another time.")
 
     def _validate_start(self, starts_at: datetime) -> None:
         now = _utcnow()
