@@ -66,6 +66,7 @@ PLATFORM = {
     ("PUT", "/platform/restaurants/{restaurant_id}/features/{key}"),
     ("DELETE", "/platform/restaurants/{restaurant_id}/features/{key}"),
     ("GET", "/platform/audit-log"),
+    ("POST", "/platform/restaurants"), ("GET", "/platform/restaurants/templates"), ("POST", "/platform/restaurants/{restaurant_id}/verify-domain"),
 }
 
 
