@@ -44,6 +44,10 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - Scoped to registered accounts: a phone/walk-in booking with only a `guest_name`/`guest_email` (no account) doesn't get a profile or show up in the customer list, so notes and allergies can't be attached to it.
 - No search across notes/allergies (only name and email), no CSV export, no "add a note from the order page" shortcut.
 
+### 9. Reservation-link follow-ups
+- "Auto no-show release" only frees a table once the whole booked window has elapsed (existing behaviour); a faster release shortly after the start time, with a configurable grace period, isn't built.
+- A cancelled-by-link booking that had an order attached is refused (same rule as cancelling while signed in) — the guest is told to contact the restaurant, with no in-page way to do that.
+
 ## Done
 - Password reset, change-password and owner invite links (no more printed passwords); header, sidebar and profile no longer show labels over the wrong links after a page load.
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.

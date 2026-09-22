@@ -151,7 +151,7 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 
 ### Stage C — Reservations 2.0 & guest CRM · ~4–6 weeks · *first slice built*
 - [x] **Guest profiles**: every registered customer shows up (not only those who have ordered — a booking-only guest, or one who has just signed up, appears too), with order and booking history, notes, allergies and a VIP tag staff can set; "last seen" combines ordering and booking. Searchable customer list.
-- [ ] Confirm/cancel links in reminders; auto no-show release. Deposits / no-show fee are Stripe-dependent — deferred with B4.
+- [x] **Confirm/cancel links** in the confirmation and reminder emails: a guest can tap "I'll be there" (staff see a ✓ next to their name) or cancel — no account needed, a signed link proves it's theirs and stops working once the booking is gone or the link expires. **Auto no-show release** was already built (Stage A): a CONFIRMED booking whose window fully elapses with no order attached is auto-expired and its table freed; not yet done is releasing it sooner, right after the start time, rather than waiting for the whole window. Deposits / no-show fee are Stripe-dependent — deferred with B4.
 - [ ] Waitlist & walk-in queue ("your table is ready") — email only for now, no SMS provider chosen yet.
 - [ ] Pacing (max covers per 15-min slot), per-tenant party limits and lead time. Blackout dates are already covered by the `closures` built in B5.
 - [ ] Table combining for large parties; smarter auto-assignment (least wasted seats).
