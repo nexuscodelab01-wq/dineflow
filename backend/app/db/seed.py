@@ -197,6 +197,7 @@ def seed() -> None:
             name="Bella Vista Kitchen",
             slug="bella-vista-kitchen",
             order_prefix="BV",
+            timezone="America/Los_Angeles",
             description="Modern Italian-American dining with wood-fired pizza and craft burgers.",
             logo_url=None,
             address="124 Market Street",

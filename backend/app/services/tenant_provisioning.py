@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError, ConflictError
 from app.core.images import InvalidImage, process_image
 from app.core.security import hash_password
+from app.core.hours import valid_timezone
 from app.core.stations import CATEGORY_STATIONS, DEFAULT_STATION
 from app.core.storage import get_storage, tenant_prefix
 from app.models.audit_log import AuditLog
@@ -100,6 +101,7 @@ def provision_tenant(
     color: str | None = None,
     logo: bytes | None = None,
     template: str = "generic",
+    timezone: str = "UTC",
     owner_name: str = "Owner",
     branding: bool = True,
     send_invite: bool = False,
@@ -113,6 +115,8 @@ def provision_tenant(
         raise AppError(f"Unknown template '{template}'. Choose one of: {', '.join(TEMPLATES)}")
     if color is not None and not COLOR.match(color):
         raise AppError("Colour must look like #1a7f5a")
+    if not valid_timezone(timezone):
+        raise AppError(f"'{timezone}' is not a known timezone (e.g. 'America/Los_Angeles', 'Europe/London', 'UTC')")
     if db.scalar(select(Restaurant.id).where(Restaurant.slug == slug)) is not None:
         raise ConflictError(f"A restaurant with slug '{slug}' already exists")
 
@@ -125,7 +129,7 @@ def provision_tenant(
 
     restaurant = Restaurant(
         name=name, slug=slug, order_prefix=order_prefix(name), primary_color=color.lower() if color else None,
-        opening_hours=HOURS, tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
+        opening_hours=HOURS, timezone=timezone, tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
     )
     db.add(restaurant)
     db.flush()
