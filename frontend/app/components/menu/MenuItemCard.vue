@@ -44,7 +44,7 @@ const resolvedImage = computed(() =>
     </div>
     <div class="flex flex-1 flex-col p-4">
       <div class="mb-2 flex flex-wrap gap-1.5">
-        <span v-if="isPopular" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">Popular</span>
+        <span v-if="isPopular" class="rounded-full bg-accent-100 px-2 py-0.5 text-xs font-medium text-accent-900">Popular</span>
         <span v-if="isVegetarian" class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Vegetarian</span>
         <span v-if="isSpicy" class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Spicy</span>
         <span v-if="unavailable" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Unavailable</span>
