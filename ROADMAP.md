@@ -142,9 +142,10 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 - [ ] Stripe Connect onboarding per tenant; pay the full bill, split equally or by item; tips; Apple/Google Pay; receipts by email.
 - [ ] "Pay at counter / cash" request → staff marks paid; closing the session frees the table (→ cleaning) and **rotates the QR token**.
 
-**B5 Hours & basics (1–2 wk)**
-- [ ] Tenant timezone; opening hours by weekday/shift; holidays and closures enforced on orders and reservations.
-- [ ] Notifications: booking confirmation/reminder, order status (email first).
+**B5 Hours & basics (1–2 wk)** — *done*
+- [x] Restaurant timezone (IANA name) and weekly opening hours, enforced on customer ordering and guest booking (staff can override — private events, corrections); a restaurant with no hours set stays always open. Settings page: timezone picker, a day-by-day hours editor, and dated closures (holidays, private events). "Open now" badge on the menu page.
+- [x] Notifications: booking confirmation and order status were already built (Stage A2); this adds a **booking reminder**, scheduled a few hours ahead of the visit when there is enough notice, cancelled or rescheduled automatically if the booking is, and dropped once the guest is seated or the visit is over.
+- [ ] Not yet: per-day shifts (lunch/dinner as two windows), PDF/print of hours, a reminder lead time configurable per restaurant (fixed at 3 hours).
 
 **Exit — Demo milestone:** scan a table QR on a phone → order → the kitchen screen lights up with "T5" → status updates on the phone → request the bill → pay → table flips to cleaning. Repeatable on a demo tenant.
 

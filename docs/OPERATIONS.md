@@ -118,9 +118,10 @@ A restaurant's site is `<slug>.PLATFORM_DOMAIN`, or its own `custom_domain` (set
 ```sh
 docker compose exec backend python -m app.cli create-tenant \
   --name "Luigi's Trattoria" --slug luigis --owner owner@luigis.com --owner-name "Luigi Rossi" \
-  --color "#c0392b" --logo /path/to/logo.png --template pizzeria     # templates: generic | pizzeria | cafe
+  --color "#c0392b" --logo /path/to/logo.png --template pizzeria \    # templates: generic | pizzeria | cafe
+  --timezone "America/Los_Angeles"                                   # IANA name; default UTC
 ```
-It creates the restaurant with a starter menu, tables and hours, an owner admin account, turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour or logo is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
+It creates the restaurant with a starter menu, tables and a placeholder weekly schedule (edit the real hours in Settings afterwards), an owner admin account, turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour, logo or timezone is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
 A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
 
 ## Waiter view
@@ -152,6 +153,17 @@ Switch it on per restaurant: `python -m app.cli features <slug> qr_table_orderin
 
 ## Testing on a phone (same Wi-Fi)
 `localhost` and `<slug>.localhost` only exist on your computer, so a phone can't open them. Run `scripts/lan-dev.sh on luigis` (any restaurant slug): it points the site and API at your computer's Wi-Fi address, allows that origin, and makes that restaurant the default one there. Then open `http://<your-ip>:3000` on the phone. Open the admin **Table ordering** page from that same address so the printed QR codes carry it. `scripts/lan-dev.sh off` restores your `.env`. If the phone can't connect, allow incoming connections for Docker in the macOS firewall. This is for development only: with a real domain, tenants are found by subdomain (see *Tenants* above).
+
+## Opening hours, timezone and closures
+A restaurant's `timezone` (IANA name, e.g. `America/Los_Angeles`) and `opening_hours` (a day -> `"HH:MM-HH:MM"` or `"closed"` map) live on the restaurant row and are edited from **Settings → Hours & timezone**. A restaurant with no `opening_hours` set at all is **always open** — the same as before this feature existed — so nothing changes until an admin sets real hours. `closures` is a list of whole extra days shut (`{"date": "2026-12-25", "label": "Christmas"}`), which override the weekly hours regardless of what they say.
+
+- **Enforced on:** a customer placing an order, and a guest booking a table (`GET`/`POST .../reservations`). Both are checked against the restaurant's local time at the moment in question (now, for an order; the requested slot, for a booking).
+- **Not enforced on:** staff creating a reservation (`POST /admin/reservations`, including walk-ins) — private events and corrections shouldn't need a settings change first. Table QR ordering (a guest already seated) is likewise unaffected.
+- **The rule lives in one place:** `backend/app/core/hours.py` (pure, no database) and its frontend port `frontend/app/utils/hours.ts` (for the "Open now" badge on the menu page, computed client-side from the same data so it doesn't need a round trip). Keep them in step if the rule ever changes.
+- **A window that crosses midnight** (e.g. `"18:00-01:00"`) is read correctly; a date in `closures` beats the weekly hours for that whole day.
+
+## Booking reminders
+A reservation confirmed with at least ~3.5 hours' notice gets a reminder email scheduled for 3 hours before the visit (`REMINDER_LEAD_HOURS` in `reservation_service.py`), through the same job queue as every other email. Rescheduling the booking moves the reminder; cancelling it, or the guest being seated or the visit ending, drops it (`dedupe_key` = `email:reservation:{id}:reminder`, cancelled with `jobs.cancel_by_dedupe_key`). A booking made too close to its time gets no separate reminder — the confirmation email already told the guest soon enough.
 
 ## Row-level security (the database keeps restaurants apart)
 Besides the checks in the code, PostgreSQL itself refuses to show or change another restaurant's rows. Every tenant table has a policy; when a request is *bound to a restaurant* the database only exposes that restaurant's rows, even if a query forgets its `WHERE restaurant_id = …`.
