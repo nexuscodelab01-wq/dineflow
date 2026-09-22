@@ -288,13 +288,15 @@ def test_dashboard_counts_todays_orders(world):
 
 def test_customer_list_and_detail(world):
     w = world
-    assert w.client.get(url(w, "/customers"), headers=w.staff).json() == []
+    # A registered customer already shows up before ordering anything — guest profiles, not just an order log.
+    rows = w.client.get(url(w, "/customers"), headers=w.staff).json()
+    assert len(rows) == 1 and rows[0]["email"] == "am-cust@demo.com" and rows[0]["total_orders"] == 0
     place_order(w)
     place_order(w)
     rows = w.client.get(url(w, "/customers"), headers=w.staff).json()
     assert len(rows) == 1 and rows[0]["email"] == "am-cust@demo.com" and rows[0]["total_orders"] == 2
     detail = w.client.get(url(w, f"/customers/{w.customer_user.id}"), headers=w.staff).json()
-    assert detail["total_orders"] == 2 and len(detail["orders"]) == 2
+    assert detail["total_orders"] == 2 and len(detail["orders"]) == 2 and detail["is_vip"] is False
     assert w.client.get(url(w, "/customers/999999"), headers=w.staff).status_code == 404
     assert w.client.get(url(w, f"/customers/{w.customer_user.id}", restaurant=w.b), headers=w.admin_b).status_code == 404
 
