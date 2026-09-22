@@ -41,6 +41,7 @@ async def create_restaurant(
     owner_email: Annotated[str, Form()],
     owner_name: Annotated[str, Form()] = "Owner",
     color: Annotated[str | None, Form()] = None,
+    secondary_color: Annotated[str | None, Form()] = None,
     template: Annotated[str, Form()] = "generic",
     timezone: Annotated[str, Form()] = "UTC",
     custom_domain: Annotated[str | None, Form()] = None,
@@ -53,7 +54,7 @@ async def create_restaurant(
     try:
         result = await run_in_threadpool(
             provision_tenant, db, name=name, slug=slug, owner_email=owner_email, owner_name=owner_name,
-            color=color or None, logo=logo_bytes, template=template, timezone=timezone,
+            color=color or None, secondary_color=secondary_color or None, logo=logo_bytes, template=template, timezone=timezone,
             custom_domain=custom_domain or None, branding=branding, send_invite=send_invite,
         )
     except (AppError, NotFoundError) as exc:

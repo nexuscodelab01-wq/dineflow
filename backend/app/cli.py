@@ -38,9 +38,11 @@ def create_tenant(argv: list[str]) -> int:
     parser.add_argument("--owner", required=True, help="email of the restaurant's admin")
     parser.add_argument("--owner-name", default="Owner")
     parser.add_argument("--color", help="brand colour, e.g. #c0392b")
+    parser.add_argument("--secondary-color", help="accent colour for badges/highlights, e.g. #f1c40f (optional)")
     parser.add_argument("--logo", help="path to a PNG/JPEG/WebP logo")
     parser.add_argument("--template", default="generic", choices=sorted(TEMPLATES))
     parser.add_argument("--timezone", default="UTC", help='IANA name, e.g. "America/Los_Angeles" (default: UTC)')
+    parser.add_argument("--custom-domain", help="e.g. order.theirrestaurant.com (optional, can be added later)")
     parser.add_argument("--no-branding", action="store_true", help="don't switch on custom branding")
     parser.add_argument("--send-invite", action="store_true", help="email the owner their set-password link (needs email configured)")
     args = parser.parse_args(argv)
@@ -55,7 +57,8 @@ def create_tenant(argv: list[str]) -> int:
         try:
             result = provision_tenant(
                 db, name=args.name, slug=args.slug, owner_email=args.owner, owner_name=args.owner_name, color=args.color,
-                logo=logo, template=args.template, timezone=args.timezone, branding=not args.no_branding, send_invite=args.send_invite,
+                secondary_color=args.secondary_color, logo=logo, template=args.template, timezone=args.timezone,
+                custom_domain=args.custom_domain, branding=not args.no_branding, send_invite=args.send_invite,
             )
         except AppError as exc:
             sys.exit(exc.message)
