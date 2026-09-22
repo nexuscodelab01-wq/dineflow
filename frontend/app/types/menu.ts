@@ -10,6 +10,12 @@ export type Restaurant = {
   postal_code?: string | null
   phone?: string | null
   email?: string | null
+  /** Day name (lowercase) -> "HH:MM-HH:MM" or "closed"; no entry at all means always open. */
+  opening_hours?: Record<string, string> | null
+  /** IANA name, e.g. "America/Los_Angeles". Opening hours and closures are read in this zone. */
+  timezone?: string
+  /** Whole extra days closed on top of the weekly hours. */
+  closures?: { date: string, label?: string | null }[]
   delivery_enabled: boolean
   pickup_enabled: boolean
   dine_in_enabled: boolean

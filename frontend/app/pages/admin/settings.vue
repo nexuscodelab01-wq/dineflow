@@ -2,6 +2,8 @@
 import type { Restaurant } from '~/types/menu'
 import { fetchAdminSettings, updateAdminSettings, uploadLogo } from '~/services/admin'
 import { resolveMediaUrl } from '~/utils/media'
+import { DAYS, type Day, parseDay } from '~/utils/hours'
+import { COMMON_TIMEZONES } from '~/utils/timezones'
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
@@ -31,6 +33,36 @@ const form = reactive({
   reservation_buffer_minutes: 15,
 })
 
+const dayLabels: Record<Day, string> = {
+  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
+  friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
+}
+
+type DayHours = { closed: boolean, open: string, close: string }
+const hours = reactive<Record<Day, DayHours>>(
+  Object.fromEntries(DAYS.map(d => [d, { closed: true, open: '11:00', close: '22:00' }])) as Record<Day, DayHours>,
+)
+
+const timezone = ref('UTC')
+const customTimezone = ref(false)
+
+const closures = ref<{ date: string, label: string }[]>([])
+const newClosureDate = ref('')
+const newClosureLabel = ref('')
+
+function applyOpeningHours(source: Record<string, string> | null | undefined) {
+  for (const day of DAYS) {
+    const window = source ? parseDay(source[day]) : null
+    if (window) {
+      const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+      hours[day] = { closed: false, open: fmt(window[0]), close: fmt(window[1]) }
+    }
+    else {
+      hours[day] = { closed: true, open: '11:00', close: '22:00' }
+    }
+  }
+}
+
 onMounted(async () => {
   await admin.initialize()
   if (admin.restaurantId) {
@@ -51,6 +83,10 @@ onMounted(async () => {
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
     })
+    timezone.value = settings.value.timezone || 'UTC'
+    customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
+    applyOpeningHours(settings.value.opening_hours)
+    closures.value = (settings.value.closures ?? []).map(c => ({ date: c.date, label: c.label ?? '' })).sort((a, b) => a.date.localeCompare(b.date))
   }
   loading.value = false
 })
@@ -100,15 +136,36 @@ async function removeLogo() {
   }
 }
 
+function addClosure() {
+  if (!newClosureDate.value) return
+  if (closures.value.some(c => c.date === newClosureDate.value)) {
+    message.value = 'That date is already in the list'
+    return
+  }
+  closures.value = [...closures.value, { date: newClosureDate.value, label: newClosureLabel.value.trim() }].sort((a, b) => a.date.localeCompare(b.date))
+  newClosureDate.value = ''
+  newClosureLabel.value = ''
+}
+
+function removeClosure(date: string) {
+  closures.value = closures.value.filter(c => c.date !== date)
+}
+
 async function save() {
   if (!admin.restaurantId) return
   saving.value = true
   message.value = ''
   try {
+    const openingHours = Object.fromEntries(
+      DAYS.map(day => [day, hours[day].closed ? 'closed' : `${hours[day].open}-${hours[day].close}`]),
+    )
     settings.value = await updateAdminSettings(admin.restaurantId, {
       ...form,
       tax_rate: form.tax_rate,
       delivery_fee: form.delivery_fee,
+      timezone: timezone.value,
+      opening_hours: openingHours,
+      closures: closures.value.map(c => ({ date: c.date, label: c.label || null })),
     })
     message.value = 'Settings saved'
   }
@@ -124,7 +181,7 @@ async function save() {
 <template>
   <div>
     <h1 class="font-display text-2xl font-semibold text-brand-900">Restaurant settings</h1>
-    <p class="text-sm text-ink-muted">Profile, ordering options, and fees</p>
+    <p class="text-sm text-ink-muted">Profile, ordering options, hours and fees</p>
 
     <div v-if="loading" class="mt-6 h-64 animate-pulse rounded-2xl bg-brand-100/60" />
 
@@ -171,6 +228,59 @@ async function save() {
         <div class="grid gap-3 sm:grid-cols-2">
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
+        <div>
+          <h2 class="font-semibold">Hours &amp; timezone</h2>
+          <p class="mt-1 text-xs text-ink-subtle">
+            Ordering and booking are refused outside these hours (a day left off or marked closed is closed all day). Leave every day closed to stay open around the clock.
+          </p>
+        </div>
+
+        <label class="block text-sm font-medium">Timezone
+          <select v-if="!customTimezone" v-model="timezone" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            <option v-for="tz in COMMON_TIMEZONES" :key="tz.value" :value="tz.value">{{ tz.label }}</option>
+          </select>
+          <input v-else v-model="timezone" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="e.g. Europe/Lisbon">
+        </label>
+        <button type="button" class="text-xs font-medium text-brand-700 hover:underline" @click="customTimezone = !customTimezone">
+          {{ customTimezone ? 'Choose from the list instead' : 'My timezone isn’t listed' }}
+        </button>
+
+        <div class="space-y-2">
+          <div v-for="day in DAYS" :key="day" class="flex flex-wrap items-center gap-3 rounded-lg border border-brand-100 px-3 py-2">
+            <span class="w-24 shrink-0 text-sm font-medium">{{ dayLabels[day] }}</span>
+            <label class="flex items-center gap-1.5 text-xs text-ink-muted">
+              <input v-model="hours[day].closed" type="checkbox" :data-testid="`closed-${day}`"> Closed
+            </label>
+            <template v-if="!hours[day].closed">
+              <input v-model="hours[day].open" type="time" class="rounded-md border px-2 py-1 text-sm" :data-testid="`open-${day}`">
+              <span class="text-ink-subtle">to</span>
+              <input v-model="hours[day].close" type="time" class="rounded-md border px-2 py-1 text-sm" :data-testid="`close-${day}`">
+            </template>
+          </div>
+        </div>
+
+        <div class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Closed on specific dates</h3>
+          <p class="mt-1 text-xs text-ink-subtle">Holidays, private events — closed all day, whatever the weekly hours say.</p>
+          <ul v-if="closures.length" class="mt-3 space-y-1.5">
+            <li v-for="c in closures" :key="c.date" class="flex items-center justify-between gap-2 rounded-lg bg-surface-muted/60 px-3 py-1.5 text-sm">
+              <span><strong>{{ c.date }}</strong><span v-if="c.label"> — {{ c.label }}</span></span>
+              <button type="button" class="text-xs font-medium text-red-600 hover:underline" @click="removeClosure(c.date)">Remove</button>
+            </li>
+          </ul>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <label class="text-xs font-medium">Date
+              <input v-model="newClosureDate" type="date" class="mt-1 block rounded-lg border px-2 py-1.5 text-sm">
+            </label>
+            <label class="flex-1 text-xs font-medium">Reason (optional)
+              <input v-model="newClosureLabel" type="text" maxlength="100" placeholder="e.g. Christmas Day" class="mt-1 w-full rounded-lg border px-2 py-1.5 text-sm">
+            </label>
+            <button type="button" class="rounded-lg border border-brand-200 px-3 py-1.5 text-sm font-medium hover:bg-brand-50" :disabled="!newClosureDate" @click="addClosure">Add</button>
+          </div>
         </div>
       </section>
 

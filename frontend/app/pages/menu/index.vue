@@ -5,6 +5,7 @@ import { useDebounceFn } from '@vueuse/core'
 
 const restaurant = useRestaurantStore()
 const router = useRouter()
+const { status: openStatus, todayLabel } = useOpeningStatus()
 
 await restaurant.load()
 
@@ -82,6 +83,14 @@ function goToItem(id: number) {
       </h1>
       <p v-if="restaurant.current.description" class="mt-2 max-w-2xl text-ink-muted">
         {{ restaurant.current.description }}
+      </p>
+      <p v-if="restaurant.current.opening_hours" class="mt-3 inline-flex items-center gap-2 text-sm" data-testid="opening-status">
+        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold" :class="openStatus.open ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'">
+          <span class="h-2 w-2 rounded-full" :class="openStatus.open ? 'bg-emerald-500' : 'bg-amber-500'" />
+          {{ openStatus.open ? 'Open now' : openStatus.reason && openStatus.reason !== 'closed right now' ? `Closed — ${openStatus.reason}` : 'Closed now' }}
+        </span>
+        <span v-if="!openStatus.open && openStatus.opensAt" class="text-ink-subtle">Opens {{ openStatus.opensAt.day }} {{ openStatus.opensAt.time }}</span>
+        <span v-else-if="todayLabel" class="text-ink-subtle">Today: {{ todayLabel }}</span>
       </p>
     </div>
 
