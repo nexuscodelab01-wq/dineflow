@@ -24,13 +24,16 @@ def memory_mail():
 
 
 def queued(db, subject_contains=None):
-    rows = db.execute(text("SELECT id, payload, restaurant_id, dedupe_key FROM jobs WHERE type = 'send_email' ORDER BY id")).all()
+    rows = db.execute(text("SELECT id, payload, restaurant_id, dedupe_key, status FROM jobs WHERE type = 'send_email' ORDER BY id")).all()
     return [r for r in rows if subject_contains is None or subject_contains in r.payload["subject"]]
 
 
 def deliver(db, memory_mail):
-    """What the worker does with each queued email job (in the test's own transaction)."""
+    """What the worker does with each due, still-queued email job (in the test's own transaction) — a cancelled
+    reminder, for instance, is never claimed and so never delivered, same as the real worker."""
     for row in queued(db):
+        if row.status != "queued":
+            continue
         HANDLERS["send_email"](row.payload, JobContext(job_id=row.id, attempt=1, restaurant_id=row.restaurant_id))
     return memory_mail.outbox
 
@@ -126,7 +129,10 @@ def test_walk_ins_and_bookings_without_an_email_send_nothing(floor_world):
     assert no_mail.status_code == 201
     assert queued(w.db) == []
     with_mail = _admin_book(w, w.t3, _now() + timedelta(hours=6), name="Emailed", guest_email="guest@example.com")
-    assert with_mail.status_code == 201 and [j.payload["to"] for j in queued(w.db)] == ["guest@example.com"]
+    assert with_mail.status_code == 201
+    # Confirmation now, and (6h notice is plenty) a reminder queued for later — both addressed to the guest.
+    assert [j.payload["to"] for j in queued(w.db, "is booked")] == ["guest@example.com"]
+    assert [j.payload["to"] for j in queued(w.db, "See you soon")] == ["guest@example.com"]
 
 
 def test_confirming_a_hold_sends_the_confirmation(floor_world):

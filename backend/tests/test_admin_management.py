@@ -308,6 +308,8 @@ def test_settings_update_and_validation(world):
     body = ok.json()
     assert body["description"] == "Cosy" and Decimal(body["tax_rate"]) == Decimal("0.0725") and body["delivery_enabled"] is False
     assert body["opening_hours"] == {"monday": "09:00-17:00"}
+    # Clear it again so the rest of this test isn't at the mercy of what day/time it happens to run.
+    assert w.client.patch(url(w, "/settings"), headers=w.admin, json={"opening_hours": None}).json()["opening_hours"] is None
     assert w.client.patch(url(w, "/settings"), headers=w.admin, json={"tax_rate": "1.5"}).status_code == 422
     assert w.client.patch(url(w, "/settings"), headers=w.admin, json={"delivery_fee": "-1"}).status_code == 422
     # A restaurant that has turned delivery off refuses delivery orders.
