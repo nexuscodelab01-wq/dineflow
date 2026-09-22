@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
@@ -444,9 +445,16 @@ class AdminService:
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
         old_logo = restaurant.logo_url
-        for key, value in data.model_dump(exclude_unset=True).items():
+        payload = data.model_dump(exclude_unset=True)
+        if "custom_domain" in payload and payload["custom_domain"] != restaurant.custom_domain:
+            restaurant.domain_verified_at = None  # a changed domain needs verifying again
+        for key, value in payload.items():
             setattr(restaurant, key, value)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError("That domain is already in use by another restaurant") from exc
         if old_logo and old_logo != restaurant.logo_url:
             delete_owned_url(old_logo, restaurant_id)
         return RestaurantRead.model_validate(restaurant)

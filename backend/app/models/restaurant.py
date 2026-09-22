@@ -1,9 +1,10 @@
 """Restaurant ORM model."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Index, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +52,9 @@ class Restaurant(TimestampMixin, Base):
     )
     # Own domain for this restaurant's site (e.g. order.bellavista.com); resolves to this tenant.
     custom_domain: Mapped[str | None] = mapped_column(String(253), nullable=True)
+    # Set by a platform admin's "Verify domain" action. A stand-in for real DNS/TLS automation (Stage E);
+    # not enforced anywhere yet, just shown as a status.
+    domain_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Order numbers are "<prefix>-<n>", counted per restaurant.
     order_prefix: Mapped[str] = mapped_column(String(8), default="DF", server_default="DF", nullable=False)
     next_order_number: Mapped[int] = mapped_column(Integer, default=1001, server_default="1001", nullable=False)

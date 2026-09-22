@@ -1,5 +1,6 @@
 """Restaurant Pydantic schemas."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -29,6 +30,8 @@ class RestaurantRead(BaseModel):
     tax_rate: Decimal
     delivery_fee: Decimal
     reservation_buffer_minutes: int = 15
+    custom_domain: str | None = None
+    domain_verified_at: datetime | None = None
     is_active: bool
 
 
@@ -36,3 +39,14 @@ class TenantRead(RestaurantRead):
     """What a restaurant's own site needs on load: its details plus which features are switched on."""
 
     features: dict[str, bool] = {}
+
+
+class TenantCreateResponse(BaseModel):
+    restaurant_id: int
+    name: str
+    slug: str
+    order_prefix: str
+    owner_email: str
+    site_url: str
+    # A one-time set-password link (shown once — the platform admin passes it to the owner).
+    invite_link: str | None = None

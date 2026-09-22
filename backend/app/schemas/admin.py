@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.config import settings
 from app.core.hours import InvalidHours, validate_closures, validate_opening_hours, valid_timezone
 from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
@@ -271,6 +272,7 @@ class RestaurantSettingsUpdate(BaseModel):
     opening_hours: dict[str, Any] | None = None
     timezone: str | None = None
     closures: list[dict[str, Any]] | None = None
+    custom_domain: str | None = None
     delivery_enabled: bool | None = None
     pickup_enabled: bool | None = None
     dine_in_enabled: bool | None = None
@@ -312,6 +314,20 @@ class RestaurantSettingsUpdate(BaseModel):
             validate_closures(value)
         except InvalidHours as exc:
             raise ValueError(str(exc)) from exc
+        return value
+
+    @field_validator("custom_domain")
+    @classmethod
+    def _check_custom_domain(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        value = value.strip().lower()
+        if not re.fullmatch(r"(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}", value):
+            raise ValueError("That doesn't look like a domain, e.g. order.yourrestaurant.com")
+        platform_domain = settings.PLATFORM_DOMAIN.lower() if settings.PLATFORM_DOMAIN else None
+        is_platform_subdomain = platform_domain is not None and (value == platform_domain or value.endswith(f".{platform_domain}"))
+        if value in settings.reserved_subdomains or is_platform_subdomain:
+            raise ValueError("Use a domain you own, not a subdomain of the platform's own domain")
         return value
 
     @field_validator("primary_color")
