@@ -35,6 +35,7 @@ from app.services.password_service import PasswordService
 
 SLUG = re.compile(r"^[a-z0-9]([a-z0-9-]{0,60}[a-z0-9])?$")
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+DOMAIN = re.compile(r"(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}")
 
 HOURS = {day: "11:00-22:00" for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")}
 
@@ -102,6 +103,7 @@ def provision_tenant(
     logo: bytes | None = None,
     template: str = "generic",
     timezone: str = "UTC",
+    custom_domain: str | None = None,
     owner_name: str = "Owner",
     branding: bool = True,
     send_invite: bool = False,
@@ -119,6 +121,11 @@ def provision_tenant(
         raise AppError(f"'{timezone}' is not a known timezone (e.g. 'America/Los_Angeles', 'Europe/London', 'UTC')")
     if db.scalar(select(Restaurant.id).where(Restaurant.slug == slug)) is not None:
         raise ConflictError(f"A restaurant with slug '{slug}' already exists")
+    custom_domain = (custom_domain or "").strip().lower() or None
+    if custom_domain is not None and not DOMAIN.fullmatch(custom_domain):
+        raise AppError("That doesn't look like a domain, e.g. order.yourrestaurant.com")
+    if custom_domain is not None and db.scalar(select(Restaurant.id).where(Restaurant.custom_domain == custom_domain)) is not None:
+        raise ConflictError(f"'{custom_domain}' is already used by another restaurant")
 
     processed = None
     if logo is not None:  # validate before writing anything
@@ -129,7 +136,8 @@ def provision_tenant(
 
     restaurant = Restaurant(
         name=name, slug=slug, order_prefix=order_prefix(name), primary_color=color.lower() if color else None,
-        opening_hours=HOURS, timezone=timezone, tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
+        opening_hours=HOURS, timezone=timezone, custom_domain=custom_domain,
+        tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
     )
     db.add(restaurant)
     db.flush()
