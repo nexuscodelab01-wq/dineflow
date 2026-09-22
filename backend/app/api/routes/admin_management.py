@@ -29,11 +29,13 @@ from app.schemas.table_session import (
 from app.services.kitchen_service import KitchenService
 from app.services.table_session_service import TableSessionService
 from app.schemas.admin import (
+    CustomerDetail,
+    CustomerProfileUpdate,
+    CustomerSummary,
     SoldOutUpdate,
     CategoryCreate,
     CategoryReorder,
     CategoryUpdate,
-    CustomerSummary,
     DashboardStats,
     KitchenBoard,
     MenuItemCreate,
@@ -736,15 +738,30 @@ def list_customers(
     return service.list_customers(restaurant_id)
 
 
-@router.get("/customers/{user_id}")
+@router.get("/customers/{user_id}", response_model=CustomerDetail)
 def get_customer(
     user_id: int,
     _: StaffUser,
     restaurant_id: RestaurantId,
     service: Annotated[AdminService, Depends(get_admin_service)],
-):
+) -> CustomerDetail:
     try:
         return service.get_customer_detail(restaurant_id, user_id)
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/customers/{user_id}", response_model=CustomerSummary)
+def update_customer(
+    user_id: int,
+    data: CustomerProfileUpdate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> CustomerSummary:
+    """Notes, allergies and the VIP flag a restaurant keeps on its own guest."""
+    try:
+        return service.update_customer_profile(restaurant_id, user_id, data)
     except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc
 

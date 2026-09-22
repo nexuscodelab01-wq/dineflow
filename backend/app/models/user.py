@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,6 +40,10 @@ class User(TimestampMixin, Base):
     restaurant_id: Mapped[int | None] = mapped_column(
         ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    # Guest-profile notes a restaurant keeps on its own customer (only meaningful for CUSTOMER rows).
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allergies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_vip: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     role: Mapped["Role"] = relationship("Role", back_populates="users")
     restaurant_memberships: Mapped[list["RestaurantUser"]] = relationship(

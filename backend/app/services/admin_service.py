@@ -28,6 +28,9 @@ from app.schemas.admin import (
     CategoryCreate,
     CategoryUpdate,
     CategoryReorder,
+    CustomerDetail,
+    CustomerProfileUpdate,
+    CustomerReservationBrief,
     CustomerSummary,
     DashboardStats,
     KitchenBoard,
@@ -396,17 +399,38 @@ class AdminService:
         rows = self.customers.list_for_restaurant(restaurant_id)
         return [CustomerSummary(**row) for row in rows]
 
-    def get_customer_detail(self, restaurant_id: int, user_id: int) -> dict:
-        orders = self.customers.get_customer_orders(restaurant_id, user_id)
-        if not orders:
+    def get_customer_detail(self, restaurant_id: int, user_id: int) -> CustomerDetail:
+        customer = self.customers.get_for_restaurant(restaurant_id, user_id)
+        if customer is None:
             raise NotFoundError("Customer not found for this restaurant")
+        orders = self.customers.get_customer_orders(restaurant_id, user_id)
+        reservations = self.customers.get_customer_reservations(restaurant_id, user_id)
         total_spending = sum((o.total for o in orders), Decimal("0.00"))
-        return {
-            "user_id": user_id,
-            "total_orders": len(orders),
-            "total_spending": total_spending,
-            "orders": [OrderRead.model_validate(o) for o in orders],
-        }
+        return CustomerDetail(
+            id=customer.id, email=customer.email, first_name=customer.first_name, last_name=customer.last_name,
+            phone=customer.phone, is_active=customer.is_active, is_vip=customer.is_vip,
+            notes=customer.notes, allergies=customer.allergies,
+            total_orders=len(orders), total_spending=total_spending, total_bookings=len(reservations),
+            orders=[OrderRead.model_validate(o) for o in orders],
+            reservations=[
+                CustomerReservationBrief(
+                    id=r.id, starts_at=r.starts_at, party_size=r.party_size, status=r.status,
+                    table_number=r.table.table_number if r.table else None,
+                )
+                for r in reservations
+            ],
+        )
+
+    def update_customer_profile(self, restaurant_id: int, user_id: int, data: CustomerProfileUpdate) -> CustomerSummary:
+        customer = self.customers.get_for_restaurant(restaurant_id, user_id)
+        if customer is None:
+            raise NotFoundError("Customer not found for this restaurant")
+        for key, value in data.model_dump(exclude_unset=True).items():
+            setattr(customer, key, value)
+        self.db.commit()
+        rows = self.customers.list_for_restaurant(restaurant_id)
+        row = next(r for r in rows if r["id"] == user_id)
+        return CustomerSummary(**row)
 
     # Settings
     def get_settings(self, restaurant_id: int) -> RestaurantRead:

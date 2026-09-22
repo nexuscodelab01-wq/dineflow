@@ -1,6 +1,7 @@
 """Admin request/response schemas."""
 
 import re
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -333,9 +334,53 @@ class CustomerSummary(BaseModel):
     last_name: str
     phone: str | None = None
     is_active: bool
+    is_vip: bool = False
+    notes: str | None = None
+    allergies: str | None = None
     total_orders: int
     total_spending: Decimal
     last_order_at: str | None = None
+    total_bookings: int = 0
+    # The more recent of their last order and last booking — "have we seen them lately", not just "have they ordered".
+    last_seen_at: str | None = None
+
+
+class CustomerProfileUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=4000)
+    allergies: str | None = Field(default=None, max_length=1000)
+    is_vip: bool | None = None
+
+
+class CustomerReservationBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    starts_at: datetime
+    party_size: int
+    status: str
+    table_number: str | None = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _status_value(cls, value):
+        return value.value if hasattr(value, "value") else value
+
+
+class CustomerDetail(BaseModel):
+    id: int
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None = None
+    is_active: bool
+    is_vip: bool
+    notes: str | None = None
+    allergies: str | None = None
+    total_orders: int
+    total_spending: Decimal
+    total_bookings: int
+    orders: list[OrderRead]
+    reservations: list[CustomerReservationBrief]
 
 
 class KitchenBoard(BaseModel):

@@ -10,6 +10,7 @@ from app.models.enums import OrderStatus, OrderType
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
+from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
 
@@ -144,38 +145,64 @@ class CustomerRepository:
         self.db = db
 
     def list_for_restaurant(self, restaurant_id: int) -> list[dict]:
-        stmt = (
+        """Every customer of this restaurant — including one who has only ever booked a table, or just signed
+        up — not only those with an order (a plain join on Order used to make the rest invisible)."""
+        order_stats = (
             select(
-                User.id,
-                User.email,
-                User.first_name,
-                User.last_name,
-                User.phone,
-                User.is_active,
+                Order.user_id.label("user_id"),
                 func.count(Order.id).label("total_orders"),
                 func.coalesce(func.sum(Order.total), 0).label("total_spending"),
                 func.max(Order.created_at).label("last_order_at"),
             )
-            .join(Order, Order.user_id == User.id)
             .where(Order.restaurant_id == restaurant_id)
-            .group_by(User.id)
-            .order_by(func.max(Order.created_at).desc())
+            .group_by(Order.user_id)
+            .subquery()
+        )
+        booking_stats = (
+            select(
+                Reservation.user_id.label("user_id"),
+                func.count(Reservation.id).label("total_bookings"),
+                func.max(Reservation.starts_at).label("last_booking_at"),
+            )
+            .where(Reservation.restaurant_id == restaurant_id, Reservation.user_id.is_not(None))
+            .group_by(Reservation.user_id)
+            .subquery()
+        )
+        stmt = (
+            select(
+                User.id, User.email, User.first_name, User.last_name, User.phone, User.is_active,
+                User.is_vip, User.notes, User.allergies,
+                func.coalesce(order_stats.c.total_orders, 0).label("total_orders"),
+                func.coalesce(order_stats.c.total_spending, 0).label("total_spending"),
+                order_stats.c.last_order_at,
+                func.coalesce(booking_stats.c.total_bookings, 0).label("total_bookings"),
+                booking_stats.c.last_booking_at,
+            )
+            .outerjoin(order_stats, order_stats.c.user_id == User.id)
+            .outerjoin(booking_stats, booking_stats.c.user_id == User.id)
+            .where(User.restaurant_id == restaurant_id)  # only customers ever carry a restaurant_id
         )
         rows = self.db.execute(stmt).all()
-        return [
-            {
-                "id": row.id,
-                "email": row.email,
-                "first_name": row.first_name,
-                "last_name": row.last_name,
-                "phone": row.phone,
-                "is_active": row.is_active,
-                "total_orders": row.total_orders,
-                "total_spending": row.total_spending,
-                "last_order_at": row.last_order_at.isoformat() if row.last_order_at else None,
+
+        def last_seen(row) -> datetime | None:
+            candidates = [d for d in (row.last_order_at, row.last_booking_at) if d is not None]
+            return max(candidates) if candidates else None
+
+        def to_dict(row) -> dict:
+            seen = last_seen(row)
+            return {
+                "id": row.id, "email": row.email, "first_name": row.first_name, "last_name": row.last_name,
+                "phone": row.phone, "is_active": row.is_active, "is_vip": row.is_vip,
+                "notes": row.notes, "allergies": row.allergies,
+                "total_orders": row.total_orders, "total_spending": row.total_spending,
+                "total_bookings": row.total_bookings,
+                "last_seen_at": seen.isoformat() if seen else None,
             }
-            for row in rows
-        ]
+
+        return sorted((to_dict(row) for row in rows), key=lambda c: c["last_seen_at"] or "", reverse=True)
+
+    def get_for_restaurant(self, restaurant_id: int, user_id: int) -> User | None:
+        return self.db.scalar(select(User).where(User.id == user_id, User.restaurant_id == restaurant_id))
 
     def get_customer_orders(self, restaurant_id: int, user_id: int) -> list[Order]:
         stmt = (
@@ -183,5 +210,14 @@ class CustomerRepository:
             .options(selectinload(Order.items))
             .where(Order.restaurant_id == restaurant_id, Order.user_id == user_id)
             .order_by(Order.created_at.desc())
+        )
+        return list(self.db.scalars(stmt).unique().all())
+
+    def get_customer_reservations(self, restaurant_id: int, user_id: int) -> list[Reservation]:
+        stmt = (
+            select(Reservation)
+            .options(joinedload(Reservation.table))
+            .where(Reservation.restaurant_id == restaurant_id, Reservation.user_id == user_id)
+            .order_by(Reservation.starts_at.desc())
         )
         return list(self.db.scalars(stmt).unique().all())
