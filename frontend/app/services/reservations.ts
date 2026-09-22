@@ -125,3 +125,23 @@ export function updateAdminReservationStatus(
     },
   )
 }
+
+// ---- acting from an emailed link (no account) -------------------------------------------------
+
+export function fetchReservationByActionToken(token: string) {
+  return apiFetch<Reservation>(`/api/v1/reservations/actions/${encodeURIComponent(token)}`, { auth: false })
+}
+
+export function confirmReservationByActionToken(token: string) {
+  return apiFetch<Reservation>(`/api/v1/reservations/actions/${encodeURIComponent(token)}/confirm`, {
+    method: 'POST',
+    auth: false,
+  })
+}
+
+export function cancelReservationByActionToken(token: string) {
+  return apiFetch<Reservation>(`/api/v1/reservations/actions/${encodeURIComponent(token)}/cancel`, {
+    method: 'POST',
+    auth: false,
+  })
+}

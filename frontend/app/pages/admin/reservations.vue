@@ -542,7 +542,10 @@ onMounted(async () => {
           <tr v-for="r in visible" :key="r.id" class="border-b border-brand-50" :class="{ 'opacity-60': !isActive(r) }">
             <td class="whitespace-nowrap px-4 py-3">{{ formatTimeRange(r.starts_at, r.ends_at) }}</td>
             <td class="px-4 py-3">
-              <div class="font-medium">{{ r.guest_name }}</div>
+              <div class="flex items-center gap-1.5 font-medium">
+                {{ r.guest_name }}
+                <span v-if="r.guest_confirmed_at" class="text-emerald-600" title="Guest confirmed they're coming">✓</span>
+              </div>
               <div class="text-xs text-ink-subtle">{{ r.guest_phone || r.guest_email }}</div>
               <div v-if="r.notes" class="mt-0.5 max-w-xs truncate text-xs italic text-ink-subtle" :title="r.notes">“{{ r.notes }}”</div>
             </td>

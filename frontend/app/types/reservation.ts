@@ -28,6 +28,8 @@ export type Reservation = {
   overdue_minutes?: number
   /** Name of the seated party still at this booking's table when it is due. */
   blocked_by?: string | null
+  /** The guest tapped "I'll be there" from the reminder email. */
+  guest_confirmed_at?: string | null
 }
 
 export type AvailableTable = {
