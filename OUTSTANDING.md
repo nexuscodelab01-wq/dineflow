@@ -40,6 +40,10 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - Reminder lead time is fixed at 3 hours (`ReservationService.REMINDER_LEAD_HOURS`), not a per-restaurant setting.
 - The "Open now" badge is on the menu page only; not on the reserve or checkout pages, and there's no printable hours page.
 
+### 8. Guest profile follow-ups
+- Scoped to registered accounts: a phone/walk-in booking with only a `guest_name`/`guest_email` (no account) doesn't get a profile or show up in the customer list, so notes and allergies can't be attached to it.
+- No search across notes/allergies (only name and email), no CSV export, no "add a note from the order page" shortcut.
+
 ## Done
 - Password reset, change-password and owner invite links (no more printed passwords); header, sidebar and profile no longer show labels over the wrong links after a page load.
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.

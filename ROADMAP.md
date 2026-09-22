@@ -138,7 +138,7 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 - [x] **Waiter view** (`/admin/waiter`): live floor plan with each table's tab total, tables that need someone (requests, food ready to serve) glowing and queued longest-waiting first; tap a table for its rounds, mark rounds served, answer requests, **add items on the table's behalf**, **move the tab to another table** (kitchen, requests and guests follow; old table to cleaning, its QR replaced), close the tab. Seat walk-ins.
 - [ ] Still to do in B3: merge tables, void/comp with a reason, split-the-tab views, per-waiter sections, a sound for new requests.
 
-**B4 Pay at table (2–3 wk)**
+**B4 Pay at table (2–3 wk)** — *deferred: needs a payments decision with a real client first (Stripe Connect vs. cash/card as today); revisit before onboarding one*
 - [ ] Stripe Connect onboarding per tenant; pay the full bill, split equally or by item; tips; Apple/Google Pay; receipts by email.
 - [ ] "Pay at counter / cash" request → staff marks paid; closing the session frees the table (→ cleaning) and **rotates the QR token**.
 
@@ -149,12 +149,13 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 
 **Exit — Demo milestone:** scan a table QR on a phone → order → the kitchen screen lights up with "T5" → status updates on the phone → request the bill → pay → table flips to cleaning. Repeatable on a demo tenant.
 
-### Stage C — Reservations 2.0 & guest CRM · ~4–6 weeks
-- [ ] Confirm/cancel links in reminders; deposits / no-show fee (Stripe); auto no-show release.
-- [ ] Waitlist & walk-in queue with SMS "your table is ready".
-- [ ] Pacing (max covers per 15-min slot), per-tenant party limits and lead time, blackout dates.
+### Stage C — Reservations 2.0 & guest CRM · ~4–6 weeks · *first slice built*
+- [x] **Guest profiles**: every registered customer shows up (not only those who have ordered — a booking-only guest, or one who has just signed up, appears too), with order and booking history, notes, allergies and a VIP tag staff can set; "last seen" combines ordering and booking. Searchable customer list.
+- [ ] Confirm/cancel links in reminders; auto no-show release. Deposits / no-show fee are Stripe-dependent — deferred with B4.
+- [ ] Waitlist & walk-in queue ("your table is ready") — email only for now, no SMS provider chosen yet.
+- [ ] Pacing (max covers per 15-min slot), per-tenant party limits and lead time. Blackout dates are already covered by the `closures` built in B5.
 - [ ] Table combining for large parties; smarter auto-assignment (least wasted seats).
-- [ ] Guest profiles (visits, spend, notes, allergies, VIP tags), calendar view, embeddable booking widget.
+- [ ] Calendar view, embeddable booking widget.
 
 ### Stage D — Growth features · ongoing, one flag at a time
 Loyalty · reviews · coupons/gift cards · scheduled pickup slots · delivery zones/fees · order throttling when busy · analytics 2.0 · multi-language · web push · smart features (§7.6).

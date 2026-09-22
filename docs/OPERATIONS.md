@@ -165,6 +165,9 @@ A restaurant's `timezone` (IANA name, e.g. `America/Los_Angeles`) and `opening_h
 ## Booking reminders
 A reservation confirmed with at least ~3.5 hours' notice gets a reminder email scheduled for 3 hours before the visit (`REMINDER_LEAD_HOURS` in `reservation_service.py`), through the same job queue as every other email. Rescheduling the booking moves the reminder; cancelling it, or the guest being seated or the visit ending, drops it (`dedupe_key` = `email:reservation:{id}:reminder`, cancelled with `jobs.cancel_by_dedupe_key`). A booking made too close to its time gets no separate reminder — the confirmation email already told the guest soon enough.
 
+## Guest profiles
+**Customers** (admin sidebar) lists every registered customer of the restaurant, not only those who have ordered — someone who has only booked a table, or who has just signed up, shows up too, since a customer account already lives in that restaurant's own table (`users.restaurant_id`). "Last seen" is the more recent of their last order and last booking. Open a customer to see their order and booking history and set **notes**, **allergies** and a **VIP** tag — staff-only, never shown to the guest. A customer's own account page has no access to this (`GET`/`PATCH /admin/customers/{id}` are staff routes).
+
 ## Row-level security (the database keeps restaurants apart)
 Besides the checks in the code, PostgreSQL itself refuses to show or change another restaurant's rows. Every tenant table has a policy; when a request is *bound to a restaurant* the database only exposes that restaurant's rows, even if a query forgets its `WHERE restaurant_id = …`.
 - **Which requests are bound:** staff routes (the restaurant they are working in, after the membership check), signed-in customers (their own restaurant) and table guests (their table's restaurant). Sign-in, public menus, QR lookups, background jobs and the CLI run unbound (as before) and still filter explicitly in code.
