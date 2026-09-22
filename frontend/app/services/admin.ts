@@ -1,5 +1,5 @@
 import type { AnalyticsResponse, DateRangePreset } from '~/types/analytics'
-import type { DashboardStats, CustomerSummary, KitchenBoard } from '~/types/admin'
+import type { CustomerDetail, CustomerProfileUpdate, CustomerSummary, DashboardStats, KitchenBoard } from '~/types/admin'
 import type { Category, MenuItemDetail, MenuModifier, Restaurant, RestaurantTable } from '~/types/menu'
 import type { Order, OrderListResponse, OrderStatus } from '~/types/order'
 import { apiFetch } from '~/services/http'
@@ -124,9 +124,15 @@ export function fetchAdminCustomers(restaurantId: number) {
 }
 
 export function fetchAdminCustomer(restaurantId: number, userId: number) {
-  return apiFetch<{ user_id: number; total_orders: number; total_spending: string; orders: Order[] }>(
-    q(restaurantId, `/customers/${userId}`),
-  )
+  return apiFetch<CustomerDetail>(q(restaurantId, `/customers/${userId}`))
+}
+
+/** Notes, allergies and the VIP flag a restaurant keeps on its own guest. */
+export function updateAdminCustomer(restaurantId: number, userId: number, data: CustomerProfileUpdate) {
+  return apiFetch<CustomerSummary>(q(restaurantId, `/customers/${userId}`), {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
 }
 
 export function fetchAdminSettings(restaurantId: number) {
