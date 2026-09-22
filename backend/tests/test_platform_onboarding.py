@@ -30,7 +30,7 @@ def create(w, who=None, **fields):
 
 def test_a_platform_admin_can_create_a_restaurant(world):
     w = world
-    r = create(w, color="#2c6f53", template="cafe", timezone="America/Los_Angeles")
+    r = create(w, color="#2c6f53", secondary_color="#f1c40f", template="cafe", timezone="America/Los_Angeles")
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["slug"] == "onboard-kitchen" and body["owner_email"] == "onboard-owner@iso-demo.com"
@@ -39,7 +39,16 @@ def test_a_platform_admin_can_create_a_restaurant(world):
 
     restaurant = w.db.query(Restaurant).filter_by(slug="onboard-kitchen").one()
     assert restaurant.timezone == "America/Los_Angeles" and restaurant.primary_color == "#2c6f53"
+    assert restaurant.secondary_color == "#f1c40f"
     assert w.db.query(AuditLog).filter_by(restaurant_id=restaurant.id, action="tenant.create").count() == 1
+
+
+def test_a_restaurant_can_be_created_without_a_secondary_colour(world):
+    w = world
+    r = create(w, color="#2c6f53")
+    assert r.status_code == 201, r.text
+    restaurant = w.db.query(Restaurant).filter_by(slug="onboard-kitchen").one()
+    assert restaurant.secondary_color is None
 
 
 def test_only_a_platform_admin_can_create_a_restaurant(world):
@@ -55,6 +64,7 @@ def test_bad_input_creates_nothing(world):
     w = world
     assert create(w, slug="Not A Slug").status_code == 400
     assert create(w, color="not-a-color").status_code == 400
+    assert create(w, secondary_color="not-a-color").status_code == 400
     assert create(w, timezone="Nowhere/Nothing").status_code == 400
     assert w.db.query(Restaurant).filter_by(slug="onboard-kitchen").count() == 0
 
@@ -116,3 +126,27 @@ def test_only_a_platform_admin_can_verify_a_domain(world):
 def test_verifying_a_restaurant_with_no_domain_is_refused(world):
     r = world.client.post(f"{API}/platform/restaurants/{world.a.rid}/verify-domain", headers=header(world.boss))
     assert r.status_code == 400
+
+
+# ------------------------------------------------------------------ branding colours (after creation)
+
+def test_setting_colours_from_settings(world):
+    w = world
+    ok = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"primary_color": "#2C6F53", "secondary_color": "#F1C40F"})
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["primary_color"] == "#2c6f53" and body["secondary_color"] == "#f1c40f"  # lowercased
+
+
+def test_clearing_the_secondary_colour_with_an_empty_string(world):
+    w = world
+    w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"secondary_color": "#f1c40f"})
+    cleared = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"secondary_color": ""})
+    assert cleared.status_code == 200 and cleared.json()["secondary_color"] is None
+
+
+def test_bad_colours_are_refused(world):
+    w = world
+    for field in ("primary_color", "secondary_color"):
+        r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={field: "not-a-color"})
+        assert r.status_code == 422, field
