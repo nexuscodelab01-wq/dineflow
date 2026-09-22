@@ -36,6 +36,7 @@
             <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
+            <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700">Platform</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="hover:text-brand-700">Sign in</NuxtLink>
@@ -64,6 +65,7 @@
             <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Orders</NuxtLink>
             <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Admin</NuxtLink>
+            <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Platform</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Sign in</NuxtLink>
@@ -101,6 +103,7 @@ const ready = ref(false)
 onMounted(() => { ready.value = true })
 const signedIn = computed(() => ready.value && auth.isAuthenticated)
 const staffIn = computed(() => ready.value && auth.isStaff)
+const platformIn = computed(() => ready.value && auth.isPlatformAdmin)
 const cartCount = computed(() => (ready.value ? cart.itemCount : 0))
 
 const hiddenCartBarRoutes = new Set(['/cart', '/checkout'])

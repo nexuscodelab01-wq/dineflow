@@ -28,6 +28,7 @@ export const useAuthStore = defineStore('auth', {
       ['RESTAURANT_ADMIN', 'RESTAURANT_STAFF', 'SUPER_ADMIN'].includes(
         state.user?.role.name ?? '',
       ),
+    isPlatformAdmin: state => state.user?.role.name === 'SUPER_ADMIN',
   },
 
   actions: {

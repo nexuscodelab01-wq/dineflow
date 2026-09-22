@@ -23,6 +23,8 @@ export type Restaurant = {
   delivery_fee: string
   /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */
   reservation_buffer_minutes?: number
+  custom_domain?: string | null
+  domain_verified_at?: string | null
   is_active: boolean
   /** Feature flags for this restaurant's site (only present on the /tenant response). */
   features?: Record<string, boolean>

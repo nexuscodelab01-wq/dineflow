@@ -31,6 +31,7 @@ const form = reactive({
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
+  custom_domain: '',
 })
 
 const dayLabels: Record<Day, string> = {
@@ -82,6 +83,7 @@ onMounted(async () => {
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
+      custom_domain: settings.value.custom_domain || '',
     })
     timezone.value = settings.value.timezone || 'UTC'
     customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
@@ -229,6 +231,16 @@ async function save() {
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">Custom domain</h2>
+        <p class="text-xs text-ink-subtle">Point your own domain at your site (e.g. order.yourrestaurant.com). Point its DNS at this platform, then ask us to verify it.</p>
+        <input v-model="form.custom_domain" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="order.yourrestaurant.com">
+        <p v-if="settings?.custom_domain" class="text-sm">
+          <span v-if="settings.domain_verified_at" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Verified</span>
+          <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Pending verification</span>
+        </p>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
