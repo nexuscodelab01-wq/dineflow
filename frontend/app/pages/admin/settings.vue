@@ -32,6 +32,8 @@ const form = reactive({
   delivery_fee: '',
   reservation_buffer_minutes: 15,
   custom_domain: '',
+  primary_color: '',
+  secondary_color: '',
 })
 
 const dayLabels: Record<Day, string> = {
@@ -84,6 +86,8 @@ onMounted(async () => {
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
       custom_domain: settings.value.custom_domain || '',
+      primary_color: settings.value.primary_color || '',
+      secondary_color: settings.value.secondary_color || '',
     })
     timezone.value = settings.value.timezone || 'UTC'
     customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
@@ -205,6 +209,22 @@ async function save() {
           </div>
         </div>
         <p v-if="logoError" class="text-sm text-red-600" role="alert">{{ logoError }}</p>
+
+        <div class="grid gap-3 border-t border-brand-100 pt-4 sm:grid-cols-2">
+          <label class="block text-sm font-medium">Primary colour <span class="font-normal text-ink-subtle">(buttons, links)</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input v-model="form.primary_color" type="color" class="h-9 w-14 cursor-pointer rounded border">
+              <input v-model="form.primary_color" type="text" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="#2c6f53">
+            </div>
+          </label>
+          <label class="block text-sm font-medium">Secondary colour <span class="font-normal text-ink-subtle">(badges — optional)</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input v-model="form.secondary_color" type="color" class="h-9 w-14 cursor-pointer rounded border">
+              <input v-model="form.secondary_color" type="text" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="#f1c40f">
+            </div>
+          </label>
+        </div>
+        <p class="text-xs text-ink-subtle">Colours only show on your site once "Custom branding" is turned on for your restaurant (ask us if it isn't).</p>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
