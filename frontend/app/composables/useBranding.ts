@@ -10,5 +10,7 @@ export function useBranding() {
     name: computed(() => (enabled.value ? restaurant.current?.name ?? null : null)),
     logo: computed(() => (enabled.value ? nuxtApp.runWithContext(() => resolveMediaUrl(restaurant.current?.logo_url)) : null)),
     color: computed(() => (enabled.value ? restaurant.current?.primary_color ?? null : null)),
+    /** Accent colour for badges/highlights; falls back to the default amber when the restaurant hasn't set one. */
+    secondaryColor: computed(() => (enabled.value ? restaurant.current?.secondary_color ?? null : null)),
   }
 }

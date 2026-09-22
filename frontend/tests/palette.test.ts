@@ -35,4 +35,13 @@ describe('palette', () => {
     expect(paletteCss('#c0392b;}body{display:none')).toBe('')
     expect(paletteCss(null)).toBe('')
   })
+
+  it('adds an accent palette only when a secondary colour is given', () => {
+    const both = paletteCss('#c0392b', '#f1c40f')
+    expect(both).toMatch(/--color-brand-600:#[0-9a-f]{6}/)
+    expect(both).toMatch(/--color-accent-600:#[0-9a-f]{6}/)
+    expect(paletteCss('#c0392b')).not.toMatch(/--color-accent-/)
+    expect(paletteCss(null, '#f1c40f')).toMatch(/^html:root\{(--color-accent-\d+:#[0-9a-f]{6};?){10}\}$/)
+    expect(paletteCss(null, 'not-a-color')).toBe('')
+  })
 })

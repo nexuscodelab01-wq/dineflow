@@ -84,10 +84,17 @@ export function makePalette(base: string): { palette: Palette, adjusted: boolean
   return { palette, adjusted: Math.abs(l600 - hsl.l) > 0.5 && hsl.l > l600 }
 }
 
-/** CSS that re-colours the site. Only ever built from validated hex values, so it is safe to inline. */
-export function paletteCss(base: string | null | undefined): string {
-  const result = base ? makePalette(base) : null
-  if (!result) return ''
-  const vars = BRAND_STEPS.map(step => `--color-brand-${step}:${result.palette[step]}`).join(';')
+/**
+ * CSS that re-colours the site. Only ever built from validated hex values, so it is safe to inline.
+ * `accent` is optional — a restaurant with only a primary colour keeps the default accent (amber).
+ */
+export function paletteCss(base: string | null | undefined, accent?: string | null): string {
+  const brand = base ? makePalette(base) : null
+  const accentResult = accent ? makePalette(accent) : null
+  if (!brand && !accentResult) return ''
+  const vars = [
+    ...(brand ? BRAND_STEPS.map(step => `--color-brand-${step}:${brand.palette[step]}`) : []),
+    ...(accentResult ? BRAND_STEPS.map(step => `--color-accent-${step}:${accentResult.palette[step]}`) : []),
+  ].join(';')
   return `html:root{${vars}}`
 }

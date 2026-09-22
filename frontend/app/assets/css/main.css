@@ -10,6 +10,19 @@
   --color-brand-800: #1f4738;
   --color-brand-900: #1a3b2f;
 
+  /* Accent (secondary) colour, for badges and highlights. Falls back to a warm amber until a
+     restaurant sets its own — see utils/palette.ts. */
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-200: #fde68a;
+  --color-accent-300: #fcd34d;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #b45309;
+  --color-accent-700: #92400e;
+  --color-accent-800: #78350f;
+  --color-accent-900: #451a03;
+
   --color-surface: #f7f5f1;
   --color-surface-muted: #efebe4;
   --color-surface-elevated: #ffffff;
