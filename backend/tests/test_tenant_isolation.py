@@ -46,6 +46,7 @@ PUBLIC = {
     ("GET", "/restaurants/{identifier}"), ("GET", "/restaurants/{identifier}/tables"),
     ("GET", "/restaurants/{identifier}/reservations/availability"),
     ("GET", "/tenant"),
+    ("GET", "/reservations/actions/{token}"), ("POST", "/reservations/actions/{token}/confirm"), ("POST", "/reservations/actions/{token}/cancel"),
 }
 # Identity routes: tenant comes from the credentials / an explicit restaurant, see test_tenancy_auth.py.
 AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout"), ("GET", "/auth/me"), ("GET", "/auth/my-restaurants"),
