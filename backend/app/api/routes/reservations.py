@@ -115,3 +115,39 @@ def cancel_reservation(
         return service.cancel_reservation(reservation_id, user.id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/reservations/actions/{token}", response_model=ReservationRead, dependencies=[rate_limit("reservation-action", 30, 600)])
+def reservation_action_detail(
+    token: str,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    """What the guest sees before confirming or cancelling — no account needed, the link itself proves it's theirs."""
+    try:
+        return service.get_by_action_token(token)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/reservations/actions/{token}/confirm", response_model=ReservationRead, dependencies=[rate_limit("reservation-action", 30, 600)])
+def confirm_reservation_by_link(
+    token: str,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    """"I'll be there" from the reminder email."""
+    try:
+        return service.confirm_attendance(token)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/reservations/actions/{token}/cancel", response_model=ReservationRead, dependencies=[rate_limit("reservation-action", 30, 600)])
+def cancel_reservation_by_link(
+    token: str,
+    service: Annotated[ReservationService, Depends(get_reservation_service)],
+) -> ReservationRead:
+    """Cancel straight from an email link — no account needed, the link itself proves it's theirs."""
+    try:
+        return service.cancel_by_token(token)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc

@@ -50,6 +50,26 @@ def decode_guest_token(token: str) -> dict[str, Any]:
     return payload
 
 
+def create_reservation_action_token(reservation_id: int, restaurant_id: int, expires_at: datetime) -> str:
+    """A link a guest can click straight from an email — no account needed — to confirm or cancel one specific
+    booking. `expires_at` is usually a little after the reservation's own start time, so the link is dead once
+    it can no longer do anything useful."""
+    payload = {
+        "sub": str(reservation_id), "type": "reservation_action", "tenant": restaurant_id, "exp": expires_at,
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_reservation_action_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid or expired link") from exc
+    if payload.get("type") != "reservation_action":
+        raise ValueError("Invalid link")
+    return payload
+
+
 def create_refresh_token_value() -> str:
     return secrets.token_urlsafe(48)
 

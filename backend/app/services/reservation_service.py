@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.hours import status_at
+from app.core.security import create_reservation_action_token, decode_reservation_action_token
+from app.core.tenancy import site_url
 from app.models.enums import ReservationStatus, TableStatus
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
@@ -377,7 +379,7 @@ class ReservationService:
         else:
             self._sync_table_floor_status(table.id, keep_occupied=True)
         if status == ReservationStatus.CONFIRMED:  # (walk-ins and short-lived holds aren't emailed)
-            notify_reservation_confirmed(self.db, restaurant, reservation, table.table_number)
+            notify_reservation_confirmed(self.db, restaurant, reservation, table.table_number, self.action_link(reservation, restaurant))
             self._schedule_reminder(restaurant, reservation, table.table_number)
         self.db.commit()
         self.db.refresh(reservation)
@@ -485,7 +487,7 @@ class ReservationService:
         restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
         if restaurant is not None and reservation.guest_email:
             table_number = reservation.table.table_number if reservation.table else None
-            notify_reservation_confirmed(self.db, restaurant, reservation, table_number)
+            notify_reservation_confirmed(self.db, restaurant, reservation, table_number, self.action_link(reservation, restaurant))
             self._schedule_reminder(restaurant, reservation, table_number)
         self.db.commit()
         self.db.refresh(reservation)
@@ -495,6 +497,9 @@ class ReservationService:
         reservation = self.get_reservation(reservation_id)
         if reservation.user_id != user_id:
             raise AppError("You cannot cancel this reservation")
+        return self._cancel(reservation)
+
+    def _cancel(self, reservation: Reservation) -> ReservationRead:
         if reservation.status not in (ReservationStatus.HELD, ReservationStatus.CONFIRMED):
             raise AppError("This reservation can no longer be cancelled")
         if reservation.order_id is not None:
@@ -506,6 +511,38 @@ class ReservationService:
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
+
+    # ------------------------------------------------------------------ acting from an emailed link (no account)
+
+    def _issue_action_token(self, reservation: Reservation) -> str:
+        expires_at = max(reservation.starts_at + timedelta(hours=3), _utcnow() + timedelta(hours=1))
+        return create_reservation_action_token(reservation.id, reservation.restaurant_id, expires_at)
+
+    def action_link(self, reservation: Reservation, restaurant) -> str:
+        return f"{site_url(restaurant)}/reservations/manage?token={self._issue_action_token(reservation)}"
+
+    def _from_action_token(self, token: str) -> Reservation:
+        try:
+            payload = decode_reservation_action_token(token)
+            reservation_id, restaurant_id = int(payload["sub"]), int(payload["tenant"])
+        except (ValueError, KeyError, TypeError):
+            raise AppError("This link is invalid or has expired. Please contact the restaurant.") from None
+        return self.get_reservation(reservation_id, restaurant_id, expire=False)
+
+    def get_by_action_token(self, token: str) -> ReservationRead:
+        return self._to_read(self._from_action_token(token))
+
+    def confirm_attendance(self, token: str) -> ReservationRead:
+        reservation = self._from_action_token(token)
+        if reservation.status not in (ReservationStatus.CONFIRMED, ReservationStatus.SEATED):
+            raise AppError("This reservation can no longer be confirmed")
+        reservation.guest_confirmed_at = _utcnow()
+        self.db.commit()
+        self.db.refresh(reservation)
+        return self._to_read(reservation)
+
+    def cancel_by_token(self, token: str) -> ReservationRead:
+        return self._cancel(self._from_action_token(token))
 
     # ------------------------------------------------------------------ staff actions
 
@@ -774,7 +811,7 @@ class ReservationService:
         if lead < timedelta(hours=self.REMINDER_LEAD_HOURS + 0.5):
             return  # too soon for a separate reminder to be useful
         run_at = reservation.starts_at - timedelta(hours=self.REMINDER_LEAD_HOURS)
-        notify_reservation_reminder(self.db, restaurant, reservation, table_number, run_at)
+        notify_reservation_reminder(self.db, restaurant, reservation, table_number, run_at, self.action_link(reservation, restaurant))
 
     def _require_open(self, restaurant, starts_at: datetime) -> None:
         status = status_at(restaurant, starts_at)
@@ -1075,4 +1112,5 @@ class ReservationService:
             created_at=reservation.created_at,
             overdue_minutes=self._overdue_minutes(reservation, _utcnow()),
             blocked_by=self._blocked_by(reservation),
+            guest_confirmed_at=reservation.guest_confirmed_at,
         )

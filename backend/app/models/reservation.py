@@ -47,6 +47,8 @@ class Reservation(TimestampMixin, Base):
     guest_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     guest_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The guest tapped "I'll be there" from the reminder email — a signal for staff, not required for the visit.
+    guest_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="reservations")
     table: Mapped["RestaurantTable"] = relationship("RestaurantTable", back_populates="reservations")

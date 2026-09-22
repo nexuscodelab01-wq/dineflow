@@ -114,14 +114,21 @@ def _reservation_details(reservation, table_number: str | None, restaurant=None)
     return line, escape(line)
 
 
-def notify_reservation_confirmed(db: Session, restaurant, reservation, table_number: str | None) -> None:
+def notify_reservation_confirmed(db: Session, restaurant, reservation, table_number: str | None, manage_link: str | None = None) -> None:
     text_line, html_line = _reservation_details(reservation, table_number, restaurant)
     subject = f"Your table at {restaurant.name} is booked"
-    text = f"Hi {reservation.guest_name},\n\nYour reservation is confirmed:\n{text_line}\n\nNeed to change it? Sign in at {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve or contact us.\n\n— {restaurant.name}"
+    text = f"Hi {reservation.guest_name},\n\nYour reservation is confirmed:\n{text_line}\n\nNeed to change it?"
+    text += f" {manage_link}\n\nThis link works until shortly after your booking time." if manage_link else f" Sign in at {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve or contact us."
+    text += f"\n\n— {restaurant.name}"
+    manage = (
+        _button(manage_link, "Manage your reservation")
+        if manage_link else
+        f'<p>Need to change it? <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">Manage your reservation</a> or contact us.</p>'
+    )
     body = (
         f"<p>Hi {escape(reservation.guest_name)}, your reservation is confirmed:</p>"
         f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px"><strong>{html_line}</strong></p>'
-        f'<p>Need to change it? <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">Manage your reservation</a> or contact us.</p>'
+        f"{manage}"
     )
     _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "You're booked", body), f"email:reservation:{reservation.id}:confirmed")
 
@@ -201,16 +208,23 @@ def reminder_dedupe_key(reservation_id: int) -> str:
     return f"email:reservation:{reservation_id}:reminder"
 
 
-def notify_reservation_reminder(db: Session, restaurant, reservation, table_number: str | None, run_at) -> None:
+def notify_reservation_reminder(db: Session, restaurant, reservation, table_number: str | None, run_at, manage_link: str | None = None) -> None:
     """Queued ahead of time (`run_at` = a few hours before the booking); the wording avoids "confirmed" since
     this arrives long after that email did."""
     text_line, html_line = _reservation_details(reservation, table_number, restaurant)
     subject = f"See you soon — your table at {restaurant.name}"
-    text = f"Hi {reservation.guest_name},\n\nJust a reminder about your reservation:\n{text_line}\n\nWe're looking forward to it!\n\n— {restaurant.name}"
+    text = f"Hi {reservation.guest_name},\n\nJust a reminder about your reservation:\n{text_line}\n\nWe're looking forward to it!"
+    text += f"\n\nLet us know you're coming, or cancel if your plans changed: {manage_link}" if manage_link else ""
+    text += f"\n\n— {restaurant.name}"
+    manage = (
+        f'<p>{_button(manage_link, "I\'ll be there / Cancel")}</p>'
+        if manage_link else ""
+    )
     body = (
         f"<p>Hi {escape(reservation.guest_name)}, just a reminder about your reservation:</p>"
         f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px"><strong>{html_line}</strong></p>'
         "<p>We're looking forward to it!</p>"
+        f"{manage}"
     )
     _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "See you soon", body), reminder_dedupe_key(reservation.id), run_at=run_at)
 

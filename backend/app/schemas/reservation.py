@@ -72,6 +72,8 @@ class ReservationRead(BaseModel):
     overdue_minutes: int = 0
     # For an upcoming booking: name of the seated party still occupying its table when it is due.
     blocked_by: str | None = None
+    # The guest tapped "I'll be there" from the reminder email.
+    guest_confirmed_at: datetime | None = None
 
 
 class AvailableTableRead(BaseModel):
