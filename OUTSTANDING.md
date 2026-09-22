@@ -48,6 +48,11 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - "Auto no-show release" only frees a table once the whole booked window has elapsed (existing behaviour); a faster release shortly after the start time, with a configurable grace period, isn't built.
 - A cancelled-by-link booking that had an order attached is refused (same rule as cancelling while signed in) — the guest is told to contact the restaurant, with no in-page way to do that.
 
+### 10. Platform console follow-ups
+- **Domain verification is a mock** — no real DNS/TLS check, just a button a platform admin clicks. Flagged clearly in the UI and docs; replace before it matters for anything real.
+- No tenant status/health, no impersonation, no flag-editing UI, no list of *inactive* restaurants (the console only shows active ones), no way to deactivate or delete a restaurant from the console (only via direct database access today).
+- The new-restaurant form has no client-side domain-format check before submitting — the backend rejects a bad one, but the error only shows up after a round trip.
+
 ## Done
 - Password reset, change-password and owner invite links (no more printed passwords); header, sidebar and profile no longer show labels over the wrong links after a page load.
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.

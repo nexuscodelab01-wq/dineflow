@@ -160,11 +160,11 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 ### Stage D — Growth features · ongoing, one flag at a time
 Loyalty · reviews · coupons/gift cards · scheduled pickup slots · delivery zones/fees · order throttling when busy · analytics 2.0 · multi-language · web push · smart features (§7.6).
 
-### Stage E — SaaS shell · ~6–8 weeks, when a client is ready
-- [ ] Platform console: tenants, status, health, impersonate (audited), flag UI.
-- [ ] Onboarding wizard with live preview → owner invite → handover checklist; tenant lifecycle `draft → preview → live → suspended → archived`.
+### Stage E — SaaS shell · ~6–8 weeks, when a client is ready · *first slice built early, at the user's request*
+- [x] **Platform console** (`/platform`, platform admins only): lists every tenant and creates a new one from a form — name, slug (auto-filled, editable), owner email/name, brand colour, logo, menu template, timezone and an optional custom domain — the same thing `create-tenant` does, now with no terminal needed. Shows the site link and a one-time owner invite link on success.
+- [ ] Not yet: tenant status/health, impersonation (audited), a flag-editing UI (flags are CLI/API only today), the onboarding *wizard* (live preview, handover checklist), tenant lifecycle states.
 - [ ] Full branding engine: fonts, radius, hero, 2–3 templates, reorderable sections, branded emails, Open Graph.
-- [ ] Custom domains: DNS verification + automatic TLS.
+- [x] **Custom domains — mocked**: a restaurant can set one (validated, unique) from its own Settings page or at creation; a platform admin marks it "Verified" from the console with one click. There is no real DNS or TLS check behind that click yet — replace `POST /platform/restaurants/{id}/verify-domain` with a real lookup before depending on it for anything.
 - [ ] Billing (Stripe Billing or invoices), plans ↔ entitlements, terms/privacy, GDPR export/delete, status page, data export on exit.
 
 ## 6. Feature catalog
