@@ -32,6 +32,8 @@ class Restaurant(TimestampMixin, Base):
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Brand colour as #rrggbb; the site derives its whole palette from it (when the custom_branding flag is on).
     primary_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    # Accent colour for badges, highlights and secondary buttons; optional — falls back to the primary palette.
+    secondary_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)

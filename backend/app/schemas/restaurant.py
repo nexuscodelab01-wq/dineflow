@@ -16,6 +16,7 @@ class RestaurantRead(BaseModel):
     description: str | None = None
     logo_url: str | None = None
     primary_color: str | None = None
+    secondary_color: str | None = None
     address: str | None = None
     city: str | None = None
     postal_code: str | None = None

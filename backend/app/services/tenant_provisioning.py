@@ -100,6 +100,7 @@ def provision_tenant(
     slug: str,
     owner_email: str,
     color: str | None = None,
+    secondary_color: str | None = None,
     logo: bytes | None = None,
     template: str = "generic",
     timezone: str = "UTC",
@@ -117,6 +118,8 @@ def provision_tenant(
         raise AppError(f"Unknown template '{template}'. Choose one of: {', '.join(TEMPLATES)}")
     if color is not None and not COLOR.match(color):
         raise AppError("Colour must look like #1a7f5a")
+    if secondary_color is not None and not COLOR.match(secondary_color):
+        raise AppError("Secondary colour must look like #1a7f5a")
     if not valid_timezone(timezone):
         raise AppError(f"'{timezone}' is not a known timezone (e.g. 'America/Los_Angeles', 'Europe/London', 'UTC')")
     if db.scalar(select(Restaurant.id).where(Restaurant.slug == slug)) is not None:
@@ -136,6 +139,7 @@ def provision_tenant(
 
     restaurant = Restaurant(
         name=name, slug=slug, order_prefix=order_prefix(name), primary_color=color.lower() if color else None,
+        secondary_color=secondary_color.lower() if secondary_color else None,
         opening_hours=HOURS, timezone=timezone, custom_domain=custom_domain,
         tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
     )
