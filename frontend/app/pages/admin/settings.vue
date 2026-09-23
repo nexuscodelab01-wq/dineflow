@@ -33,6 +33,7 @@ const form = reactive({
   reservation_buffer_minutes: 15,
   min_party_size: 1,
   max_party_size: null as number | null,
+  max_covers_per_slot: null as number | null,
   booking_lead_time_minutes: 0,
   custom_domain: '',
   primary_color: '',
@@ -90,6 +91,7 @@ onMounted(async () => {
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
       min_party_size: settings.value.min_party_size ?? 1,
       max_party_size: settings.value.max_party_size ?? null,
+      max_covers_per_slot: settings.value.max_covers_per_slot ?? null,
       booking_lead_time_minutes: settings.value.booking_lead_time_minutes ?? 0,
       custom_domain: settings.value.custom_domain || '',
       primary_color: settings.value.primary_color || '',
@@ -177,6 +179,7 @@ async function save() {
       delivery_fee: form.delivery_fee,
       // An emptied number input leaves the ref as '' rather than null.
       max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
+      max_covers_per_slot: form.max_covers_per_slot === '' || form.max_covers_per_slot == null ? null : Number(form.max_covers_per_slot),
       timezone: timezone.value,
       opening_hours: openingHours,
       closures: closures.value.map(c => ({ date: c.date, label: c.label || null })),
@@ -358,6 +361,11 @@ async function save() {
               <span class="mb-1 block font-medium">Minimum notice (minutes)</span>
               <input v-model.number="form.booking_lead_time_minutes" type="number" min="0" step="15" class="w-full rounded-lg border px-3 py-2 text-sm">
               <span class="mt-1 block text-xs text-ink-subtle">0 allows booking right up to the start time.</span>
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block font-medium">Max covers per 15 min <span class="font-normal text-ink-subtle">(blank = no limit)</span></span>
+              <input v-model.number="form.max_covers_per_slot" type="number" min="1" placeholder="—" class="w-full rounded-lg border px-3 py-2 text-sm">
+              <span class="mt-1 block text-xs text-ink-subtle">Caps total guests arriving in the same 15 minutes — protects the kitchen even when tables are free.</span>
             </label>
           </div>
         </div>

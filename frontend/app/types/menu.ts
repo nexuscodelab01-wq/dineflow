@@ -29,6 +29,8 @@ export type Restaurant = {
   max_party_size?: number | null
   /** How much notice a guest must give before a booking's start time. */
   booking_lead_time_minutes?: number
+  /** Max total covers per 15-minute arrival slot. null/undefined = no limit. */
+  max_covers_per_slot?: number | null
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean
