@@ -23,4 +23,5 @@ FEATURES: dict[str, Feature] = {
     "pay_at_table": Feature(False, "Guests split and pay the bill from their phone"),
     "kitchen_v2": Feature(False, "New kitchen display with stations and course timing"),
     "custom_branding": Feature(False, "Restaurant's own logo, colours and fonts on its site"),
+    "reviews": Feature(False, "Guests can rate and review a completed visit; shown on the site"),
 }

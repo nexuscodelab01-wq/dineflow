@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError, raise_http_for_app_error
+from app.core.exceptions import ForbiddenError, NotFoundError, raise_http_for_app_error
 from app.core.tenancy import resolve_tenant
 from app.db.session import get_db
 from app.dependencies.auth import require_roles
@@ -14,7 +14,10 @@ from app.models.enums import RoleName
 from app.models.restaurant_table import RestaurantTable
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.restaurant import RestaurantRead
+from app.schemas.review import PublicReviewList
+from app.services.feature_service import FeatureService
 from app.services.reservation_service import ReservationService
+from app.services.review_service import ReviewService
 
 router = APIRouter(prefix="/restaurants")
 
@@ -71,3 +74,18 @@ def list_tables(
         }
         for table in tables
     ]
+
+
+@router.get("/{identifier}/reviews", response_model=PublicReviewList)
+def list_public_reviews(
+    identifier: str,
+    db: Annotated[Session, Depends(get_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50),
+) -> PublicReviewList:
+    restaurant = RestaurantRepository(db).get_by_id_or_slug(identifier)
+    if restaurant is None or not restaurant.is_active:
+        raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
+    if not FeatureService(db).is_enabled(restaurant.id, "reviews"):
+        raise raise_http_for_app_error(ForbiddenError("Reviews are not available for this restaurant"))
+    return ReviewService(db).public_list(restaurant.id, page=page, page_size=page_size)

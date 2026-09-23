@@ -45,6 +45,7 @@ PUBLIC = {
     ("GET", "/categories"), ("GET", "/menu"), ("GET", "/menu/{item_id}"),
     ("GET", "/restaurants/{identifier}"), ("GET", "/restaurants/{identifier}/tables"),
     ("GET", "/restaurants/{identifier}/reservations/availability"),
+    ("GET", "/restaurants/{identifier}/reviews"),
     ("GET", "/tenant"),
     ("GET", "/reservations/actions/{token}"), ("POST", "/reservations/actions/{token}/confirm"), ("POST", "/reservations/actions/{token}/cancel"),
 }
@@ -56,6 +57,7 @@ CUSTOMER = {
     ("GET", "/orders"), ("POST", "/orders"), ("GET", "/orders/{order_id}"), ("GET", "/orders/{order_id}/stream"),
     ("GET", "/reservations/me"), ("POST", "/reservations/{reservation_id}/confirm"),
     ("POST", "/reservations/{reservation_id}/cancel"), ("POST", "/restaurants/{identifier}/reservations"),
+    ("GET", "/reviews"), ("POST", "/reviews"), ("GET", "/reviews/eligible"),
 }
 # Guests at a table: a table pass (not an account) bound to one restaurant's open session; see test_table_ordering.py.
 GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "/table-session/stream"), ("POST", "/table-session/requests")}

@@ -64,10 +64,12 @@ from app.schemas.reservation import (
     ReservationUpdate,
 )
 from app.schemas.restaurant import RestaurantRead
+from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
+from app.services.review_service import ReviewService
 from app.services.waitlist_service import WaitlistService
 from app.utils.date_ranges import DateRangePreset
 
@@ -93,6 +95,10 @@ def get_reservation_service(db: Annotated[Session, Depends(get_db)]) -> Reservat
 
 def get_waitlist_service(db: Annotated[Session, Depends(get_db)]) -> WaitlistService:
     return WaitlistService(db)
+
+
+def get_review_service(db: Annotated[Session, Depends(get_db)]) -> ReviewService:
+    return ReviewService(db)
 
 
 def _handle(exc: Exception):
@@ -805,6 +811,45 @@ def cancel_waitlist_entry(
 ) -> WaitlistRead:
     try:
         return service.cancel(entry_id, restaurant_id)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+# ------------------------------------------------------------------ reviews
+
+@router.get("/reviews", response_model=list[AdminReviewRead], dependencies=[Depends(requires_feature("reviews"))])
+def list_reviews(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReviewService, Depends(get_review_service)],
+) -> list[AdminReviewRead]:
+    return service.admin_list(restaurant_id)
+
+
+@router.post("/reviews/{review_id}/moderate", response_model=AdminReviewRead, dependencies=[Depends(requires_feature("reviews"))])
+def moderate_review(
+    review_id: int,
+    data: ReviewModerate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReviewService, Depends(get_review_service)],
+) -> AdminReviewRead:
+    try:
+        return service.moderate(review_id, restaurant_id, data.is_published)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/reviews/{review_id}/reply", response_model=AdminReviewRead, dependencies=[Depends(requires_feature("reviews"))])
+def reply_to_review(
+    review_id: int,
+    data: ReviewReply,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[ReviewService, Depends(get_review_service)],
+) -> AdminReviewRead:
+    try:
+        return service.reply(review_id, restaurant_id, data.reply)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
