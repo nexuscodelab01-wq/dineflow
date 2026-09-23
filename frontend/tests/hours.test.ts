@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { openStatus, parseDay, todaysHoursLabel } from '../app/utils/hours'
+import { openStatus, parseDay, todaysHoursLabel, weeklyHoursLabels } from '../app/utils/hours'
 
 const WEEKLY = {
   monday: '11:00-22:00', tuesday: '11:00-22:00', wednesday: '11:00-22:00', thursday: '11:00-22:00',
@@ -63,5 +63,18 @@ describe('todaysHoursLabel', () => {
     expect(todaysHoursLabel(WEEKLY, mon(9, 0))).toBe('11:00–22:00')
     expect(todaysHoursLabel(WEEKLY, sun(9, 0))).toBe('Closed today')
     expect(todaysHoursLabel(null)).toBeNull()
+  })
+})
+
+describe('weeklyHoursLabels', () => {
+  it('formats every day, marking the given index as today', () => {
+    const rows = weeklyHoursLabels(WEEKLY, 0)
+    expect(rows[0]).toEqual({ day: 'monday', label: '11:00–22:00', isToday: true })
+    expect(rows[6]).toEqual({ day: 'sunday', label: 'Closed', isToday: false })
+    expect(rows.every(r => r.day !== 'monday' ? !r.isToday : true)).toBe(true)
+  })
+
+  it('marks nothing as today when no index is given', () => {
+    expect(weeklyHoursLabels(WEEKLY).every(r => !r.isToday)).toBe(true)
   })
 })

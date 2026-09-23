@@ -88,3 +88,24 @@ export function todaysHoursLabel(hours: OpeningHours | null | undefined, now = n
   const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
   return `${fmt(window[0])}–${fmt(window[1])}`
 }
+
+const DAY_LABELS: Record<Day, string> = {
+  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
+  friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
+}
+
+/** Every day of the week formatted for display, e.g. for a "Visit us" hours list. `isToday` lets the
+ * caller highlight the current day (pass the restaurant's own local weekday index, Monday=0). */
+export function weeklyHoursLabels(hours: OpeningHours | null | undefined, todayIndex?: number): { day: Day, label: string, isToday: boolean }[] {
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+  return DAYS.map((day, i) => {
+    const window = parseDay(hours?.[day])
+    return {
+      day,
+      label: window ? `${fmt(window[0])}–${fmt(window[1])}` : 'Closed',
+      isToday: i === todayIndex,
+    }
+  })
+}
+
+export { DAY_LABELS }
