@@ -46,7 +46,9 @@ const guestName = ref('')
 const guestPhone = ref('')
 const lastBooked = ref<Reservation | null>(null)
 
-const partyValid = computed(() => Number.isInteger(partySize.value) && partySize.value >= 1 && partySize.value <= 20)
+const minParty = computed(() => restaurant.current?.min_party_size ?? 1)
+const maxParty = computed(() => restaurant.current?.max_party_size ?? 20)
+const partyValid = computed(() => Number.isInteger(partySize.value) && partySize.value >= minParty.value && partySize.value <= maxParty.value)
 const selectedTable = computed(() => floor.value.find(t => t.id === selectedTableId.value) ?? null)
 
 const zoneOf = (t: { zone?: string | null }) => t.zone || UNASSIGNED_ZONE
@@ -101,7 +103,9 @@ async function loadMine() {
 onMounted(() => {
   startsLocal.value = toLocalInput(roundUpToStep(new Date(Date.now() + 60 * 60000), 30))
   // `min` must sit on the 15-minute grid: datetime-local measures `step` from `min`.
-  minStart.value = toLocalInput(roundUpToStep(new Date(), 15))
+  const leadMinutes = restaurant.current?.booking_lead_time_minutes ?? 0
+  minStart.value = toLocalInput(roundUpToStep(new Date(Date.now() + leadMinutes * 60000), 15))
+  partySize.value = Math.min(Math.max(partySize.value, minParty.value), maxParty.value ?? partySize.value)
   loadMine()
 })
 watch(showHistory, loadMine)
@@ -249,7 +253,10 @@ function canCancel(r: Reservation) {
       <form class="mt-4 grid gap-3 sm:grid-cols-3" @submit.prevent="searchTables">
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Party size</span>
-          <input v-model.number="partySize" type="number" min="1" max="20" required class="w-full rounded-lg border border-brand-200 px-3 py-2">
+          <input v-model.number="partySize" type="number" :min="minParty" :max="maxParty" required class="w-full rounded-lg border border-brand-200 px-3 py-2">
+          <span v-if="minParty > 1 || maxParty < 20" class="mt-1 block text-xs text-ink-subtle">
+            {{ minParty > 1 ? `${minParty}–${maxParty} guests online` : `Up to ${maxParty} guests online` }}
+          </span>
         </label>
         <label class="block text-sm sm:col-span-2">
           <span class="mb-1 block font-medium">Date &amp; time</span>
