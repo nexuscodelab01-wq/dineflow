@@ -5,6 +5,12 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 
 ## Open
 
+### 0. Embeddable widget and table combining follow-ups
+- `/embed/reserve` sends `Content-Security-Policy: frame-ancestors *` — any site can iframe it. Fine for now (no client yet); tighten to the tenant's own domain(s) before it matters for a real client.
+- Combining tables doesn't move the extras if the primary table is later moved/rescheduled to a table that's part of a *different* combination — edit each booking's tables explicitly in that case.
+- Waiter view and the guest-facing table QR flow don't show "combined with Table X" — a combined booking's extra tables are only visible on the admin Reservations page and the floor/table detail view.
+- The calendar view's day cells count *all* active bookings, not distinct parties at overlapping times — fine as a busy/quiet indicator, not a capacity readout.
+
 ### 1. Branding gaps
 - Apply branding to the admin area and emails (logo/colour in the templates).
 
