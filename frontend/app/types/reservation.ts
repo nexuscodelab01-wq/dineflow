@@ -132,3 +132,30 @@ export type CreateReservationPayload = {
   notes?: string
   hold?: boolean
 }
+
+export type WaitlistStatus = 'WAITING' | 'NOTIFIED' | 'SEATED' | 'CANCELLED'
+
+export type WaitlistEntry = {
+  id: number
+  guest_name: string
+  guest_email?: string | null
+  guest_phone?: string | null
+  party_size: number
+  notes?: string | null
+  quoted_minutes?: number | null
+  status: WaitlistStatus
+  notified_at?: string | null
+  reservation_id?: number | null
+  created_at: string
+  /** Minutes since joining (or since being notified, once notified) — computed by the server. */
+  waiting_minutes: number
+}
+
+export type WaitlistCreatePayload = {
+  guest_name: string
+  guest_email?: string
+  guest_phone?: string
+  party_size: number
+  notes?: string
+  quoted_minutes?: number
+}

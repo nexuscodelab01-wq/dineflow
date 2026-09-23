@@ -5,6 +5,8 @@ import type {
   Reservation,
   ReservationStatus,
   UpdateReservationPayload,
+  WaitlistCreatePayload,
+  WaitlistEntry,
 } from '~/types/reservation'
 import { apiFetch } from '~/services/http'
 
@@ -143,5 +145,37 @@ export function cancelReservationByActionToken(token: string) {
   return apiFetch<Reservation>(`/api/v1/reservations/actions/${encodeURIComponent(token)}/cancel`, {
     method: 'POST',
     auth: false,
+  })
+}
+
+// ---- waitlist (walk-in queue) ------------------------------------------------------------------
+
+export function fetchWaitlist(restaurantId: number) {
+  return apiFetch<WaitlistEntry[]>(`/api/v1/admin/waitlist?restaurant_id=${restaurantId}`)
+}
+
+export function addToWaitlist(restaurantId: number, payload: WaitlistCreatePayload) {
+  return apiFetch<WaitlistEntry>(`/api/v1/admin/waitlist?restaurant_id=${restaurantId}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function notifyWaitlistEntry(restaurantId: number, entryId: number) {
+  return apiFetch<WaitlistEntry>(`/api/v1/admin/waitlist/${entryId}/notify?restaurant_id=${restaurantId}`, {
+    method: 'POST',
+  })
+}
+
+export function seatWaitlistEntry(restaurantId: number, entryId: number, tableId: number, durationMinutes?: number) {
+  return apiFetch<WaitlistEntry>(`/api/v1/admin/waitlist/${entryId}/seat?restaurant_id=${restaurantId}`, {
+    method: 'POST',
+    body: JSON.stringify({ table_id: tableId, ...(durationMinutes ? { duration_minutes: durationMinutes } : {}) }),
+  })
+}
+
+export function cancelWaitlistEntry(restaurantId: number, entryId: number) {
+  return apiFetch<WaitlistEntry>(`/api/v1/admin/waitlist/${entryId}/cancel?restaurant_id=${restaurantId}`, {
+    method: 'POST',
   })
 }
