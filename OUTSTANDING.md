@@ -47,7 +47,12 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - "Auto no-show release" only frees a table once the whole booked window has elapsed (existing behaviour); a faster release shortly after the start time, with a configurable grace period, isn't built.
 - A cancelled-by-link booking that had an order attached is refused (same rule as cancelling while signed in) — the guest is told to contact the restaurant, with no in-page way to do that.
 
-### 10. Platform console follow-ups
+### 10. Waitlist follow-ups
+- Email only — no SMS ("text me when it's ready") since no SMS provider is chosen yet.
+- The 30-second poll on `/admin/waitlist` is a placeholder; move it onto the existing SSE channel if the queue gets busy enough to notice the lag.
+- No quoted-wait auto-estimate (staff enter it by hand) and no "seated late" tracking.
+
+### 11. Platform console follow-ups
 - **Domain verification is a mock** — no real DNS/TLS check, just a button a platform admin clicks. Flagged clearly in the UI and docs; replace before it matters for anything real.
 - No tenant status/health, no impersonation, no flag-editing UI, no list of *inactive* restaurants (the console only shows active ones), no way to deactivate or delete a restaurant from the console (only via direct database access today).
 - The new-restaurant form has no client-side domain-format check before submitting — the backend rejects a bad one, but the error only shows up after a round trip.
