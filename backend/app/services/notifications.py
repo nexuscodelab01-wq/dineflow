@@ -145,6 +145,18 @@ def notify_reservation_cancelled(db: Session, restaurant, reservation, table_num
     _queue_email(db, restaurant, reservation.guest_email, subject, text, _layout(restaurant, "Reservation cancelled", body), f"email:reservation:{reservation.id}:cancelled")
 
 
+# ---------------------------------------------------------------------------------- waitlist
+
+def notify_waitlist_ready(db: Session, restaurant, entry) -> None:
+    subject = f"Your table at {restaurant.name} is ready"
+    text = f"Hi {entry.guest_name},\n\nYour table for {entry.party_size} is ready — please come to the host stand.\n\n— {restaurant.name}"
+    body = (
+        f"<p>Hi {escape(entry.guest_name)}, your table for {entry.party_size} is ready.</p>"
+        f'<p style="font-size:16px;background:#f1efe9;padding:12px 16px;border-radius:8px">Please come to the host stand.</p>'
+    )
+    _queue_email(db, restaurant, entry.guest_email, subject, text, _layout(restaurant, "Your table is ready", body), f"email:waitlist:{entry.id}:notified")
+
+
 # ---------------------------------------------------------------------------------- accounts
 
 class _Platform:
