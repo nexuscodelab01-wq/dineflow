@@ -445,6 +445,7 @@ class AdminService:
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
         old_logo = restaurant.logo_url
+        old_gallery = list(restaurant.gallery or [])
         payload = data.model_dump(exclude_unset=True)
         if "custom_domain" in payload and payload["custom_domain"] != restaurant.custom_domain:
             restaurant.domain_verified_at = None  # a changed domain needs verifying again
@@ -459,6 +460,8 @@ class AdminService:
             raise ConflictError("That domain is already in use by another restaurant") from exc
         if old_logo and old_logo != restaurant.logo_url:
             delete_owned_url(old_logo, restaurant_id)
+        for removed in set(old_gallery) - set(restaurant.gallery or []):
+            delete_owned_url(removed, restaurant_id)
         return RestaurantRead.model_validate(restaurant)
 
     # Helpers

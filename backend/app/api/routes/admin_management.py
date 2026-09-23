@@ -284,6 +284,16 @@ async def upload_logo(
     return await _store_image(file, restaurant_id, "branding", max_side=800, with_thumb=False)
 
 
+@router.post("/uploads/gallery-image")
+async def upload_gallery_image(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    file: UploadFile = File(...),
+) -> dict[str, str | None]:
+    """A home page gallery photo. Append the returned url to `gallery` via PATCH /admin/settings."""
+    return await _store_image(file, restaurant_id, "gallery", max_side=1600, with_thumb=False)
+
+
 @router.get("/modifiers", response_model=list[MenuModifierRead])
 def list_modifiers(
     _: StaffUser,
