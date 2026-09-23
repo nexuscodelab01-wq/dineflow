@@ -194,6 +194,16 @@ export function uploadLogo(restaurantId: number, file: File) {
   })
 }
 
+/** A home page gallery photo. The returned url is appended to `gallery` by the caller. */
+export function uploadGalleryImage(restaurantId: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return apiFetch<{ url: string }>(q(restaurantId, '/uploads/gallery-image'), {
+    method: 'POST',
+    body,
+  })
+}
+
 // ---- kitchen screen actions -----------------------------------------------------------------------
 
 export function bumpItem(restaurantId: number, itemId: number) {

@@ -31,6 +31,14 @@ export type Restaurant = {
   booking_lead_time_minutes?: number
   /** Max total covers per 15-minute arrival slot. null/undefined = no limit. */
   max_covers_per_slot?: number | null
+  /** Longer-form home page story — `description` stays the short hero/menu-page tagline. */
+  about_text?: string | null
+  /** Home page photo gallery: ordered image URLs. */
+  gallery?: string[]
+  social_links?: Partial<Record<'instagram' | 'facebook' | 'twitter' | 'tiktok' | 'youtube', string>>
+  /** Optional map coordinates for the home page; null = no embedded map, just the address text. */
+  latitude?: string | null
+  longitude?: string | null
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean
