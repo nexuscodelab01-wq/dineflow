@@ -286,11 +286,49 @@ class RestaurantSettingsUpdate(BaseModel):
     max_party_size: int | None = Field(default=None, ge=1, le=20)
     booking_lead_time_minutes: int | None = Field(default=None, ge=0, le=10080)  # up to a week's notice
     max_covers_per_slot: int | None = Field(default=None, ge=1, le=1000)
+    # Home page content.
+    about_text: str | None = Field(default=None, max_length=4000)
+    gallery: list[str] | None = Field(default=None, max_length=20)
+    social_links: dict[str, str] | None = None
+    latitude: Decimal | None = Field(default=None, ge=-90, le=90)
+    longitude: Decimal | None = Field(default=None, ge=-180, le=180)
 
     @field_validator("logo_url")
     @classmethod
     def _check_logo_url(cls, value: str | None) -> str | None:
         return _media_url(value)
+
+    @field_validator("about_text")
+    @classmethod
+    def _check_about_text(cls, value: str | None) -> str | None:
+        value = (value or "").strip()
+        return value or None
+
+    @field_validator("gallery")
+    @classmethod
+    def _check_gallery(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned = [_media_url(v) for v in value]
+        return [v for v in cleaned if v]
+
+    @field_validator("social_links")
+    @classmethod
+    def _check_social_links(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        if value is None:
+            return None
+        allowed = {"instagram", "facebook", "twitter", "tiktok", "youtube"}
+        cleaned: dict[str, str] = {}
+        for key, url in value.items():
+            if key not in allowed:
+                raise ValueError(f"Unknown social link '{key}' — allowed: {', '.join(sorted(allowed))}")
+            url = (url or "").strip()
+            if not url:
+                continue
+            if len(url) > 500 or not url.startswith(("https://", "http://")):
+                raise ValueError(f"{key} link must be a full http(s) URL")
+            cleaned[key] = url
+        return cleaned
 
     @field_validator("opening_hours")
     @classmethod

@@ -72,6 +72,16 @@ class Restaurant(TimestampMixin, Base):
     # Null = no cap. Independent of table availability — protects the kitchen from an arrival flood
     # even when there happen to be enough free tables.
     max_covers_per_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Longer-form story for the home page's "About us" section — `description` stays the short
+    # tagline shown in the hero and menu page.
+    about_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Photo gallery for the home page: an ordered list of uploaded/linked image URLs.
+    gallery: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
+    # {"instagram": "https://...", "facebook": "https://...", ...} — every key optional.
+    social_links: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="'{}'::jsonb", nullable=False)
+    # Optional map coordinates for the home page. Null = no embedded map, just the address text.
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

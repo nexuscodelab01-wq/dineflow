@@ -35,6 +35,11 @@ class RestaurantRead(BaseModel):
     max_party_size: int | None = None
     booking_lead_time_minutes: int = 0
     max_covers_per_slot: int | None = None
+    about_text: str | None = None
+    gallery: list[str] = []
+    social_links: dict[str, str] = {}
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool
