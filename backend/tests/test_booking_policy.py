@@ -30,17 +30,19 @@ def world(client, db):
     db.flush()
     admin = make_user(db, "policy-admin@iso-demo.com", RoleName.RESTAURANT_ADMIN)
     customer = make_user(db, "policy-cust@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
+    customer2 = make_user(db, "policy-cust2@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
     db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
     cat = Category(restaurant_id=restaurant.id, name="Mains", slug="mains")
     db.add(cat)
     db.flush()
     db.add(MenuItem(restaurant_id=restaurant.id, category_id=cat.id, name="Soup", price=Decimal("9.00"), is_available=True))
     table = RestaurantTable(restaurant_id=restaurant.id, table_number="P1", capacity=20, status=TableStatus.AVAILABLE)
-    db.add(table)
+    table2 = RestaurantTable(restaurant_id=restaurant.id, table_number="P2", capacity=20, status=TableStatus.AVAILABLE)
+    db.add_all([table, table2])
     db.flush()
     db.expire_all()
     yield type("W", (), {"client": client, "db": db, "rid": restaurant.id, "restaurant": restaurant, "admin": admin,
-                         "customer": customer, "table": table})
+                         "customer": customer, "customer2": customer2, "table": table, "table2": table2})
     app.dependency_overrides.clear()
 
 
@@ -50,9 +52,9 @@ def set_policy(w, **fields):
     return r.json()
 
 
-def book(w, starts, party_size=2, headers=None):
+def book(w, starts, party_size=2, headers=None, table=None):
     return w.client.post(f"{API}/restaurants/{w.restaurant.slug}/reservations", headers=headers or header(w.customer), json={
-        "table_id": w.table.id, "party_size": party_size, "starts_at": starts.isoformat(), "guest_name": "Cust",
+        "table_id": (table or w.table).id, "party_size": party_size, "starts_at": starts.isoformat(), "guest_name": "Cust",
         "guest_email": w.customer.email})
 
 
@@ -145,4 +147,65 @@ def test_bad_lead_time_is_refused(world):
     w = world
     for bad in (-1, 20000):
         r = w.client.patch(f"{API}/admin/settings?restaurant_id={w.rid}", headers=header(w.admin), json={"booking_lead_time_minutes": bad})
+        assert r.status_code == 422, bad
+
+
+# ------------------------------------------------------------------ pacing (covers per 15-min slot)
+
+def test_a_slot_over_the_cap_is_refused(world):
+    w = world
+    set_policy(w, max_covers_per_slot=6)
+    starts = now_utc() + timedelta(days=1)
+    first = book(w, starts, party_size=4, headers=header(w.customer))
+    assert first.status_code == 201, first.text
+    second = book(w, starts, party_size=4, headers=header(w.customer2), table=w.table2)
+    assert second.status_code == 400 and "fully booked" in second.json()["detail"].lower()
+    assert availability(w, starts, party_size=4).status_code == 400
+
+
+def test_a_slot_at_or_under_the_cap_is_accepted(world):
+    w = world
+    set_policy(w, max_covers_per_slot=6)
+    starts = now_utc() + timedelta(days=1)
+    first = book(w, starts, party_size=4, headers=header(w.customer))
+    assert first.status_code == 201, first.text
+    second = book(w, starts, party_size=2, headers=header(w.customer2), table=w.table2)
+    assert second.status_code == 201, second.text
+
+
+def test_pacing_only_counts_the_same_15_minute_slot(world):
+    w = world
+    set_policy(w, max_covers_per_slot=4)
+    bucket = (now_utc() + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
+    first = book(w, bucket, party_size=4, headers=header(w.customer))
+    assert first.status_code == 201, first.text
+    # 15 minutes later is a different slot, so the cap doesn't carry over
+    later = book(w, bucket + timedelta(minutes=15), party_size=4, headers=header(w.customer2), table=w.table2)
+    assert later.status_code == 201, later.text
+
+
+def test_cancelled_bookings_free_up_the_slot(world):
+    w = world
+    set_policy(w, max_covers_per_slot=4)
+    starts = now_utc() + timedelta(days=1)
+    first = book(w, starts, party_size=4, headers=header(w.customer)).json()
+    w.client.post(f"{API}/reservations/{first['id']}/cancel", headers=header(w.customer))
+    second = book(w, starts, party_size=4, headers=header(w.customer2), table=w.table2)
+    assert second.status_code == 201, second.text
+
+
+def test_staff_can_book_over_the_pacing_cap(world):
+    w = world
+    set_policy(w, max_covers_per_slot=2)
+    starts = now_utc() + timedelta(hours=3)
+    r = w.client.post(f"{API}/admin/reservations?restaurant_id={w.rid}", headers=header(w.admin), json={
+        "table_id": w.table.id, "party_size": 10, "starts_at": starts.isoformat(),
+        "duration_minutes": 90, "guest_name": "Private event"})
+    assert r.status_code == 201, r.text
+
+
+def test_bad_pacing_cap_is_refused(world):
+    w = world
+    for bad in (0, 1001):
+        r = w.client.patch(f"{API}/admin/settings?restaurant_id={w.rid}", headers=header(w.admin), json={"max_covers_per_slot": bad})
         assert r.status_code == 422, bad
