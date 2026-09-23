@@ -34,6 +34,7 @@ class RestaurantRead(BaseModel):
     min_party_size: int = 1
     max_party_size: int | None = None
     booking_lead_time_minutes: int = 0
+    max_covers_per_slot: int | None = None
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool

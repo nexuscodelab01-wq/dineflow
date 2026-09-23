@@ -285,6 +285,7 @@ class RestaurantSettingsUpdate(BaseModel):
     min_party_size: int | None = Field(default=None, ge=1, le=20)
     max_party_size: int | None = Field(default=None, ge=1, le=20)
     booking_lead_time_minutes: int | None = Field(default=None, ge=0, le=10080)  # up to a week's notice
+    max_covers_per_slot: int | None = Field(default=None, ge=1, le=1000)
 
     @field_validator("logo_url")
     @classmethod

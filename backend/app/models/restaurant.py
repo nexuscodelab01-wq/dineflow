@@ -68,6 +68,10 @@ class Restaurant(TimestampMixin, Base):
     max_party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # How much notice a guest must give before a booking's start time.
     booking_lead_time_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Pacing: the most guests (summed party sizes) who may book into the same 15-minute arrival slot.
+    # Null = no cap. Independent of table availability — protects the kitchen from an arrival flood
+    # even when there happen to be enough free tables.
+    max_covers_per_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(
