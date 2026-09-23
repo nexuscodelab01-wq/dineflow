@@ -11,13 +11,17 @@ import {
   updateAdminReservationStatus,
 } from '~/services/reservations'
 import {
+  currentMonth,
   formatDayLabel,
   formatTimeRange,
   localDayRange,
   localInputToIso,
+  localMonthRange,
   minutesBetween,
+  monthGridDays,
   roundUpToStep,
   shiftDay,
+  shiftMonth,
   toLocalDate,
   toLocalInput,
 } from '~/utils/datetime'
@@ -65,6 +69,52 @@ async function load(silent = false) {
 // Keep the list live — table statuses change as bookings come into range or lapse.
 useIntervalFn(() => load(true), 30000)
 watch(day, () => load())
+
+// ---------------------------------------------------------------- calendar view
+
+type View = 'day' | 'month'
+const view = ref<View>('day')
+const month = ref(currentMonth())
+const monthReservations = ref<Reservation[]>([])
+const monthLoading = ref(false)
+
+async function loadMonth() {
+  await admin.initialize()
+  if (!admin.restaurantId) return
+  monthLoading.value = true
+  try {
+    monthReservations.value = await fetchAdminReservations(admin.restaurantId, localMonthRange(month.value))
+  }
+  catch {
+    monthReservations.value = []
+  }
+  finally {
+    monthLoading.value = false
+  }
+}
+watch([view, month], () => { if (view.value === 'month') loadMonth() })
+
+// Active (not cancelled/expired) bookings per day, keyed by local date — the calendar shows how busy a day is.
+const countsByDay = computed(() => {
+  const out: Record<string, number> = {}
+  for (const r of monthReservations.value) {
+    if (r.status === 'CANCELLED' || r.status === 'EXPIRED') continue
+    const key = toLocalDate(new Date(r.starts_at))
+    out[key] = (out[key] || 0) + 1
+  }
+  return out
+})
+
+const gridDays = computed(() => monthGridDays(month.value))
+const monthLabel = computed(() => {
+  const [y, m] = month.value.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+})
+
+function pickCalendarDay(d: string) {
+  day.value = d
+  view.value = 'day'
+}
 
 const FILTER_GROUPS: Record<Exclude<Filter, 'all'>, ReservationStatus[]> = {
   upcoming: ['HELD', 'CONFIRMED'],
@@ -181,6 +231,7 @@ const form = reactive({
   duration: 90,
   party: 2,
   table_id: 0,
+  extra_table_ids: [] as number[],
   guest_name: '',
   guest_phone: '',
   guest_email: '',
@@ -291,6 +342,7 @@ function resetForm() {
     duration: 90,
     party: 2,
     table_id: 0,
+    extra_table_ids: [],
     guest_name: '',
     guest_phone: '',
     guest_email: '',
@@ -336,6 +388,7 @@ function openEdit(r: Reservation) {
   form.duration = minutesBetween(r.starts_at, r.ends_at)
   form.party = r.party_size
   form.table_id = r.table_id
+  form.extra_table_ids = [...(r.extra_table_ids || [])]
   form.guest_name = r.guest_name
   form.guest_phone = r.guest_phone || ''
   form.guest_email = r.guest_email || ''
@@ -370,10 +423,30 @@ const slotLabels: Record<SlotStatus, string> = {
 }
 
 function pickTable(t: AdminTableAvailability) {
-  if (!t.available) return
+  // TOO_SMALL is still pickable as the anchor for a party that's going to be combined with another
+  // table — only a table that's actually taken (occupied/reserved/cleaning) can't be picked at all.
+  if (!t.available && t.slot_status !== 'TOO_SMALL') return
   form.table_id = t.id
+  form.extra_table_ids = form.extra_table_ids.filter(id => id !== t.id)
   tableHint.value = ''
 }
+
+function toggleExtraTable(id: number) {
+  form.extra_table_ids = form.extra_table_ids.includes(id)
+    ? form.extra_table_ids.filter(x => x !== id)
+    : [...form.extra_table_ids, id]
+}
+
+// Tables free for this slot that could be combined with the chosen one for a large party.
+// TOO_SMALL is only about a table's own capacity vs. the full party — still a valid combine partner.
+const combineCandidates = computed(() => availability.value.filter(
+  t => (t.available || t.slot_status === 'TOO_SMALL') && t.id !== form.table_id,
+))
+const combinedCapacity = computed(() => {
+  const primary = availability.value.find(t => t.id === form.table_id)
+  const extras = availability.value.filter(t => form.extra_table_ids.includes(t.id))
+  return (primary?.capacity || 0) + extras.reduce((sum, t) => sum + t.capacity, 0)
+})
 
 async function save() {
   if (!admin.restaurantId) return
@@ -400,6 +473,7 @@ async function save() {
           ? {}
           : {
               table_id: form.table_id,
+              extra_table_ids: form.extra_table_ids,
               party_size: partySize.value,
               starts_at: localInputToIso(form.startsLocal),
               duration_minutes: form.duration,
@@ -414,6 +488,7 @@ async function save() {
     else {
       saved = await createAdminReservation(admin.restaurantId, {
         table_id: form.table_id,
+        extra_table_ids: form.extra_table_ids,
         party_size: partySize.value,
         starts_at: mode.value === 'walkin' ? new Date().toISOString() : localInputToIso(form.startsLocal),
         duration_minutes: form.duration,
@@ -473,27 +548,64 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Day navigation -->
+    <!-- Day / calendar navigation -->
     <div class="mt-5 flex flex-wrap items-center gap-2">
-      <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Previous day" @click="day = shiftDay(day, -1)">‹</button>
-      <input
-        v-model="day"
-        type="date"
-        class="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm"
-        aria-label="Reservation date"
-      >
-      <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Next day" @click="day = shiftDay(day, 1)">›</button>
-      <button
-        v-if="!isToday"
-        type="button"
-        class="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
-        @click="day = toLocalDate(new Date())"
-      >
-        Today
-      </button>
-      <span class="ml-1 text-sm font-medium text-ink">{{ formatDayLabel(day) }}</span>
+      <div class="inline-flex overflow-hidden rounded-lg border border-brand-200 text-sm font-medium" role="group" aria-label="View">
+        <button type="button" class="px-3 py-2" :class="view === 'day' ? 'bg-brand-700 text-white' : 'bg-white hover:bg-brand-50'" :aria-pressed="view === 'day'" @click="view = 'day'">Day</button>
+        <button type="button" class="px-3 py-2" :class="view === 'month' ? 'bg-brand-700 text-white' : 'bg-white hover:bg-brand-50'" :aria-pressed="view === 'month'" @click="view = 'month'">Calendar</button>
+      </div>
+
+      <template v-if="view === 'day'">
+        <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Previous day" @click="day = shiftDay(day, -1)">‹</button>
+        <input
+          v-model="day"
+          type="date"
+          class="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm"
+          aria-label="Reservation date"
+        >
+        <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Next day" @click="day = shiftDay(day, 1)">›</button>
+        <button
+          v-if="!isToday"
+          type="button"
+          class="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
+          @click="day = toLocalDate(new Date())"
+        >
+          Today
+        </button>
+        <span class="ml-1 text-sm font-medium text-ink">{{ formatDayLabel(day) }}</span>
+      </template>
+
+      <template v-else>
+        <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Previous month" @click="month = shiftMonth(month, -1)">‹</button>
+        <button type="button" class="rounded-lg border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50" aria-label="Next month" @click="month = shiftMonth(month, 1)">›</button>
+        <button type="button" class="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50" @click="month = currentMonth()">This month</button>
+        <span class="ml-1 text-sm font-medium text-ink">{{ monthLabel }}</span>
+      </template>
     </div>
 
+    <div v-if="view === 'month'" class="mt-4">
+      <div v-if="monthLoading" class="h-64 animate-pulse rounded-2xl bg-brand-100/60" />
+      <div v-else class="overflow-hidden rounded-2xl border border-brand-100">
+        <div class="grid grid-cols-7 bg-brand-50/50 text-center text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+          <div v-for="d in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']" :key="d" class="py-2">{{ d }}</div>
+        </div>
+        <div class="grid grid-cols-7">
+          <button
+            v-for="d in gridDays" :key="d" type="button"
+            class="min-h-20 border-b border-r border-brand-50 p-2 text-left align-top hover:bg-brand-50/60"
+            :class="[d.startsWith(month) ? 'bg-white' : 'bg-surface-muted/40 text-ink-subtle', d === toLocalDate(new Date()) ? 'ring-2 ring-inset ring-brand-700' : '']"
+            @click="pickCalendarDay(d)"
+          >
+            <span class="text-xs font-medium">{{ Number(d.slice(8)) }}</span>
+            <span v-if="countsByDay[d]" class="mt-1 block w-fit rounded-full bg-brand-700 px-1.5 py-0.5 text-xs font-semibold text-white">
+              {{ countsByDay[d] }} {{ countsByDay[d] === 1 ? 'booking' : 'bookings' }}
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <template v-if="view === 'day'">
     <p
       v-if="overdueCount"
       class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
@@ -549,7 +661,10 @@ onMounted(async () => {
               <div class="text-xs text-ink-subtle">{{ r.guest_phone || r.guest_email }}</div>
               <div v-if="r.notes" class="mt-0.5 max-w-xs truncate text-xs italic text-ink-subtle" :title="r.notes">“{{ r.notes }}”</div>
             </td>
-            <td class="px-4 py-3">{{ r.table_number }}</td>
+            <td class="px-4 py-3">
+              {{ r.table_number }}
+              <span v-if="r.extra_table_numbers?.length" class="text-xs text-ink-subtle">+ {{ r.extra_table_numbers.join(', ') }}</span>
+            </td>
             <td class="px-4 py-3">{{ r.party_size }}</td>
             <td class="px-4 py-3">
               <StatusBadge :status="r.status" />
@@ -594,6 +709,7 @@ onMounted(async () => {
         </tbody>
       </table>
     </div>
+    </template>
 
     <!-- Booking modal -->
     <div
@@ -687,7 +803,7 @@ onMounted(async () => {
                 type="button"
                 class="rounded-xl border-2 p-3 text-left transition"
                 :class="[slotStyles[t.slot_status], form.table_id === t.id ? 'ring-2 ring-brand-700 ring-offset-1' : '']"
-                :disabled="!t.available"
+                :disabled="!t.available && t.slot_status !== 'TOO_SMALL'"
                 :aria-pressed="form.table_id === t.id"
                 @click="pickTable(t)"
               >
@@ -716,6 +832,23 @@ onMounted(async () => {
             >
               No table is free for that party and time. Try a different time or a shorter duration.
             </p>
+
+            <div v-if="form.table_id && combineCandidates.length" class="rounded-xl border border-brand-100 p-3">
+              <p class="text-xs font-semibold text-ink">Combine with other tables <span class="font-normal text-ink-subtle">(for a party too big for one table)</span></p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <label
+                  v-for="t in combineCandidates" :key="t.id"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs"
+                  :class="form.extra_table_ids.includes(t.id) ? 'border-brand-700 bg-brand-50 text-brand-900' : 'border-brand-200'"
+                >
+                  <input type="checkbox" class="sr-only" :checked="form.extra_table_ids.includes(t.id)" @change="toggleExtraTable(t.id)">
+                  {{ t.table_number }} (seats {{ t.capacity }})
+                </label>
+              </div>
+              <p v-if="form.extra_table_ids.length" class="mt-2 text-xs text-ink-subtle">
+                Combined seating: {{ combinedCapacity }} — {{ combinedCapacity >= partySize ? 'fits this party' : `still short for a party of ${partySize}` }}
+              </p>
+            </div>
           </section>
 
           <section class="space-y-3">
