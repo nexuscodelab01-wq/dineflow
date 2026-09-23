@@ -64,9 +64,11 @@ from app.schemas.reservation import (
     ReservationUpdate,
 )
 from app.schemas.restaurant import RestaurantRead
+from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
+from app.services.waitlist_service import WaitlistService
 from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
@@ -87,6 +89,10 @@ def get_analytics_service(db: Annotated[Session, Depends(get_db)]) -> AnalyticsS
 
 def get_reservation_service(db: Annotated[Session, Depends(get_db)]) -> ReservationService:
     return ReservationService(db)
+
+
+def get_waitlist_service(db: Annotated[Session, Depends(get_db)]) -> WaitlistService:
+    return WaitlistService(db)
 
 
 def _handle(exc: Exception):
@@ -725,6 +731,70 @@ def update_reservation_status(
 ) -> ReservationRead:
     try:
         return service.update_status(reservation_id, restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+# ------------------------------------------------------------------ waitlist (walk-in queue)
+
+@router.get("/waitlist", response_model=list[WaitlistRead], dependencies=[Depends(requires_feature("reservations"))])
+def list_waitlist(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[WaitlistService, Depends(get_waitlist_service)],
+) -> list[WaitlistRead]:
+    return service.list_active(restaurant_id)
+
+
+@router.post("/waitlist", response_model=WaitlistRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(requires_feature("reservations"))])
+def add_to_waitlist(
+    data: WaitlistCreate,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[WaitlistService, Depends(get_waitlist_service)],
+) -> WaitlistRead:
+    try:
+        return service.add(restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/waitlist/{entry_id}/notify", response_model=WaitlistRead, dependencies=[Depends(requires_feature("reservations"))])
+def notify_waitlist_entry(
+    entry_id: int,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[WaitlistService, Depends(get_waitlist_service)],
+) -> WaitlistRead:
+    try:
+        return service.notify(entry_id, restaurant_id)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/waitlist/{entry_id}/seat", response_model=WaitlistRead, dependencies=[Depends(requires_feature("reservations"))])
+def seat_waitlist_entry(
+    entry_id: int,
+    data: WaitlistSeat,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[WaitlistService, Depends(get_waitlist_service)],
+) -> WaitlistRead:
+    try:
+        return service.seat(entry_id, restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/waitlist/{entry_id}/cancel", response_model=WaitlistRead, dependencies=[Depends(requires_feature("reservations"))])
+def cancel_waitlist_entry(
+    entry_id: int,
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[WaitlistService, Depends(get_waitlist_service)],
+) -> WaitlistRead:
+    try:
+        return service.cancel(entry_id, restaurant_id)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
