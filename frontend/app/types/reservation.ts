@@ -12,6 +12,9 @@ export type Reservation = {
   table_id: number
   table_number?: string | null
   table_capacity?: number | null
+  /** Other tables this booking is combined with (large parties) — staff-only. */
+  extra_table_ids?: number[]
+  extra_table_numbers?: string[]
   user_id?: number | null
   order_id?: number | null
   party_size: number
@@ -112,6 +115,7 @@ export type TableReservationBrief = {
 
 export type UpdateReservationPayload = Partial<{
   table_id: number
+  extra_table_ids: number[]
   party_size: number
   starts_at: string
   duration_minutes: number
@@ -123,6 +127,7 @@ export type UpdateReservationPayload = Partial<{
 
 export type CreateReservationPayload = {
   table_id: number
+  extra_table_ids?: number[]
   party_size: number
   starts_at: string
   duration_minutes?: number
