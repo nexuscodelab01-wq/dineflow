@@ -56,3 +56,9 @@ body {
 .font-display {
   font-family: var(--font-display);
 }
+
+/* See app/plugins/reveal.ts (v-reveal) — set only after hydration, so it never causes a server/client
+   mismatch, and only when the visitor hasn't asked for reduced motion. */
+.reveal-pending {
+  opacity: 0;
+}

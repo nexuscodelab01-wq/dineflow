@@ -54,6 +54,25 @@ export default {
         sans: ['"DM Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         display: ['Fraunces', 'Georgia', 'serif'],
       },
+      keyframes: {
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(1rem)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'cross-fade': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'ken-burns': {
+          '0%': { transform: 'scale(1)' },
+          '100%': { transform: 'scale(1.08)' },
+        },
+      },
+      animation: {
+        'fade-up': 'fade-up 0.7s ease-out both',
+        'cross-fade': 'cross-fade 1.2s ease-in-out both',
+        'ken-burns': 'ken-burns 9s ease-out both',
+      },
     },
   },
   plugins: [],
