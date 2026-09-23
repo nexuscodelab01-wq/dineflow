@@ -9,7 +9,6 @@ import { wallClockIn } from '~/utils/timezone'
 import { weeklyHoursLabels } from '~/utils/hours'
 
 const restaurant = useRestaurantStore()
-const branding = useBranding()
 const { status: openStatus, todayLabel } = useOpeningStatus()
 const current = computed(() => restaurant.current)
 
@@ -75,7 +74,8 @@ const serviceHighlights = computed(() => {
 
 // ---- hero photo slideshow (falls back to the plain gradient hero when there's no gallery) --------
 
-const heroSlides = computed(() => (current.value?.gallery ?? []).slice(0, 5))
+const gallery = computed(() => current.value?.gallery ?? [])
+const heroSlides = computed(() => gallery.value.slice(0, 5))
 const heroIndex = ref(0)
 let heroTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
@@ -84,47 +84,21 @@ onMounted(() => {
   }
 })
 onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
-
-// ---- gallery lightbox -------------------------------------------------------------------------
-
-const lightboxIndex = ref<number | null>(null)
-const gallery = computed(() => current.value?.gallery ?? [])
-function openLightbox(i: number) { lightboxIndex.value = i }
-function closeLightbox() { lightboxIndex.value = null }
-function nextImage() { if (lightboxIndex.value != null) lightboxIndex.value = (lightboxIndex.value + 1) % gallery.value.length }
-function prevImage() { if (lightboxIndex.value != null) lightboxIndex.value = (lightboxIndex.value - 1 + gallery.value.length) % gallery.value.length }
-function onLightboxKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') closeLightbox()
-  else if (e.key === 'ArrowRight') nextImage()
-  else if (e.key === 'ArrowLeft') prevImage()
-}
-watch(lightboxIndex, (open) => {
-  if (typeof window === 'undefined') return
-  if (open != null) window.addEventListener('keydown', onLightboxKey)
-  else window.removeEventListener('keydown', onLightboxKey)
-})
-onUnmounted(() => { if (typeof window !== 'undefined') window.removeEventListener('keydown', onLightboxKey) })
 </script>
 
 <template>
   <div>
-    <section class="relative overflow-hidden">
+    <!-- Hero -->
+    <section class="relative flex items-center overflow-hidden" :class="heroSlides.length ? 'min-h-[86vh]' : 'min-h-[58vh]'">
       <template v-if="heroSlides.length">
         <div class="absolute inset-0">
           <img
             v-for="(url, i) in heroSlides" :key="url"
             :src="resolveMediaUrl(url)!" alt=""
-            class="absolute inset-0 h-full w-full animate-ken-burns object-cover transition-opacity duration-[1500ms]"
+            class="animate-ken-burns absolute inset-0 h-full w-full object-cover transition-opacity duration-[1600ms] ease-in-out"
             :class="i === heroIndex ? 'opacity-100' : 'opacity-0'"
           >
-          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" aria-hidden="true" />
-        </div>
-        <div v-if="heroSlides.length > 1" class="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-          <button
-            v-for="(url, i) in heroSlides" :key="url" type="button"
-            class="h-1.5 rounded-full transition-all" :class="i === heroIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'"
-            :aria-label="`Show photo ${i + 1}`" @click="heroIndex = i"
-          />
+          <div class="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/60" aria-hidden="true" />
         </div>
       </template>
       <div
@@ -133,215 +107,248 @@ onUnmounted(() => { if (typeof window !== 'undefined') window.removeEventListene
         aria-hidden="true"
       />
 
-      <div class="relative mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32" :class="heroSlides.length ? 'text-white' : ''">
-        <img v-if="branding.logo.value" :src="branding.logo.value" :alt="current?.name" class="h-16 w-auto max-w-[16rem] rounded-lg bg-white/90 object-contain p-1.5 sm:h-20">
-
-        <p
-          v-if="current?.opening_hours"
-          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-          :class="openStatus.open ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'"
+      <div class="relative mx-auto w-full max-w-6xl px-4 py-24 sm:px-6">
+        <div
+          class="max-w-xl rounded-[1.75rem] p-8 sm:p-10"
+          :class="heroSlides.length
+            ? 'border border-white/20 bg-gradient-to-br from-white/[0.18] to-white/[0.06] shadow-2xl shadow-black/40 ring-1 ring-inset ring-white/10 backdrop-blur-2xl'
+            : ''"
         >
-          <span class="h-2 w-2 rounded-full" :class="openStatus.open ? 'bg-emerald-500' : 'bg-amber-500'" />
-          {{ openStatus.open ? 'Open now' : 'Closed now' }}
-        </p>
-
-        <h1
-          class="font-display max-w-2xl text-4xl font-semibold leading-tight sm:text-5xl md:text-6xl"
-          :class="heroSlides.length ? 'text-white drop-shadow-sm' : 'text-brand-900'"
-        >
-          {{ current?.name ?? 'Welcome' }}
-        </h1>
-        <p class="max-w-xl text-lg leading-relaxed" :class="heroSlides.length ? 'text-white/90' : 'text-ink-muted'">
-          {{ current?.description || 'Order online, or book a table — we\'d love to have you.' }}
-        </p>
-        <p v-if="fullAddress" class="text-sm" :class="heroSlides.length ? 'text-white/75' : 'text-ink-subtle'">{{ fullAddress }}</p>
-
-        <div class="flex flex-wrap items-center gap-3 pt-2">
-          <NuxtLink
-            to="/menu"
-            class="inline-flex items-center justify-center rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 hover:shadow-xl"
+          <p
+            v-if="current?.opening_hours"
+            class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em]"
+            :class="heroSlides.length
+              ? 'border border-white/25 bg-white/10 text-white backdrop-blur-sm'
+              : (openStatus.open ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900')"
           >
-            Browse menu
-          </NuxtLink>
-          <NuxtLink
-            v-if="current?.dine_in_enabled"
-            to="/reserve"
-            class="inline-flex items-center rounded-lg border px-5 py-2.5 text-sm font-semibold transition"
-            :class="heroSlides.length ? 'border-white/40 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20' : 'border-brand-200 bg-surface-elevated text-ink hover:bg-brand-50'"
+            <span class="h-1.5 w-1.5 rounded-full" :class="openStatus.open ? 'bg-emerald-400' : 'bg-amber-400'" />
+            {{ openStatus.open ? 'Open now' : 'Closed now' }}
+          </p>
+
+          <h1
+            class="font-display mt-5 text-[2.75rem] font-semibold leading-[1.05] tracking-tight sm:text-6xl"
+            :class="heroSlides.length ? 'text-white' : 'text-brand-900'"
           >
-            Book a table
-          </NuxtLink>
+            {{ current?.name ?? 'Welcome' }}
+          </h1>
+
+          <p class="mt-5 text-lg leading-relaxed" :class="heroSlides.length ? 'text-white/85' : 'text-ink-muted'">
+            {{ current?.description || 'Order online, or book a table — we\'d love to have you.' }}
+          </p>
+
+          <p
+            v-if="fullAddress"
+            class="mt-4 inline-flex items-center gap-2 text-sm"
+            :class="heroSlides.length ? 'text-white/70' : 'text-ink-subtle'"
+          >
+            <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21s7-5.686 7-11a7 7 0 1 0-14 0c0 5.314 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
+            {{ fullAddress }}
+          </p>
+
+          <div class="mt-8 flex flex-wrap items-center gap-3">
+            <NuxtLink
+              to="/menu"
+              class="inline-flex items-center justify-center rounded-full bg-brand-700 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 transition duration-300 hover:-translate-y-0.5 hover:bg-brand-800 hover:shadow-xl"
+            >
+              Browse menu
+            </NuxtLink>
+            <NuxtLink
+              v-if="current?.dine_in_enabled"
+              to="/reserve"
+              class="inline-flex items-center rounded-full border px-7 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5"
+              :class="heroSlides.length
+                ? 'border-white/30 bg-white/10 text-white backdrop-blur-md hover:bg-white/20'
+                : 'border-brand-200 bg-surface-elevated text-ink hover:bg-brand-50'"
+            >
+              Book a table
+            </NuxtLink>
+          </div>
         </div>
       </div>
+
+      <!-- Slide dots: a rail down the right edge on desktop, out of the way of the gallery pill on phones -->
+      <div
+        v-if="heroSlides.length > 1"
+        class="absolute bottom-8 left-4 z-10 flex gap-2 sm:bottom-auto sm:left-auto sm:right-7 sm:top-1/2 sm:-translate-y-1/2 sm:flex-col sm:items-center"
+      >
+        <button
+          v-for="(url, i) in heroSlides" :key="url" type="button"
+          class="rounded-full transition-all duration-500"
+          :class="i === heroIndex ? 'h-1.5 w-8 bg-white sm:h-10 sm:w-1.5' : 'h-1.5 w-1.5 bg-white/40 hover:bg-white/70'"
+          :aria-label="`Show photo ${i + 1}`" @click="heroIndex = i"
+        />
+      </div>
+
+      <!-- Gallery entry point -->
+      <NuxtLink
+        v-if="gallery.length"
+        to="/gallery"
+        class="group absolute bottom-6 right-4 z-10 inline-flex items-center gap-2.5 rounded-full border border-white/25 bg-white/10 py-2.5 pl-4 pr-3 text-sm font-semibold text-white shadow-lg shadow-black/20 backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 sm:bottom-8 sm:right-8"
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="5" width="18" height="14" rx="2.5" /><circle cx="8.5" cy="10" r="1.5" /><path stroke-linecap="round" stroke-linejoin="round" d="m4 17 5-5 4 4 2.5-2.5L20 17" /></svg>
+        Gallery
+        <span class="rounded-full bg-white/15 px-2 py-0.5 text-xs font-medium tabular-nums">{{ gallery.length }}</span>
+      </NuxtLink>
     </section>
 
+    <!-- Services / hours strip -->
     <section v-if="serviceHighlights.length || todayLabel" class="border-b border-brand-100 bg-surface-elevated">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-4 py-5 text-sm font-medium text-ink-muted sm:px-6">
-        <span v-for="s in serviceHighlights" :key="s.key" class="inline-flex items-center gap-2">
-          <svg v-if="s.key === 'dine-in'" viewBox="0 0 24 24" class="h-4 w-4 text-brand-700" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M7 2v9M4 2v5a2 2 0 0 0 2 2h2M20 2c-2.2 0-4 2.5-4 6s1.8 6 4 6M20 2v20M7 11v11" /></svg>
-          <svg v-else-if="s.key === 'pickup'" viewBox="0 0 24 24" class="h-4 w-4 text-brand-700" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M6 8h12l1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L6 8ZM9 8V6a3 3 0 0 1 6 0v2" /></svg>
-          <svg v-else viewBox="0 0 24 24" class="h-4 w-4 text-brand-700" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path stroke-linecap="round" stroke-linejoin="round" d="M6 18l4-9h5l3 6h-2M10 9l3 3h4" /></svg>
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-12 gap-y-3 px-4 py-6 text-sm font-medium text-ink-muted sm:px-6">
+        <span v-for="s in serviceHighlights" :key="s.key" class="inline-flex items-center gap-2.5">
+          <svg v-if="s.key === 'dine-in'" viewBox="0 0 24 24" class="h-[18px] w-[18px] text-brand-700" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M7 2v9M4 2v5a2 2 0 0 0 2 2h2M20 2c-2.2 0-4 2.5-4 6s1.8 6 4 6M20 2v20M7 11v11" /></svg>
+          <svg v-else-if="s.key === 'pickup'" viewBox="0 0 24 24" class="h-[18px] w-[18px] text-brand-700" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 8h12l1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L6 8ZM9 8V6a3 3 0 0 1 6 0v2" /></svg>
+          <svg v-else viewBox="0 0 24 24" class="h-[18px] w-[18px] text-brand-700" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path stroke-linecap="round" stroke-linejoin="round" d="M6 18l4-9h5l3 6h-2M10 9l3 3h4" /></svg>
           {{ s.label }}
         </span>
-        <span v-if="todayLabel" class="inline-flex items-center gap-2">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 text-brand-700" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3.5 2" /></svg>
-          Today: {{ todayLabel }}
+        <span v-if="todayLabel" class="inline-flex items-center gap-2.5">
+          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] text-brand-700" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3.5 2" /></svg>
+          Today <span class="text-ink">{{ todayLabel }}</span>
         </span>
       </div>
     </section>
 
-    <section v-if="popularItems.length" v-reveal class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+    <!-- Popular dishes -->
+    <section v-if="popularItems.length" v-reveal class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
       <div class="flex items-end justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-brand-700">Fan favourites</p>
-          <h2 class="font-display mt-1 text-2xl font-semibold text-brand-900 sm:text-3xl">Popular dishes</h2>
+          <p class="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+            <span class="h-px w-8 bg-brand-300" />Fan favourites
+          </p>
+          <h2 class="font-display mt-3 text-3xl font-semibold text-brand-900 sm:text-4xl">Popular dishes</h2>
         </div>
-        <NuxtLink to="/menu" class="hidden shrink-0 text-sm font-semibold text-brand-700 hover:underline sm:inline">View full menu →</NuxtLink>
+        <NuxtLink to="/menu" class="hidden shrink-0 text-sm font-semibold text-brand-700 transition hover:underline sm:inline">View full menu →</NuxtLink>
       </div>
-      <div class="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+
+      <div class="mt-10 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-3 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
         <NuxtLink
           v-for="item in popularItems" :key="item.id" to="/menu"
-          class="group w-64 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-surface-elevated transition hover:-translate-y-1 hover:shadow-lg sm:w-auto"
+          class="group w-64 shrink-0 snap-start overflow-hidden rounded-2xl bg-surface-elevated shadow-sm ring-1 ring-brand-100 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-brand-200 sm:w-auto"
         >
-          <div class="aspect-[4/3] overflow-hidden bg-brand-50">
+          <div class="relative aspect-[4/3] overflow-hidden bg-brand-50">
             <img
               v-if="item.image_url" :src="resolveMediaUrl(item.image_url)!" :alt="item.name"
-              class="h-full w-full object-cover transition duration-500 group-hover:scale-110"
+              class="h-full w-full object-cover transition duration-700 group-hover:scale-110"
             >
-            <div v-else class="flex h-full items-center justify-center text-sm text-ink-subtle">{{ item.name }}</div>
+            <div v-else class="flex h-full items-center justify-center px-4 text-center font-display text-lg text-brand-800/40">{{ item.name }}</div>
+            <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
           </div>
-          <div class="p-4">
+          <div class="flex items-baseline justify-between gap-3 p-5">
             <p class="font-medium text-ink">{{ item.name }}</p>
-            <p class="mt-1 text-sm font-semibold text-brand-700">{{ formatCurrency(Number(item.price)) }}</p>
+            <p class="shrink-0 font-display text-lg font-semibold text-brand-700">{{ formatCurrency(Number(item.price)) }}</p>
           </div>
         </NuxtLink>
       </div>
-      <NuxtLink to="/menu" class="mt-6 block text-center text-sm font-semibold text-brand-700 hover:underline sm:hidden">View full menu →</NuxtLink>
+      <NuxtLink to="/menu" class="mt-8 block text-center text-sm font-semibold text-brand-700 hover:underline sm:hidden">View full menu →</NuxtLink>
     </section>
 
-    <section v-if="gallery.length" v-reveal class="border-t border-brand-100 bg-surface-muted/40">
-      <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <p class="text-xs font-semibold uppercase tracking-widest text-brand-700">A closer look</p>
-        <h2 class="font-display mt-1 text-2xl font-semibold text-brand-900 sm:text-3xl">Gallery</h2>
-        <div class="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          <button
-            v-for="(url, i) in gallery" :key="url" type="button"
-            class="group aspect-square overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
-            :aria-label="`Open photo ${i + 1}`"
-            @click="openLightbox(i)"
-          >
-            <img :src="resolveMediaUrl(url)!" alt="" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-110">
-          </button>
-        </div>
+    <!-- About -->
+    <section v-if="current?.about_text" v-reveal class="border-y border-brand-100 bg-surface-muted/50">
+      <div class="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6">
+        <p class="flex items-center justify-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+          <span class="h-px w-8 bg-brand-300" />Our story<span class="h-px w-8 bg-brand-300" />
+        </p>
+        <h2 class="font-display mt-3 text-3xl font-semibold text-brand-900 sm:text-4xl">About us</h2>
+        <p class="font-display mt-7 whitespace-pre-line text-xl font-light leading-relaxed text-ink-muted sm:text-2xl">{{ current.about_text }}</p>
       </div>
     </section>
 
-    <section v-if="current?.about_text" v-reveal class="border-t border-brand-100">
-      <div class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
-        <p class="text-xs font-semibold uppercase tracking-widest text-brand-700">Our story</p>
-        <h2 class="font-display mt-1 text-2xl font-semibold text-brand-900 sm:text-3xl">About us</h2>
-        <p class="mt-5 whitespace-pre-line text-lg leading-relaxed text-ink-muted">{{ current.about_text }}</p>
-      </div>
-    </section>
-
-    <section v-if="hasContactSection" v-reveal class="border-t border-brand-100 bg-surface-muted/40">
-      <div class="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-2">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-brand-700">Find us</p>
-          <h2 class="font-display mt-1 text-2xl font-semibold text-brand-900 sm:text-3xl">Visit us</h2>
-          <dl class="mt-6 space-y-4 text-sm">
-            <div v-if="fullAddress || directionsUrl">
-              <dt class="font-semibold text-ink">Address</dt>
-              <dd v-if="fullAddress" class="mt-0.5 text-ink-muted">{{ fullAddress }}</dd>
-              <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener" class="mt-1 inline-block text-brand-700 underline">Get directions</a>
-            </div>
-            <div v-if="current?.phone">
-              <dt class="font-semibold text-ink">Phone</dt>
-              <dd class="mt-0.5"><a :href="`tel:${current.phone}`" class="text-brand-700 underline">{{ current.phone }}</a></dd>
-            </div>
-            <div v-if="current?.email">
-              <dt class="font-semibold text-ink">Email</dt>
-              <dd class="mt-0.5"><a :href="`mailto:${current.email}`" class="text-brand-700 underline">{{ current.email }}</a></dd>
-            </div>
-            <div v-if="socialLinks.length">
-              <dt class="font-semibold text-ink">Follow us</dt>
-              <dd class="mt-1 flex flex-wrap gap-3">
-                <a v-for="s in socialLinks" :key="s.key" :href="s.url" target="_blank" rel="noopener" class="text-brand-700 underline">{{ s.label }}</a>
-              </dd>
-            </div>
-            <div v-if="weeklyHours.length">
-              <dt class="font-semibold text-ink">Hours</dt>
-              <dd class="mt-1.5 space-y-0.5">
-                <div v-for="row in weeklyHours" :key="row.day" class="flex justify-between gap-6" :class="row.isToday ? 'font-semibold text-ink' : 'text-ink-muted'">
-                  <span class="capitalize">{{ row.day }}</span>
-                  <span>{{ row.label }}</span>
-                </div>
-              </dd>
-            </div>
-          </dl>
-        </div>
-
+    <!-- Visit us: the map fills the band, the details sit on a glass card over it -->
+    <section v-if="hasContactSection" v-reveal class="relative isolate overflow-hidden bg-brand-900">
+      <!-- Decorative backdrop: not interactive, so scrolling the page never gets caught by the map.
+           "Get directions" is the real way in. -->
+      <div v-if="mapEmbedUrl" class="pointer-events-none absolute inset-0">
         <iframe
-          v-if="mapEmbedUrl"
-          :src="mapEmbedUrl"
-          title="Map"
-          loading="lazy"
-          class="h-64 w-full rounded-xl border border-brand-100 shadow-sm md:h-full"
+          :src="mapEmbedUrl" title="Map" loading="lazy" tabindex="-1"
+          class="h-full w-full opacity-95 grayscale-[0.6] contrast-[1.02] brightness-[1.03]"
         />
-        <div v-else-if="fullAddress" class="flex h-64 items-center justify-center rounded-xl border border-brand-100 bg-surface-elevated text-center text-sm text-ink-subtle md:h-full">
-          <div class="px-6">
-            <p>{{ fullAddress }}</p>
-            <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener" class="mt-2 inline-block font-medium text-brand-700 underline">Get directions</a>
+      </div>
+      <div
+        v-else
+        class="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--color-brand-700)_0%,_transparent_60%)]"
+        aria-hidden="true"
+      />
+
+      <div class="pointer-events-none relative mx-auto flex max-w-6xl items-center px-4 py-20 sm:px-6 sm:py-28">
+        <div class="pointer-events-auto w-full max-w-md rounded-[1.75rem] border border-white/50 bg-white/85 p-8 shadow-2xl shadow-black/20 backdrop-blur-2xl sm:p-10">
+          <p class="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+            <span class="h-px w-8 bg-brand-300" />Find us
+          </p>
+          <h2 class="font-display mt-3 text-3xl font-semibold text-brand-900 sm:text-4xl">Visit us</h2>
+
+          <div class="mt-8 space-y-5 text-sm">
+            <div v-if="fullAddress || directionsUrl" class="flex gap-3.5">
+              <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21s7-5.686 7-11a7 7 0 1 0-14 0c0 5.314 7 11 7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
+              </span>
+              <div>
+                <p v-if="fullAddress" class="font-medium text-ink">{{ fullAddress }}</p>
+                <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener" class="mt-0.5 inline-block font-medium text-brand-700 transition hover:underline">Get directions →</a>
+              </div>
+            </div>
+
+            <div v-if="current?.phone" class="flex items-center gap-3.5">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A1.5 1.5 0 0 1 5.5 4h2.2a1 1 0 0 1 .96.73l.9 3a1 1 0 0 1-.34 1.06l-1.4 1.1a12.5 12.5 0 0 0 5.29 5.29l1.1-1.4a1 1 0 0 1 1.06-.34l3 .9a1 1 0 0 1 .73.96v2.2a1.5 1.5 0 0 1-1.5 1.5A14.5 14.5 0 0 1 4 5.5Z" /></svg>
+              </span>
+              <a :href="`tel:${current.phone}`" class="font-medium text-ink transition hover:text-brand-700">{{ current.phone }}</a>
+            </div>
+
+            <div v-if="current?.email" class="flex items-center gap-3.5">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path stroke-linecap="round" stroke-linejoin="round" d="m3.5 7 8.5 6 8.5-6" /></svg>
+              </span>
+              <a :href="`mailto:${current.email}`" class="font-medium text-ink transition hover:text-brand-700">{{ current.email }}</a>
+            </div>
+          </div>
+
+          <div v-if="weeklyHours.length" class="mt-7 border-t border-brand-100 pt-6">
+            <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-subtle">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3.5 2" /></svg>
+              Opening hours
+            </p>
+            <dl class="mt-3 space-y-1 text-sm">
+              <div
+                v-for="row in weeklyHours" :key="row.day"
+                class="flex justify-between gap-6 rounded-md px-2 py-1"
+                :class="row.isToday ? 'bg-brand-50 font-semibold text-ink' : 'text-ink-muted'"
+              >
+                <dt class="capitalize">{{ row.day }}</dt>
+                <dd class="tabular-nums">{{ row.label }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div v-if="socialLinks.length" class="mt-7 flex flex-wrap gap-2 border-t border-brand-100 pt-6">
+            <a
+              v-for="s in socialLinks" :key="s.key" :href="s.url" target="_blank" rel="noopener"
+              class="inline-flex items-center rounded-full border border-brand-200 px-4 py-1.5 text-xs font-semibold text-brand-800 transition hover:border-brand-400 hover:bg-brand-50"
+            >
+              {{ s.label }}
+            </a>
           </div>
         </div>
       </div>
     </section>
 
-    <section v-reveal class="border-t border-brand-100 bg-brand-800">
-      <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-14 text-center sm:px-6">
-        <h2 class="font-display text-2xl font-semibold text-white sm:text-3xl">Hungry yet?</h2>
-        <p class="max-w-md text-brand-100">Order online for pickup or delivery, or book a table and let us take care of the rest.</p>
-        <div class="mt-2 flex flex-wrap items-center justify-center gap-3">
-          <NuxtLink to="/menu" class="inline-flex items-center justify-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-brand-800 shadow-lg transition hover:bg-brand-50">
+    <!-- Closing call to action -->
+    <section v-reveal class="relative overflow-hidden bg-brand-800">
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.14)_0%,_transparent_60%)]" aria-hidden="true" />
+      <div class="relative mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 py-20 text-center sm:px-6">
+        <h2 class="font-display text-3xl font-semibold text-white sm:text-4xl">Hungry yet?</h2>
+        <p class="max-w-md text-brand-100/90">Order online for pickup or delivery, or book a table and let us take care of the rest.</p>
+        <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
+          <NuxtLink to="/menu" class="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-semibold text-brand-800 shadow-lg transition duration-300 hover:-translate-y-0.5 hover:shadow-xl">
             Browse menu
           </NuxtLink>
           <NuxtLink
             v-if="current?.dine_in_enabled"
             to="/reserve"
-            class="inline-flex items-center rounded-lg border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+            class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-7 py-3 text-sm font-semibold text-white backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
           >
             Book a table
           </NuxtLink>
         </div>
       </div>
     </section>
-
-    <Teleport to="body">
-      <div
-        v-if="lightboxIndex != null"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-cross-fade"
-        role="dialog" aria-modal="true" aria-label="Photo"
-        @click.self="closeLightbox"
-      >
-        <button type="button" class="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Close" @click="closeLightbox">
-          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
-        </button>
-        <button
-          v-if="gallery.length > 1" type="button"
-          class="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 sm:left-4"
-          aria-label="Previous photo" @click="prevImage"
-        >
-          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
-        </button>
-        <img :src="resolveMediaUrl(gallery[lightboxIndex])!" alt="" class="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl">
-        <button
-          v-if="gallery.length > 1" type="button"
-          class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 sm:right-4"
-          aria-label="Next photo" @click="nextImage"
-        >
-          <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
-        </button>
-      </div>
-    </Teleport>
   </div>
 </template>
