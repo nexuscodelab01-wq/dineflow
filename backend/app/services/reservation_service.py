@@ -12,7 +12,7 @@ reservation changes first — otherwise it would read stale rows.
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, cast, or_, select
+from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, joinedload
 
@@ -197,6 +197,7 @@ class ReservationService:
         self._validate_start(starts_at)
         self._require_open(restaurant, starts_at)
         self._require_lead_time(restaurant, starts_at)
+        self._require_pacing(restaurant, starts_at, party_size)
         ends_at = starts_at + timedelta(minutes=duration_minutes)
 
         tables = self._available_tables(restaurant_id, starts_at, ends_at, party_size)
@@ -354,6 +355,7 @@ class ReservationService:
             if enforce_policy:
                 self._require_open(restaurant, starts_at)
                 self._require_lead_time(restaurant, starts_at)
+                self._require_pacing(restaurant, starts_at, data.party_size)
         ends_at = starts_at + timedelta(minutes=data.duration_minutes)
 
         # Lock the table row to serialise concurrent bookings of the same table.
@@ -907,6 +909,26 @@ class ReservationService:
             raise AppError("Party size must be at least 1")
         if restaurant.max_party_size is not None and party_size > restaurant.max_party_size:
             raise AppError(f"For parties larger than {restaurant.max_party_size}, please contact {restaurant.name} directly")
+
+    def _require_pacing(self, restaurant, starts_at: datetime, party_size: int, *, exclude_id: int | None = None) -> None:
+        """Cap total covers arriving in the same 15-minute slot, independent of table availability —
+        this protects the kitchen from an arrival flood even when there happen to be free tables.
+        """
+        if not restaurant.max_covers_per_slot:
+            return
+        bucket_start = starts_at.replace(minute=(starts_at.minute // 15) * 15, second=0, microsecond=0)
+        bucket_end = bucket_start + timedelta(minutes=15)
+        stmt = select(func.coalesce(func.sum(Reservation.party_size), 0)).where(
+            Reservation.restaurant_id == restaurant.id,
+            Reservation.status.in_([ReservationStatus.HELD, ReservationStatus.CONFIRMED, ReservationStatus.SEATED]),
+            Reservation.starts_at >= bucket_start,
+            Reservation.starts_at < bucket_end,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(Reservation.id != exclude_id)
+        booked = self.db.scalar(stmt) or 0
+        if booked + party_size > restaurant.max_covers_per_slot:
+            raise AppError(f"That time is fully booked — {restaurant.name} can only seat {restaurant.max_covers_per_slot} guests per 15 minutes. Try a different time.")
 
     def _validate_start(self, starts_at: datetime) -> None:
         now = _utcnow()
