@@ -111,7 +111,7 @@ Estimates are **rough, one focused full-time developer**; double for part-time.
 - [x] `python -m app.cli create-tenant`: name, slug, logo, brand colour, cuisine template (generic / pizzeria / cafe: starter menu, tables, hours), owner admin account; switches on `custom_branding`; audited. Prints the site address and a one-time password.
 - [x] Palette generated from one colour with a contrast check (brand-600 is darkened just enough for white text to reach WCAG AA); CSS variables, page title and favicon rendered on the server, so there is no flash of the default theme. Only when the restaurant's `custom_branding` flag is on. Logo shown in the header.
 - [x] Owner invite: no password is ever printed; `create-tenant` produces a one-time set-password link (optionally emailed). Password reset, reset-by-email and change-password are built (see A1/A3 hardening).
-- [ ] Not yet: a settings-page colour picker and logo uploader, branding on the admin area and emails.
+- [x] Settings-page colour pickers (primary + secondary) and logo uploader. [ ] Not yet: branding on the admin area and emails.
 - **Exit:** ~10 minutes from nothing to a prospect's site with *their* name, logo and colours. Try it: `docker compose exec backend python -m app.cli create-tenant --name "Luigi's" --slug luigis --owner owner@luigis.demo --color "#c0392b" --template pizzeria`.
 
 ### Stage B — Hero experience · ~8–12 weeks
@@ -153,7 +153,7 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 - [x] **Guest profiles**: every registered customer shows up (not only those who have ordered — a booking-only guest, or one who has just signed up, appears too), with order and booking history, notes, allergies and a VIP tag staff can set; "last seen" combines ordering and booking. Searchable customer list.
 - [x] **Confirm/cancel links** in the confirmation and reminder emails: a guest can tap "I'll be there" (staff see a ✓ next to their name) or cancel — no account needed, a signed link proves it's theirs and stops working once the booking is gone or the link expires. **Auto no-show release** was already built (Stage A): a CONFIRMED booking whose window fully elapses with no order attached is auto-expired and its table freed; not yet done is releasing it sooner, right after the start time, rather than waiting for the whole window. Deposits / no-show fee are Stripe-dependent — deferred with B4.
 - [ ] Waitlist & walk-in queue ("your table is ready") — email only for now, no SMS provider chosen yet.
-- [ ] Pacing (max covers per 15-min slot), per-tenant party limits and lead time. Blackout dates are already covered by the `closures` built in B5.
+- [x] Per-tenant party size limits and booking lead time, enforced on guest bookings (staff can override). [ ] Pacing (max covers per 15-min slot) is still to do. Blackout dates are already covered by the `closures` built in B5.
 - [ ] Table combining for large parties; smarter auto-assignment (least wasted seats).
 - [ ] Calendar view, embeddable booking widget.
 

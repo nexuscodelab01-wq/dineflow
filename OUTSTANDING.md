@@ -6,8 +6,7 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 ## Open
 
 ### 1. Branding gaps
-- Colour picker and logo uploader on the admin settings page (the API already accepts `primary_color` and logo uploads).
-- Apply branding to the admin area, emails (logo/colour in the templates) and the landing page (`pages/index.vue` still says "DineFlow").
+- Apply branding to the admin area and emails (logo/colour in the templates).
 
 ### 2. QR ordering follow-ups
 - Settings screen for `qr_access_policy`; PIN and staff-approved modes; table tents as a downloadable PDF.
@@ -54,6 +53,7 @@ Add new items at the top of the list; move finished ones to "Done" with the comm
 - The new-restaurant form has no client-side domain-format check before submitting — the backend rejects a bad one, but the error only shows up after a round trip.
 
 ## Done
+- Colour picker (primary + secondary) and logo uploader on the admin settings page. The landing page (`pages/index.vue`) no longer says "DineFlow" for every tenant — it was unfinished Phase-2 scaffolding that never read the resolved restaurant at all.
 - Password reset, change-password and owner invite links (no more printed passwords); header, sidebar and profile no longer show labels over the wrong links after a page load.
 - Admin sidebar showed labels over the wrong links ("Floor plan" opened Reservations…): the server and browser rendered different menus. Both now render the full menu first and trim it after the page is live.
 - Customer order page and table guests did not update live: they now follow their order over SSE (`GET /orders/{id}/stream`, `GET /table-session/stream`), with a slow poll only as a fallback. Status changes show in well under a second.

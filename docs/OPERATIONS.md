@@ -118,11 +118,11 @@ A restaurant's site is `<slug>.PLATFORM_DOMAIN`, or its own `custom_domain` (set
 ```sh
 docker compose exec backend python -m app.cli create-tenant \
   --name "Luigi's Trattoria" --slug luigis --owner owner@luigis.com --owner-name "Luigi Rossi" \
-  --color "#c0392b" --logo /path/to/logo.png --template pizzeria \    # templates: generic | pizzeria | cafe
-  --timezone "America/Los_Angeles"                                   # IANA name; default UTC
+  --color "#c0392b" --secondary-color "#f1c40f" --logo /path/to/logo.png --template pizzeria \  # templates: generic | pizzeria | cafe
+  --timezone "America/Los_Angeles" --custom-domain order.luigis.com                             # both optional
 ```
 It creates the restaurant with a starter menu, tables and a placeholder weekly schedule (edit the real hours in Settings afterwards), an owner admin account, turns on `custom_branding`, and prints the site address (`http://luigis.localhost:3000` in dev, `https://luigis.<PLATFORM_DOMAIN>` in production). Nothing is created if the slug, colour, logo or timezone is invalid. If the owner email already belongs to a staff account, that account is given access to the new restaurant instead. The logo path must be readable *inside* the container (copy it in with `docker compose cp`).
-A very light brand colour is darkened just enough for white button text to stay readable. Change a colour later with `PATCH /admin/settings` (`primary_color`).
+A very light brand colour is darkened just enough for white button text to stay readable. `--secondary-color` is an optional accent for badges and highlights — it falls back to a default amber until set. Change either colour later from the restaurant's own Settings page or with `PATCH /admin/settings` (`primary_color`, `secondary_color`).
 
 **Or without a terminal:** sign in as a platform admin (`SUPER_ADMIN` role — the seed data's is `superadmin@dineflow.demo` / `Demo1234!`) and open **`/platform`**. It lists every restaurant and has a **New restaurant** form asking for the same things the command does — name, slug, owner, branding, template, timezone, an optional custom domain — and shows the site link and the owner's one-time set-password link when it's done.
 
