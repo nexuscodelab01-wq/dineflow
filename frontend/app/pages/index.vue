@@ -2,7 +2,9 @@
 // A restaurant's own home page — the tenant middleware guarantees a restaurant has resolved by the
 // time this renders (an unknown address shows the "no restaurant here" error page instead).
 import type { MenuItem } from '~/types/menu'
+import type { PublicReview } from '~/types/review'
 import { fetchMenu } from '~/services/menu'
+import { fetchPublicReviews } from '~/services/reviews'
 import { resolveMediaUrl } from '~/utils/media'
 import { formatCurrency } from '~/utils/format'
 import { wallClockIn } from '~/utils/timezone'
@@ -11,6 +13,7 @@ import { weeklyHoursLabels } from '~/utils/hours'
 const restaurant = useRestaurantStore()
 const { status: openStatus, todayLabel } = useOpeningStatus()
 const current = computed(() => restaurant.current)
+const reviewsEnabled = useFeature('reviews')
 
 // A handful of popular dishes give the home page something real to show beyond stock copy — fetched
 // once alongside the restaurant itself so it's there on first paint, not a layout jump after mount.
@@ -24,6 +27,23 @@ if (current.value) {
     // Decorative — a failed fetch just means no "Popular dishes" section, not a broken page.
   }
 }
+
+// Reviews: fetched client-side only when the flag is on, so a tenant with it off never pays for the request.
+const reviews = ref<PublicReview[]>([])
+const averageRating = ref<number | null>(null)
+const reviewCount = ref(0)
+onMounted(async () => {
+  if (!reviewsEnabled.value || !current.value) return
+  try {
+    const res = await fetchPublicReviews(current.value.slug, 1, 6)
+    reviews.value = res.items
+    averageRating.value = res.average_rating
+    reviewCount.value = res.total
+  }
+  catch {
+    // Decorative — a failed fetch just means no "Reviews" section.
+  }
+})
 
 const fullAddress = computed(() => {
   if (!current.value?.address) return null
@@ -249,6 +269,43 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
         </p>
         <h2 class="font-display mt-3 text-3xl font-semibold text-brand-900 sm:text-4xl">About us</h2>
         <p class="font-display mt-7 whitespace-pre-line text-xl font-light leading-relaxed text-ink-muted sm:text-2xl">{{ current.about_text }}</p>
+      </div>
+    </section>
+
+    <!-- Reviews -->
+    <section v-if="reviewsEnabled && reviews.length" v-reveal class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <div class="flex flex-col items-center gap-3 text-center">
+        <p class="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+          <span class="h-px w-8 bg-brand-300" />What guests say<span class="h-px w-8 bg-brand-300" />
+        </p>
+        <h2 class="font-display text-3xl font-semibold text-brand-900 sm:text-4xl">Reviews</h2>
+        <div v-if="averageRating" class="mt-1 flex items-center gap-2 text-sm text-ink-muted">
+          <span class="flex text-amber-500">
+            <svg v-for="n in 5" :key="n" viewBox="0 0 20 20" class="h-4 w-4" :fill="n <= Math.round(averageRating) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.2">
+              <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="font-semibold text-ink">{{ averageRating }}</span> out of 5 · {{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}
+        </div>
+      </div>
+
+      <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="review in reviews" :key="review.id"
+          class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
+        >
+          <span class="flex text-amber-500">
+            <svg v-for="n in 5" :key="n" viewBox="0 0 20 20" class="h-3.5 w-3.5" :fill="n <= review.rating ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.2">
+              <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <p v-if="review.comment" class="mt-3 text-sm leading-relaxed text-ink">"{{ review.comment }}"</p>
+          <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{{ review.reviewer_name }}</p>
+          <div v-if="review.staff_reply" class="mt-3 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
+            <p class="font-semibold uppercase tracking-wide text-brand-700">Owner's reply</p>
+            <p class="mt-1">{{ review.staff_reply }}</p>
+          </div>
+        </div>
       </div>
     </section>
 
