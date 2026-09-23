@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   localDayRange,
+  localMonthRange,
   minutesBetween,
+  monthGridDays,
   roundUpToStep,
   shiftDay,
+  shiftMonth,
   toLocalDate,
   toLocalInput,
 } from '../app/utils/datetime'
@@ -34,5 +37,23 @@ describe('datetime helpers', () => {
 
   it('measures minutes between instants', () => {
     expect(minutesBetween('2026-09-19T15:00:00Z', '2026-09-19T17:00:00Z')).toBe(120)
+  })
+
+  it('bounds a local calendar month as [start, end)', () => {
+    const { start, end } = localMonthRange('2026-09')
+    expect(new Date(start).getTime()).toBe(new Date(2026, 8, 1).getTime())
+    expect(new Date(end).getTime()).toBe(new Date(2026, 9, 1).getTime())
+  })
+
+  it('shifts months across year boundaries', () => {
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01')
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12')
+  })
+
+  it('builds a Sunday-start month grid padded to full weeks', () => {
+    const days = monthGridDays('2026-09') // September 2026 starts on a Tuesday
+    expect(days).toHaveLength(42)
+    expect(days[0]).toBe('2026-08-30') // padded back to the preceding Sunday
+    expect(days.filter(d => d.startsWith('2026-09'))).toHaveLength(30)
   })
 })

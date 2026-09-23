@@ -39,6 +39,40 @@ export function shiftDay(day: string, delta: number): string {
   return toLocalDate(d)
 }
 
+/** ISO instants bounding a local calendar month, e.g. "2026-09": [start, end). */
+export function localMonthRange(month: string): { start: string, end: string } {
+  const [y, m] = month.split('-').map(Number)
+  const start = new Date(y, m - 1, 1)
+  const end = new Date(y, m, 1)
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
+
+export function currentMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
+
+/** Every date (YYYY-MM-DD) in a calendar month grid, padded to full weeks (Sunday-start). */
+export function monthGridDays(month: string): string[] {
+  const [y, m] = month.split('-').map(Number)
+  const first = new Date(y, m - 1, 1)
+  const gridStart = new Date(first)
+  gridStart.setDate(first.getDate() - first.getDay())
+  const days: string[] = []
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart)
+    d.setDate(gridStart.getDate() + i)
+    days.push(toLocalDate(d))
+  }
+  return days
+}
+
 export function formatDayLabel(day: string): string {
   return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
     weekday: 'long',
