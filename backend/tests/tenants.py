@@ -19,6 +19,7 @@ from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
 from app.models.role import Role
 from app.models.user import User
+from app.models.waitlist_entry import WaitlistEntry
 
 
 def header(user: User) -> dict[str, str]:
@@ -79,6 +80,8 @@ def make_tenant(db: Session, label: str) -> SimpleNamespace:
         starts_at=start, ends_at=start + timedelta(minutes=90), status=ReservationStatus.CONFIRMED,
     )
     db.add(reservation)
+    waitlist_entry = WaitlistEntry(restaurant_id=restaurant.id, guest_name=f"{label} Walk-in", party_size=2)
+    db.add(waitlist_entry)
     db.flush()
     db.expire_all()
 
@@ -86,7 +89,7 @@ def make_tenant(db: Session, label: str) -> SimpleNamespace:
         label=label, restaurant=restaurant, rid=restaurant.id, slug=restaurant.slug,
         admin=db.get(User, admin.id), staff=db.get(User, staff.id), customer=db.get(User, customer.id),
         category=category, item=item, modifier=modifier, option=option, table=table, reservation=reservation,
-        order=None,
+        waitlist_entry=waitlist_entry, order=None,
     )
 
 

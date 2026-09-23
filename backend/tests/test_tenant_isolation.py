@@ -157,6 +157,10 @@ IDOR = [
     ("cancel their reservation", "PATCH", lambda t: f"/reservations/{t.b.reservation.id}/status", lambda t: {"status": "CANCELLED"}),
     ("extend their reservation", "POST", lambda t: f"/reservations/{t.b.reservation.id}/extend", lambda t: {"minutes": 30}),
     ("move own reservation onto their table", "PATCH", lambda t: f"/reservations/{t.a.reservation.id}", lambda t: {"table_id": t.b.table.id}),
+    ("notify their waitlist entry", "POST", lambda t: f"/waitlist/{t.b.waitlist_entry.id}/notify", None),
+    ("seat their waitlist entry", "POST", lambda t: f"/waitlist/{t.b.waitlist_entry.id}/seat", lambda t: {"table_id": t.a.table.id}),
+    ("seat own waitlist entry onto their table", "POST", lambda t: f"/waitlist/{t.a.waitlist_entry.id}/seat", lambda t: {"table_id": t.b.table.id}),
+    ("cancel their waitlist entry", "POST", lambda t: f"/waitlist/{t.b.waitlist_entry.id}/cancel", None),
 ]
 
 
