@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -27,6 +28,10 @@ class Reservation(TimestampMixin, Base):
     table_id: Mapped[int] = mapped_column(
         ForeignKey("restaurant_tables.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    # Other tables this booking is combined with, for a party too large for one table (staff-only —
+    # a guest booking online always gets a single table). No FK: kept lightweight like `closures` on
+    # Restaurant; ids are validated in the service on every write.
+    extra_table_ids: Mapped[list[int]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

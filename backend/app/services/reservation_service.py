@@ -12,7 +12,8 @@ reservation changes first — otherwise it would read stale rows.
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, cast, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
@@ -154,6 +155,7 @@ class ReservationService:
                 reservation.status = ReservationStatus.EXPIRED
             reservation.hold_expires_at = None
             table_ids.add(reservation.table_id)
+            table_ids.update(reservation.extra_table_ids or [])
         self.db.flush()
         for table_id in table_ids:
             self._sync_table_floor_status(table_id)
@@ -334,7 +336,12 @@ class ReservationService:
             raise AppError("Invalid table for this restaurant")
         if not table.is_active:
             raise AppError(f"Table {table.table_number} is not in service")
-        if table.capacity < data.party_size:
+        extra_table_ids: list[int] = list(dict.fromkeys(getattr(data, "extra_table_ids", None) or []))
+        if table.id in extra_table_ids:
+            raise AppError("A table can't be combined with itself")
+        extra_tables = self._resolve_extra_tables(restaurant_id, extra_table_ids)
+        total_capacity = table.capacity + sum(t.capacity for t in extra_tables)
+        if total_capacity < data.party_size:
             raise AppError("Table capacity is too small for this party")
         if enforce_policy:
             self._validate_party_size(restaurant, data.party_size)
@@ -363,6 +370,17 @@ class ReservationService:
             raise AppError(f"Table {table.table_number} is already booked for that time")
         if self._floor_blocks_slot(locked, starts_at):
             raise AppError(f"Table {table.table_number} is currently unavailable")
+        locked_extras = [
+            self.db.scalar(select(RestaurantTable).where(RestaurantTable.id == t.id).with_for_update())
+            for t in extra_tables
+        ]
+        for extra in locked_extras:
+            if seat_immediately:
+                self._ensure_table_has_no_seated_guests(extra)
+            if self._has_overlap(extra.id, starts_at, ends_at, buffer=buffer):
+                raise AppError(f"Table {extra.table_number} is already booked for that time")
+            if self._floor_blocks_slot(extra, starts_at):
+                raise AppError(f"Table {extra.table_number} is currently unavailable")
         if user is not None:
             self._ensure_no_user_overlap(user.id, restaurant_id, starts_at, ends_at)
 
@@ -379,6 +397,7 @@ class ReservationService:
         reservation = Reservation(
             restaurant_id=restaurant_id,
             table_id=table.id,
+            extra_table_ids=extra_table_ids,
             user_id=user.id if user else None,
             party_size=data.party_size,
             starts_at=starts_at,
@@ -394,8 +413,11 @@ class ReservationService:
         self.db.flush()
         if seat_immediately:
             locked.status = TableStatus.OCCUPIED
+            for extra in locked_extras:
+                extra.status = TableStatus.OCCUPIED
         else:
-            self._sync_table_floor_status(table.id, keep_occupied=True)
+            for tid in [table.id, *extra_table_ids]:
+                self._sync_table_floor_status(tid, keep_occupied=True)
         if status == ReservationStatus.CONFIRMED:  # (walk-ins and short-lived holds aren't emailed)
             notify_reservation_confirmed(self.db, restaurant, reservation, table.table_number, self.action_link(reservation, restaurant))
             self._schedule_reminder(restaurant, reservation, table.table_number)
@@ -501,7 +523,7 @@ class ReservationService:
             raise AppError("Only held reservations can be confirmed")
         reservation.status = ReservationStatus.CONFIRMED
         reservation.hold_expires_at = None
-        self._sync_table_floor_status(reservation.table_id, keep_occupied=True)
+        self._sync_reservation_tables(reservation, keep_occupied=True)
         restaurant = self.restaurants.get_by_id(reservation.restaurant_id)
         if restaurant is not None and reservation.guest_email:
             table_number = reservation.table.table_number if reservation.table else None
@@ -524,7 +546,7 @@ class ReservationService:
             raise AppError("This reservation has an order attached. Please contact the restaurant to cancel.")
         reservation.status = ReservationStatus.CANCELLED
         reservation.hold_expires_at = None
-        self._sync_table_floor_status(reservation.table_id)
+        self._sync_reservation_tables(reservation)
         self._email_cancellation(reservation)
         self.db.commit()
         self.db.refresh(reservation)
@@ -600,11 +622,12 @@ class ReservationService:
 
         self.db.flush()
         if reservation.status == ReservationStatus.SEATED:
-            table = self.db.get(RestaurantTable, reservation.table_id)
-            if table is not None:
-                table.status = TableStatus.OCCUPIED
+            for table_id in [reservation.table_id, *(reservation.extra_table_ids or [])]:
+                table = self.db.get(RestaurantTable, table_id)
+                if table is not None:
+                    table.status = TableStatus.OCCUPIED
         else:
-            self._sync_table_floor_status(reservation.table_id)
+            self._sync_reservation_tables(reservation)
         self.db.commit()
         self.db.refresh(reservation)
         return self._to_read(reservation)
@@ -625,12 +648,16 @@ class ReservationService:
             raise AppError("Only active reservations can be edited")
 
         changes = data.model_dump(exclude_unset=True)
-        schedule_keys = {"table_id", "party_size", "starts_at", "duration_minutes"}
+        schedule_keys = {"table_id", "extra_table_ids", "party_size", "starts_at", "duration_minutes"}
         if reservation.status == ReservationStatus.SEATED and schedule_keys & changes.keys():
             raise AppError("Seated guests can't be moved — only their details can be edited")
 
         old_table_id = reservation.table_id
+        old_extra_ids = list(reservation.extra_table_ids or [])
         table_id = changes.get("table_id") or reservation.table_id
+        extra_table_ids = list(dict.fromkeys(changes["extra_table_ids"])) if "extra_table_ids" in changes else old_extra_ids
+        if table_id in extra_table_ids:
+            raise AppError("A table can't be combined with itself")
         party_size = changes.get("party_size") or reservation.party_size
         current_minutes = int((reservation.ends_at - reservation.starts_at).total_seconds() // 60)
         duration = changes.get("duration_minutes") or current_minutes
@@ -639,6 +666,7 @@ class ReservationService:
 
         moved = (
             table_id != reservation.table_id
+            or set(extra_table_ids) != set(old_extra_ids)
             or starts_at != reservation.starts_at
             or ends_at != reservation.ends_at
             or party_size != reservation.party_size
@@ -649,7 +677,9 @@ class ReservationService:
                 raise AppError("Invalid table for this restaurant")
             if not table.is_active and table.id != reservation.table_id:
                 raise AppError(f"Table {table.table_number} is not in service")
-            if table.capacity < party_size:
+            extra_tables = self._resolve_extra_tables(restaurant_id, extra_table_ids)
+            total_capacity = table.capacity + sum(t.capacity for t in extra_tables)
+            if total_capacity < party_size:
                 raise AppError("Table capacity is too small for this party")
             if starts_at != reservation.starts_at:
                 self._validate_start(starts_at)
@@ -662,11 +692,18 @@ class ReservationService:
             if (table_id != reservation.table_id or starts_at != reservation.starts_at) and locked is not None:
                 if self._floor_blocks_slot(locked, starts_at):
                     raise AppError(f"Table {table.table_number} is currently unavailable")
+            for extra in extra_tables:
+                locked_extra = self.db.scalar(select(RestaurantTable).where(RestaurantTable.id == extra.id).with_for_update())
+                if self._has_overlap(extra.id, starts_at, ends_at, exclude_id=reservation.id, buffer=buffer):
+                    raise AppError(f"Table {extra.table_number} is already booked for that time")
+                if locked_extra is not None and self._floor_blocks_slot(locked_extra, starts_at):
+                    raise AppError(f"Table {extra.table_number} is currently unavailable")
             if reservation.user_id is not None:
                 self._ensure_no_user_overlap(
                     reservation.user_id, restaurant_id, starts_at, ends_at, exclude_id=reservation.id
                 )
             reservation.table_id = table_id
+            reservation.extra_table_ids = extra_table_ids
             reservation.party_size = party_size
             reservation.starts_at = starts_at
             reservation.ends_at = ends_at
@@ -677,7 +714,7 @@ class ReservationService:
                 setattr(reservation, key, str(value) if key == "guest_email" and value else value)
 
         self.db.flush()
-        for table_id_to_sync in {old_table_id, reservation.table_id}:
+        for table_id_to_sync in {old_table_id, reservation.table_id, *old_extra_ids, *(reservation.extra_table_ids or [])}:
             self._sync_table_floor_status(table_id_to_sync, keep_occupied=True)
         if reservation.status == ReservationStatus.CONFIRMED:
             # The time, table or contact details may have changed: replace whatever reminder was queued before.
@@ -710,7 +747,7 @@ class ReservationService:
             and not [r for r in self._seated_on(reservation.table_id) if r.id != reservation.id]
         ):
             reservation.status = ReservationStatus.SEATED
-        self._sync_table_floor_status(reservation.table_id, keep_occupied=True)
+        self._sync_reservation_tables(reservation, keep_occupied=True)
         return reservation
 
     # ------------------------------------------------------------------ table release (staff)
@@ -783,19 +820,19 @@ class ReservationService:
         ).all()
         by_table: dict[int, list[TableReservationBrief]] = {}
         for r in rows:
-            by_table.setdefault(r.table_id, []).append(
-                TableReservationBrief(
-                    id=r.id,
-                    guest_name=r.guest_name,
-                    guest_phone=r.guest_phone,
-                    party_size=r.party_size,
-                    starts_at=r.starts_at,
-                    ends_at=r.ends_at,
-                    status=r.status,
-                    blocking=r.status == ReservationStatus.SEATED or r.starts_at <= horizon,
-                    overdue_minutes=self._overdue_minutes(r, now),
-                )
+            brief = TableReservationBrief(
+                id=r.id,
+                guest_name=r.guest_name,
+                guest_phone=r.guest_phone,
+                party_size=r.party_size,
+                starts_at=r.starts_at,
+                ends_at=r.ends_at,
+                status=r.status,
+                blocking=r.status == ReservationStatus.SEATED or r.starts_at <= horizon,
+                overdue_minutes=self._overdue_minutes(r, now),
             )
+            for table_id in [r.table_id, *(r.extra_table_ids or [])]:
+                by_table.setdefault(table_id, []).append(brief)
         return [(t, by_table.get(t.id, [])) for t in tables]
 
     # ------------------------------------------------------------------ internals
@@ -816,6 +853,26 @@ class ReservationService:
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
         return restaurant
+
+    def _resolve_extra_tables(self, restaurant_id: int, extra_table_ids: list[int]) -> list[RestaurantTable]:
+        """Validate the tables a large party's booking is combined with (large parties, staff-only)."""
+        if not extra_table_ids:
+            return []
+        tables = {
+            t.id: t
+            for t in self.db.scalars(
+                select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.id.in_(extra_table_ids))
+            ).all()
+        }
+        resolved = []
+        for tid in extra_table_ids:
+            table = tables.get(tid)
+            if table is None:
+                raise AppError("Invalid table for this restaurant")
+            if not table.is_active:
+                raise AppError(f"Table {table.table_number} is not in service")
+            resolved.append(table)
+        return resolved
 
     # A reminder is only worth sending if there is enough notice for it to add something beyond the
     # confirmation email the guest already got.
@@ -871,6 +928,12 @@ class ReservationService:
                 raise AppError("The table is still booked by an earlier reservation")
             reservation.starts_at = now
 
+    @staticmethod
+    def _table_match(table_id: int):
+        """A reservation occupies a table either as its primary table or as one it's combined with
+        (large parties spanning more than one table — see `extra_table_ids`)."""
+        return or_(Reservation.table_id == table_id, Reservation.extra_table_ids.op("@>")(cast([table_id], JSONB)))
+
     def _conflicts(
         self,
         table_id: int,
@@ -883,7 +946,7 @@ class ReservationService:
         parties are never packed back-to-back (clearing time + slack for guests running over)."""
         now = _utcnow()
         conditions = [
-            Reservation.table_id == table_id,
+            self._table_match(table_id),
             Reservation.status.in_(list(ACTIVE_STATUSES)),
             Reservation.starts_at < ends_at + buffer,
             Reservation.ends_at > starts_at - buffer,
@@ -938,7 +1001,7 @@ class ReservationService:
         stmt = (
             select(Reservation)
             .where(
-                Reservation.table_id == table_id,
+                self._table_match(table_id),
                 Reservation.status.in_(list(ACTIVE_STATUSES)),
                 or_(
                     Reservation.status != ReservationStatus.HELD,
@@ -1003,6 +1066,11 @@ class ReservationService:
                     break
         return sorted(found)
 
+    def _sync_reservation_tables(self, reservation: Reservation, *, keep_occupied: bool = False) -> None:
+        """Sync the primary table and every table it's combined with."""
+        for table_id in [reservation.table_id, *(reservation.extra_table_ids or [])]:
+            self._sync_table_floor_status(table_id, keep_occupied=keep_occupied)
+
     def _sync_table_floor_status(self, table_id: int, *, keep_occupied: bool = False) -> None:
         """Re-derive a table's floor status from its reservations.
 
@@ -1044,19 +1112,15 @@ class ReservationService:
         if new_end - reservation.starts_at > timedelta(minutes=MAX_TOTAL_MINUTES):
             raise AppError(f"A booking can't run longer than {MAX_TOTAL_MINUTES // 60} hours in total")
 
-        clashes = self._conflicts(
-            reservation.table_id,
-            reservation.ends_at,
-            new_end,
-            exclude_id=reservation.id,
-            buffer=self._buffer(restaurant_id),
-        )
-        if clashes:
-            nxt = clashes[0]
-            raise AppError(
-                f"Can't extend — {nxt.guest_name} (party of {nxt.party_size}) is booked next on this table. "
-                "Move that booking to another table first."
-            )
+        buffer = self._buffer(restaurant_id)
+        for table_id in [reservation.table_id, *(reservation.extra_table_ids or [])]:
+            clashes = self._conflicts(table_id, reservation.ends_at, new_end, exclude_id=reservation.id, buffer=buffer)
+            if clashes:
+                nxt = clashes[0]
+                raise AppError(
+                    f"Can't extend — {nxt.guest_name} (party of {nxt.party_size}) is booked next on this table. "
+                    "Move that booking to another table first."
+                )
         reservation.ends_at = new_end
         self.db.commit()
         self.db.refresh(reservation)
@@ -1125,12 +1189,16 @@ class ReservationService:
         table = reservation.table
         if table is None:
             table = self.db.get(RestaurantTable, reservation.table_id)
+        extra_table_ids = reservation.extra_table_ids or []
+        extra_tables = [self.db.get(RestaurantTable, tid) for tid in extra_table_ids]
         return ReservationRead(
             id=reservation.id,
             restaurant_id=reservation.restaurant_id,
             table_id=reservation.table_id,
             table_number=table.table_number if table else None,
             table_capacity=table.capacity if table else None,
+            extra_table_ids=extra_table_ids,
+            extra_table_numbers=[t.table_number for t in extra_tables if t is not None],
             user_id=reservation.user_id,
             order_id=reservation.order_id,
             party_size=reservation.party_size,

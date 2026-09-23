@@ -22,6 +22,9 @@ class ReservationCreate(BaseModel):
 class AdminReservationCreate(ReservationCreate):
     user_id: int | None = None
     seat_immediately: bool = False
+    # Other tables this large party's booking is combined with — staff-only, so a guest booking
+    # online is always a single table.
+    extra_table_ids: list[int] = Field(default_factory=list, max_length=8)
 
 
 class ReservationStatusUpdate(BaseModel):
@@ -39,6 +42,7 @@ class ReservationUpdate(BaseModel):
     """Admin edit / reschedule of an upcoming reservation. Omitted fields are unchanged."""
 
     table_id: int | None = None
+    extra_table_ids: list[int] | None = Field(default=None, max_length=8)
     party_size: int | None = Field(default=None, ge=1, le=20)
     starts_at: datetime | None = None
     duration_minutes: int | None = Field(default=None, ge=30, le=240)
@@ -56,6 +60,9 @@ class ReservationRead(BaseModel):
     table_id: int
     table_number: str | None = None
     table_capacity: int | None = None
+    # Other tables this booking is combined with (large parties), and their numbers for display.
+    extra_table_ids: list[int] = Field(default_factory=list)
+    extra_table_numbers: list[str] = Field(default_factory=list)
     user_id: int | None
     order_id: int | None
     party_size: int
