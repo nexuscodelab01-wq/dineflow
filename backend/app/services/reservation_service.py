@@ -86,6 +86,16 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _format_minutes(minutes: int) -> str:
+    if minutes % (24 * 60) == 0:
+        days = minutes // (24 * 60)
+        return f"{days} day{'s' if days != 1 else ''}"
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    return f"{minutes} minute{'s' if minutes != 1 else ''}"
+
+
 def _status_value(value) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
@@ -180,9 +190,11 @@ class ReservationService:
         if not restaurant.dine_in_enabled:
             raise AppError("Dine-in is not available for this restaurant")
 
+        self._validate_party_size(restaurant, party_size)
         starts_at = self._ensure_aware(starts_at)
         self._validate_start(starts_at)
         self._require_open(restaurant, starts_at)
+        self._require_lead_time(restaurant, starts_at)
         ends_at = starts_at + timedelta(minutes=duration_minutes)
 
         tables = self._available_tables(restaurant_id, starts_at, ends_at, party_size)
@@ -309,6 +321,9 @@ class ReservationService:
         seat_immediately: bool = False,
         enforce_hours: bool = True,
     ) -> ReservationRead:
+        # `enforce_hours` also gates the party-size limits and lead time below — one switch for
+        # every guest-facing booking policy that staff may need to override (private events, corrections).
+        enforce_policy = enforce_hours
         self.expire_holds(restaurant_id)
         restaurant = self._active_restaurant(restaurant_id)
         if not restaurant.dine_in_enabled:
@@ -321,14 +336,17 @@ class ReservationService:
             raise AppError(f"Table {table.table_number} is not in service")
         if table.capacity < data.party_size:
             raise AppError("Table capacity is too small for this party")
+        if enforce_policy:
+            self._validate_party_size(restaurant, data.party_size)
 
         if seat_immediately:
             starts_at = _utcnow()  # walk-ins are seated now, whatever the client clock says
         else:
             starts_at = self._ensure_aware(data.starts_at)
             self._validate_start(starts_at)
-            if enforce_hours:
+            if enforce_policy:
                 self._require_open(restaurant, starts_at)
+                self._require_lead_time(restaurant, starts_at)
         ends_at = starts_at + timedelta(minutes=data.duration_minutes)
 
         # Lock the table row to serialise concurrent bookings of the same table.
@@ -817,6 +835,21 @@ class ReservationService:
         status = status_at(restaurant, starts_at)
         if not status.open:
             raise AppError(f"{restaurant.name} is closed at that time ({status.reason}). Please choose another time.")
+
+    def _require_lead_time(self, restaurant, starts_at: datetime) -> None:
+        if not restaurant.booking_lead_time_minutes:
+            return
+        earliest = _utcnow() + timedelta(minutes=restaurant.booking_lead_time_minutes)
+        if starts_at < earliest:
+            raise AppError(f"Bookings need at least {_format_minutes(restaurant.booking_lead_time_minutes)} notice")
+
+    def _validate_party_size(self, restaurant, party_size: int) -> None:
+        if party_size < restaurant.min_party_size:
+            if restaurant.min_party_size > 1:
+                raise AppError(f"Parties of at least {restaurant.min_party_size} are required to book online")
+            raise AppError("Party size must be at least 1")
+        if restaurant.max_party_size is not None and party_size > restaurant.max_party_size:
+            raise AppError(f"For parties larger than {restaurant.max_party_size}, please contact {restaurant.name} directly")
 
     def _validate_start(self, starts_at: datetime) -> None:
         now = _utcnow()
