@@ -49,6 +49,13 @@ class ReservationStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"
 
 
+class WaitlistStatus(str, enum.Enum):
+    WAITING = "WAITING"
+    NOTIFIED = "NOTIFIED"   # "your table is ready" has been sent
+    SEATED = "SEATED"
+    CANCELLED = "CANCELLED"
+
+
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"

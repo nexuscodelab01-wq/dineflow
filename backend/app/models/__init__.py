@@ -24,6 +24,7 @@ from app.models.role import Role
 from app.models.service_request import ServiceRequest
 from app.models.table_session import SessionGuest, TableSession
 from app.models.user import User
+from app.models.waitlist_entry import WaitlistEntry
 
 __all__ = [
     "Address",
@@ -51,4 +52,5 @@ __all__ = [
     "SessionGuest",
     "TableSession",
     "User",
+    "WaitlistEntry",
 ]
