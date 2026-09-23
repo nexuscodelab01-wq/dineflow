@@ -157,6 +157,8 @@ IDOR = [
     ("cancel their reservation", "PATCH", lambda t: f"/reservations/{t.b.reservation.id}/status", lambda t: {"status": "CANCELLED"}),
     ("extend their reservation", "POST", lambda t: f"/reservations/{t.b.reservation.id}/extend", lambda t: {"minutes": 30}),
     ("move own reservation onto their table", "PATCH", lambda t: f"/reservations/{t.a.reservation.id}", lambda t: {"table_id": t.b.table.id}),
+    ("combine own reservation with their table", "PATCH", lambda t: f"/reservations/{t.a.reservation.id}", lambda t: {"extra_table_ids": [t.b.table.id]}),
+    ("book combined with their table", "POST", lambda t: "/reservations", lambda t: {"table_id": t.a.table.id, "extra_table_ids": [t.b.table.id], "party_size": 2, "starts_at": "2030-01-01T18:00:00Z", "guest_name": "x"}),
     ("notify their waitlist entry", "POST", lambda t: f"/waitlist/{t.b.waitlist_entry.id}/notify", None),
     ("seat their waitlist entry", "POST", lambda t: f"/waitlist/{t.b.waitlist_entry.id}/seat", lambda t: {"table_id": t.a.table.id}),
     ("seat own waitlist entry onto their table", "POST", lambda t: f"/waitlist/{t.a.waitlist_entry.id}/seat", lambda t: {"table_id": t.b.table.id}),
