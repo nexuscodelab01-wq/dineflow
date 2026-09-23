@@ -42,6 +42,18 @@ export default defineNuxtConfig({
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       },
     },
+    // The booking widget is meant to be framed on a restaurant's own external site — everything
+    // else stays DENY. CSP frame-ancestors (rather than X-Frame-Options, which can't allow "any
+    // origin") is the mechanism for that; a future per-tenant allow-list can tighten this further.
+    '/embed/**': {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': '',
+        'Content-Security-Policy': 'frame-ancestors *',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      },
+    },
   },
 
   typescript: {
