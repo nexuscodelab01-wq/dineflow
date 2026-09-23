@@ -150,3 +150,71 @@ def test_bad_colours_are_refused(world):
     for field in ("primary_color", "secondary_color"):
         r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={field: "not-a-color"})
         assert r.status_code == 422, field
+
+
+# ------------------------------------------------------------------ home page content
+
+def test_setting_home_page_content(world):
+    w = world
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "about_text": "We've been serving pasta since 1990.",
+        "gallery": ["/uploads/tenants/1/gallery/a.webp", "https://example.com/photo.jpg"],
+        "social_links": {"instagram": "https://instagram.com/alpha", "facebook": "https://facebook.com/alpha"},
+        "latitude": "40.712800", "longitude": "-74.006000",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["about_text"] == "We've been serving pasta since 1990."
+    assert body["gallery"] == ["/uploads/tenants/1/gallery/a.webp", "https://example.com/photo.jpg"]
+    assert body["social_links"] == {"instagram": "https://instagram.com/alpha", "facebook": "https://facebook.com/alpha"}
+    assert body["latitude"] == "40.712800" and body["longitude"] == "-74.006000"
+
+
+def test_an_unknown_social_link_is_refused(world):
+    w = world
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "social_links": {"myspace": "https://myspace.com/alpha"},
+    })
+    assert r.status_code == 422
+
+
+def test_a_social_link_must_be_a_full_url(world):
+    w = world
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "social_links": {"instagram": "alpha"},
+    })
+    assert r.status_code == 422
+
+
+def test_a_gallery_image_must_be_uploaded_or_a_link(world):
+    w = world
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "gallery": ["not a url"],
+    })
+    assert r.status_code == 422
+
+
+def test_too_many_gallery_images_is_refused(world):
+    w = world
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "gallery": [f"https://example.com/{i}.jpg" for i in range(21)],
+    })
+    assert r.status_code == 422
+
+
+def test_bad_coordinates_are_refused(world):
+    w = world
+    for field, bad in (("latitude", "91"), ("latitude", "-91"), ("longitude", "181"), ("longitude", "-181")):
+        r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={field: bad})
+        assert r.status_code == 422, (field, bad)
+
+
+def test_removing_a_gallery_image_deletes_the_stored_file(world):
+    w = world
+    w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "gallery": [f"/uploads/tenants/{w.a.rid}/gallery/keep.webp", f"/uploads/tenants/{w.a.rid}/gallery/drop.webp"],
+    })
+    r = w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={
+        "gallery": [f"/uploads/tenants/{w.a.rid}/gallery/keep.webp"],
+    })
+    assert r.status_code == 200 and r.json()["gallery"] == [f"/uploads/tenants/{w.a.rid}/gallery/keep.webp"]
