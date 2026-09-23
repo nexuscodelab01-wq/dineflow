@@ -31,6 +31,9 @@ const form = reactive({
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
+  min_party_size: 1,
+  max_party_size: null as number | null,
+  booking_lead_time_minutes: 0,
   custom_domain: '',
   primary_color: '',
   secondary_color: '',
@@ -85,6 +88,9 @@ onMounted(async () => {
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
+      min_party_size: settings.value.min_party_size ?? 1,
+      max_party_size: settings.value.max_party_size ?? null,
+      booking_lead_time_minutes: settings.value.booking_lead_time_minutes ?? 0,
       custom_domain: settings.value.custom_domain || '',
       primary_color: settings.value.primary_color || '',
       secondary_color: settings.value.secondary_color || '',
@@ -169,6 +175,8 @@ async function save() {
       ...form,
       tax_rate: form.tax_rate,
       delivery_fee: form.delivery_fee,
+      // An emptied number input leaves the ref as '' rather than null.
+      max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
       timezone: timezone.value,
       opening_hours: openingHours,
       closures: closures.value.map(c => ({ date: c.date, label: c.label || null })),
@@ -316,7 +324,7 @@ async function save() {
         </div>
       </section>
 
-      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
         <h2 class="font-semibold">Reservations</h2>
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Reset gap between bookings (minutes)</span>
@@ -333,6 +341,26 @@ async function save() {
             0 allows back-to-back bookings.
           </span>
         </label>
+
+        <div class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Guest booking limits</h3>
+          <p class="mt-1 text-xs text-ink-subtle">Staff can still book outside these from the admin side — for private events or corrections.</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+            <label class="block text-sm">
+              <span class="mb-1 block font-medium">Min party size</span>
+              <input v-model.number="form.min_party_size" type="number" min="1" max="20" class="w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block font-medium">Max party size <span class="font-normal text-ink-subtle">(blank = no limit)</span></span>
+              <input v-model.number="form.max_party_size" type="number" min="1" max="20" placeholder="—" class="w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block font-medium">Minimum notice (minutes)</span>
+              <input v-model.number="form.booking_lead_time_minutes" type="number" min="0" step="15" class="w-full rounded-lg border px-3 py-2 text-sm">
+              <span class="mt-1 block text-xs text-ink-subtle">0 allows booking right up to the start time.</span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <p v-if="message" class="text-sm" :class="message === 'Settings saved' ? 'text-brand-700' : 'text-red-600'">{{ message }}</p>

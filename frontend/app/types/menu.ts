@@ -24,6 +24,11 @@ export type Restaurant = {
   delivery_fee: string
   /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */
   reservation_buffer_minutes?: number
+  min_party_size?: number
+  /** null/undefined = no upper limit. */
+  max_party_size?: number | null
+  /** How much notice a guest must give before a booking's start time. */
+  booking_lead_time_minutes?: number
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean
