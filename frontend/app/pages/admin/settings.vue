@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Restaurant } from '~/types/menu'
-import { fetchAdminSettings, updateAdminSettings, uploadLogo } from '~/services/admin'
+import { fetchAdminSettings, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
 import { resolveMediaUrl } from '~/utils/media'
 import { DAYS, type Day, parseDay } from '~/utils/hours'
 import { COMMON_TIMEZONES } from '~/utils/timezones'
@@ -16,6 +16,10 @@ const message = ref('')
 const logoUrl = ref<string | null>(null)
 const uploadingLogo = ref(false)
 const logoError = ref('')
+
+const gallery = ref<string[]>([])
+const uploadingGallery = ref(false)
+const galleryError = ref('')
 
 const form = reactive({
   name: '',
@@ -38,6 +42,10 @@ const form = reactive({
   custom_domain: '',
   primary_color: '',
   secondary_color: '',
+  about_text: '',
+  social_links: { instagram: '', facebook: '', twitter: '', tiktok: '', youtube: '' },
+  latitude: '',
+  longitude: '',
 })
 
 const dayLabels: Record<Day, string> = {
@@ -75,6 +83,7 @@ onMounted(async () => {
   if (admin.restaurantId) {
     settings.value = await fetchAdminSettings(admin.restaurantId)
     logoUrl.value = settings.value.logo_url ?? null
+    gallery.value = [...(settings.value.gallery ?? [])]
     Object.assign(form, {
       name: settings.value.name,
       description: settings.value.description || '',
@@ -96,6 +105,16 @@ onMounted(async () => {
       custom_domain: settings.value.custom_domain || '',
       primary_color: settings.value.primary_color || '',
       secondary_color: settings.value.secondary_color || '',
+      about_text: settings.value.about_text || '',
+      social_links: {
+        instagram: settings.value.social_links?.instagram || '',
+        facebook: settings.value.social_links?.facebook || '',
+        twitter: settings.value.social_links?.twitter || '',
+        tiktok: settings.value.social_links?.tiktok || '',
+        youtube: settings.value.social_links?.youtube || '',
+      },
+      latitude: settings.value.latitude || '',
+      longitude: settings.value.longitude || '',
     })
     timezone.value = settings.value.timezone || 'UTC'
     customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
@@ -150,6 +169,54 @@ async function removeLogo() {
   }
 }
 
+const MAX_GALLERY_IMAGES = 20
+
+async function onGallerySelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !admin.restaurantId) return
+  galleryError.value = ''
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    galleryError.value = 'Use a PNG, JPEG, WebP or GIF image'
+    return
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    galleryError.value = 'The image must be 5MB or smaller'
+    return
+  }
+  if (gallery.value.length >= MAX_GALLERY_IMAGES) {
+    galleryError.value = `Up to ${MAX_GALLERY_IMAGES} photos`
+    return
+  }
+  uploadingGallery.value = true
+  try {
+    const { url } = await uploadGalleryImage(admin.restaurantId, file)
+    const updated = await updateAdminSettings(admin.restaurantId, { gallery: [...gallery.value, url] })
+    gallery.value = [...(updated.gallery ?? [])]
+    message.value = 'Photo added'
+  }
+  catch (err) {
+    galleryError.value = err instanceof Error ? err.message : 'Upload failed'
+  }
+  finally {
+    uploadingGallery.value = false
+  }
+}
+
+async function removeGalleryImage(url: string) {
+  if (!admin.restaurantId) return
+  galleryError.value = ''
+  try {
+    const updated = await updateAdminSettings(admin.restaurantId, { gallery: gallery.value.filter(g => g !== url) })
+    gallery.value = [...(updated.gallery ?? [])]
+    message.value = 'Photo removed'
+  }
+  catch (err) {
+    galleryError.value = err instanceof Error ? err.message : 'Could not remove the photo'
+  }
+}
+
 function addClosure() {
   if (!newClosureDate.value) return
   if (closures.value.some(c => c.date === newClosureDate.value)) {
@@ -180,6 +247,10 @@ async function save() {
       // An emptied number input leaves the ref as '' rather than null.
       max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
       max_covers_per_slot: form.max_covers_per_slot === '' || form.max_covers_per_slot == null ? null : Number(form.max_covers_per_slot),
+      about_text: form.about_text || null,
+      social_links: Object.fromEntries(Object.entries(form.social_links).filter(([, v]) => v.trim())),
+      latitude: form.latitude === '' ? null : form.latitude,
+      longitude: form.longitude === '' ? null : form.longitude,
       timezone: timezone.value,
       opening_hours: openingHours,
       closures: closures.value.map(c => ({ date: c.date, label: c.label || null })),
@@ -250,6 +321,64 @@ async function save() {
         <div class="grid gap-3 sm:grid-cols-2">
           <input v-model="form.city" class="rounded-lg border px-3 py-2 text-sm" placeholder="City">
           <input v-model="form.postal_code" class="rounded-lg border px-3 py-2 text-sm" placeholder="Postal code">
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
+        <div>
+          <h2 class="font-semibold">Home page</h2>
+          <p class="mt-1 text-xs text-ink-subtle">About us, photos, social links and a map for your site's home page.</p>
+        </div>
+
+        <label class="block text-sm font-medium">About us
+          <textarea v-model="form.about_text" rows="4" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Tell guests your story — when you opened, what makes your food special…" />
+        </label>
+
+        <div class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Photo gallery</h3>
+          <div v-if="gallery.length" class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div v-for="url in gallery" :key="url" class="group relative aspect-square overflow-hidden rounded-lg border border-brand-100 bg-white">
+              <img :src="resolveMediaUrl(url)!" alt="" class="h-full w-full object-cover">
+              <button
+                type="button"
+                class="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-xs text-white opacity-0 transition group-hover:opacity-100"
+                aria-label="Remove photo"
+                @click="removeGalleryImage(url)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <label class="mt-3 inline-block cursor-pointer rounded-lg border border-brand-200 px-3 py-2 text-sm font-medium hover:bg-brand-50">
+            {{ uploadingGallery ? 'Uploading…' : 'Add a photo' }}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" :disabled="uploadingGallery" @change="onGallerySelected">
+          </label>
+          <p class="mt-1 text-xs text-ink-subtle">Up to {{ MAX_GALLERY_IMAGES }} photos, 5MB each.</p>
+          <p v-if="galleryError" class="text-sm text-red-600" role="alert">{{ galleryError }}</p>
+        </div>
+
+        <div class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Social links <span class="font-normal text-ink-subtle">(optional)</span></h3>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input v-model="form.social_links.instagram" class="rounded-lg border px-3 py-2 text-sm" placeholder="Instagram URL">
+            <input v-model="form.social_links.facebook" class="rounded-lg border px-3 py-2 text-sm" placeholder="Facebook URL">
+            <input v-model="form.social_links.twitter" class="rounded-lg border px-3 py-2 text-sm" placeholder="X / Twitter URL">
+            <input v-model="form.social_links.tiktok" class="rounded-lg border px-3 py-2 text-sm" placeholder="TikTok URL">
+            <input v-model="form.social_links.youtube" class="rounded-lg border px-3 py-2 text-sm" placeholder="YouTube URL">
+          </div>
+        </div>
+
+        <div class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Map <span class="font-normal text-ink-subtle">(optional)</span></h3>
+          <p class="mt-1 text-xs text-ink-subtle">
+            Add coordinates to show an interactive map on your home page — otherwise it just shows your address as text.
+            <a href="https://www.google.com/maps" target="_blank" rel="noopener" class="text-brand-700 underline">Find yours on Google Maps</a>:
+            right-click your location, then click the coordinates to copy them.
+          </p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input v-model="form.latitude" type="number" step="0.000001" min="-90" max="90" class="rounded-lg border px-3 py-2 text-sm" placeholder="Latitude, e.g. 40.712800">
+            <input v-model="form.longitude" type="number" step="0.000001" min="-180" max="180" class="rounded-lg border px-3 py-2 text-sm" placeholder="Longitude, e.g. -74.006000">
+          </div>
         </div>
       </section>
 
