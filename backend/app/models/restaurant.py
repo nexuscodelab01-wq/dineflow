@@ -62,6 +62,12 @@ class Restaurant(TimestampMixin, Base):
     next_order_number: Mapped[int] = mapped_column(Integer, default=1001, server_default="1001", nullable=False)
     # Who may open a table's QR menu: SEATED (only while the table is occupied) or OPEN (any time).
     qr_access_policy: Mapped[str] = mapped_column(String(10), default="SEATED", server_default="SEATED", nullable=False)
+    # Guest booking limits, enforced on customer-facing availability/booking only — staff can always
+    # override for private events or corrections. max_party_size null = no upper limit.
+    min_party_size: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    max_party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # How much notice a guest must give before a booking's start time.
+    booking_lead_time_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

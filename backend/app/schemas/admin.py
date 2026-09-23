@@ -280,6 +280,11 @@ class RestaurantSettingsUpdate(BaseModel):
     tax_rate: Decimal | None = Field(default=None, ge=0, le=1)
     delivery_fee: Decimal | None = Field(default=None, ge=0)
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
+    # Guest booking policy — staff can still book outside these limits for private events or corrections.
+    # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).
+    min_party_size: int | None = Field(default=None, ge=1, le=20)
+    max_party_size: int | None = Field(default=None, ge=1, le=20)
+    booking_lead_time_minutes: int | None = Field(default=None, ge=0, le=10080)  # up to a week's notice
 
     @field_validator("logo_url")
     @classmethod

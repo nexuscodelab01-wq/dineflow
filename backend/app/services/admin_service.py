@@ -450,6 +450,8 @@ class AdminService:
             restaurant.domain_verified_at = None  # a changed domain needs verifying again
         for key, value in payload.items():
             setattr(restaurant, key, value)
+        if restaurant.max_party_size is not None and restaurant.max_party_size < restaurant.min_party_size:
+            raise AppError("Maximum party size can't be smaller than the minimum")
         try:
             self.db.commit()
         except IntegrityError as exc:

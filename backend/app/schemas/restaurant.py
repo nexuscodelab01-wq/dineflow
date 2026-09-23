@@ -31,6 +31,9 @@ class RestaurantRead(BaseModel):
     tax_rate: Decimal
     delivery_fee: Decimal
     reservation_buffer_minutes: int = 15
+    min_party_size: int = 1
+    max_party_size: int | None = None
+    booking_lead_time_minutes: int = 0
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool
