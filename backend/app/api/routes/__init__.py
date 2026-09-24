@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, health, menu, orders, platform, realtime, reservations, restaurants, reviews, table_ordering, tenant
+from app.api.routes import admin, auth, health, loyalty, menu, orders, platform, realtime, reservations, restaurants, reviews, table_ordering, tenant
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -17,3 +17,4 @@ api_router.include_router(menu.router, tags=["menu"])
 api_router.include_router(orders.router, tags=["orders"])
 api_router.include_router(reservations.router, tags=["reservations"])
 api_router.include_router(reviews.router, tags=["reviews"])
+api_router.include_router(loyalty.router, tags=["loyalty"])

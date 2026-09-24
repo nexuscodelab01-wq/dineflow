@@ -40,6 +40,7 @@ class RestaurantRead(BaseModel):
     social_links: dict[str, str] = {}
     latitude: Decimal | None = None
     longitude: Decimal | None = None
+    loyalty_points_per_currency: int = 1
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool

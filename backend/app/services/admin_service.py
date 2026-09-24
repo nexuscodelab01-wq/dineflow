@@ -52,6 +52,8 @@ from app.schemas.admin import (
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.restaurant import RestaurantRead
+from app.services.feature_service import FeatureService
+from app.services.loyalty_service import LoyaltyService
 from app.services.menu_service import MenuService
 from app.services.reservation_service import ReservationService
 
@@ -79,6 +81,8 @@ class AdminService:
         self.restaurants = RestaurantRepository(db)
         self.menu_reader = MenuService(db)
         self.reservations = ReservationService(db)
+        self.features = FeatureService(db)
+        self.loyalty = LoyaltyService(db)
 
     def dashboard_stats(self, restaurant_id: int) -> DashboardStats:
         data = self.dashboard.stats(restaurant_id)
@@ -282,6 +286,8 @@ class AdminService:
         )
         publish(self.db, kitchen_topic(restaurant_id), "order.status", {"order_id": order.id, "status": data.status.value})
         publish_order_change(self.db, order, "order.status", {"status": data.status.value})
+        if data.status == OrderStatus.COMPLETED and self.features.is_enabled(restaurant_id, "loyalty"):
+            self.loyalty.earn_for_completed_order(order, order.restaurant)
         self.db.commit()
         logger.info("Order status updated: %s -> %s by user %s", previous.value, data.status.value, user.id)
         return self.get_order(order_id, restaurant_id)

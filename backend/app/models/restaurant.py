@@ -82,6 +82,8 @@ class Restaurant(TimestampMixin, Base):
     # Optional map coordinates for the home page. Null = no embedded map, just the address text.
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    # Whole loyalty points earned per whole currency unit spent on a completed order (floor of total * rate).
+    loyalty_points_per_currency: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

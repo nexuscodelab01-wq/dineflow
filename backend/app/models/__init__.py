@@ -5,6 +5,7 @@ from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.feature_override import FeatureOverride
 from app.models.job import Job
+from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.menu_item import MenuItem
 from app.models.menu_item_modifier import MenuItemModifier
 from app.models.menu_modifier import MenuModifier
@@ -33,6 +34,8 @@ __all__ = [
     "Category",
     "FeatureOverride",
     "Job",
+    "LoyaltyAccount",
+    "LoyaltyTransaction",
     "MenuItem",
     "MenuItemModifier",
     "MenuModifier",

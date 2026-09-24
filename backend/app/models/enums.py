@@ -56,6 +56,12 @@ class WaitlistStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class LoyaltyReason(str, enum.Enum):
+    EARNED = "EARNED"      # from a completed order
+    REDEEMED = "REDEEMED"  # spent on a discount
+    ADJUSTED = "ADJUSTED"  # a staff correction (goodwill, error fix, etc.)
+
+
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"

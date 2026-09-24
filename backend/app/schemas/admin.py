@@ -292,6 +292,7 @@ class RestaurantSettingsUpdate(BaseModel):
     social_links: dict[str, str] | None = None
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
+    loyalty_points_per_currency: int | None = Field(default=None, ge=0, le=1000)
 
     @field_validator("logo_url")
     @classmethod

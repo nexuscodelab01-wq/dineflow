@@ -64,11 +64,13 @@ from app.schemas.reservation import (
     ReservationUpdate,
 )
 from app.schemas.restaurant import RestaurantRead
+from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
+from app.services.loyalty_service import LoyaltyService
 from app.services.review_service import ReviewService
 from app.services.waitlist_service import WaitlistService
 from app.utils.date_ranges import DateRangePreset
@@ -95,6 +97,10 @@ def get_reservation_service(db: Annotated[Session, Depends(get_db)]) -> Reservat
 
 def get_waitlist_service(db: Annotated[Session, Depends(get_db)]) -> WaitlistService:
     return WaitlistService(db)
+
+
+def get_loyalty_service(db: Annotated[Session, Depends(get_db)]) -> LoyaltyService:
+    return LoyaltyService(db)
 
 
 def get_review_service(db: Annotated[Session, Depends(get_db)]) -> ReviewService:
@@ -850,6 +856,31 @@ def reply_to_review(
 ) -> AdminReviewRead:
     try:
         return service.reply(review_id, restaurant_id, data.reply)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+# ------------------------------------------------------------------ loyalty
+
+@router.get("/loyalty", response_model=list[AdminLoyaltyAccountRead], dependencies=[Depends(requires_feature("loyalty"))])
+def list_loyalty_accounts(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[LoyaltyService, Depends(get_loyalty_service)],
+) -> list[AdminLoyaltyAccountRead]:
+    return service.admin_list(restaurant_id)
+
+
+@router.post("/loyalty/{user_id}/adjust", response_model=AdminLoyaltyAccountRead, dependencies=[Depends(requires_feature("loyalty"))])
+def adjust_loyalty_points(
+    user_id: int,
+    data: LoyaltyAdjust,
+    staff: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[LoyaltyService, Depends(get_loyalty_service)],
+) -> AdminLoyaltyAccountRead:
+    try:
+        return service.admin_adjust(restaurant_id, user_id, data.points, data.note, staff)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
