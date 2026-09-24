@@ -307,6 +307,9 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
           </div>
         </div>
       </div>
+      <NuxtLink v-if="reviewCount > reviews.length" to="/reviews" class="mt-8 block text-center text-sm font-semibold text-brand-700 hover:underline">
+        See all {{ reviewCount }} reviews →
+      </NuxtLink>
     </section>
 
     <!-- Visit us: the map fills the band, the details sit on a glass card over it -->
