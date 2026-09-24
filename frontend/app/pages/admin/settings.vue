@@ -8,6 +8,7 @@ import { COMMON_TIMEZONES } from '~/utils/timezones'
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
 const admin = useAdminStore()
+const loyaltyEnabled = useFeature('loyalty')
 const settings = ref<Restaurant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -46,6 +47,7 @@ const form = reactive({
   social_links: { instagram: '', facebook: '', twitter: '', tiktok: '', youtube: '' },
   latitude: '',
   longitude: '',
+  loyalty_points_per_currency: 1,
 })
 
 const dayLabels: Record<Day, string> = {
@@ -115,6 +117,7 @@ onMounted(async () => {
       },
       latitude: settings.value.latitude || '',
       longitude: settings.value.longitude || '',
+      loyalty_points_per_currency: settings.value.loyalty_points_per_currency ?? 1,
     })
     timezone.value = settings.value.timezone || 'UTC'
     customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
@@ -380,6 +383,16 @@ async function save() {
             <input v-model="form.longitude" type="number" step="0.000001" min="-180" max="180" class="rounded-lg border px-3 py-2 text-sm" placeholder="Longitude, e.g. -74.006000">
           </div>
         </div>
+      </section>
+
+      <section v-if="loyaltyEnabled" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <div>
+          <h2 class="font-semibold">Loyalty</h2>
+          <p class="mt-1 text-xs text-ink-subtle">Points a customer earns per whole currency unit spent, credited when an order is marked completed.</p>
+        </div>
+        <label class="block text-sm font-medium">Points per $1 spent
+          <input v-model.number="form.loyalty_points_per_currency" type="number" min="0" max="1000" class="mt-1 w-32 rounded-lg border px-3 py-2 text-sm">
+        </label>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">

@@ -35,6 +35,7 @@
           <NuxtLink v-if="reviewsEnabled" to="/reviews" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined">Reviews</NuxtLink>
           <template v-if="signedIn">
             <NuxtLink to="/orders" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined">Orders</NuxtLink>
+            <NuxtLink v-if="loyaltyEnabled" to="/loyalty" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/loyalty') }" :aria-current="isActive('/loyalty') ? 'page' : undefined">Points</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined">Platform</NuxtLink>
@@ -65,6 +66,7 @@
           <NuxtLink v-if="reviewsEnabled" to="/reviews" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined" @click="mobileOpen = false">Reviews</NuxtLink>
           <template v-if="signedIn">
             <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined" @click="mobileOpen = false">Orders</NuxtLink>
+            <NuxtLink v-if="loyaltyEnabled" to="/loyalty" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/loyalty') }" :aria-current="isActive('/loyalty') ? 'page' : undefined" @click="mobileOpen = false">Points</NuxtLink>
             <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined" @click="mobileOpen = false">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined" @click="mobileOpen = false">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined" @click="mobileOpen = false">Platform</NuxtLink>
@@ -95,6 +97,7 @@ const auth = useAuthStore()
 const cart = useCartStore()
 const reservations = useFeature('reservations')
 const reviewsEnabled = useFeature('reviews')
+const loyaltyEnabled = useFeature('loyalty')
 const branding = useBranding()
 const mobileOpen = ref(false)
 const route = useRoute()

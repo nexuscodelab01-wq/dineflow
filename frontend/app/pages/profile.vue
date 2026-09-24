@@ -59,6 +59,13 @@
             Your reviews
           </NuxtLink>
           <NuxtLink
+            v-if="loyaltyEnabled"
+            to="/loyalty"
+            class="inline-flex items-center rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+          >
+            Your points
+          </NuxtLink>
+          <NuxtLink
             v-if="auth.isStaff"
             to="/admin"
             class="inline-flex items-center rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
@@ -80,6 +87,7 @@ const auth = useAuthStore()
 const router = useRouter()
 const hydrated = useHydrated()
 const reviewsEnabled = useFeature('reviews')
+const loyaltyEnabled = useFeature('loyalty')
 
 const current = ref('')
 const next = ref('')

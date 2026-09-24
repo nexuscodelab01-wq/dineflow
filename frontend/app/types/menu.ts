@@ -39,6 +39,8 @@ export type Restaurant = {
   /** Optional map coordinates for the home page; null = no embedded map, just the address text. */
   latitude?: string | null
   longitude?: string | null
+  /** Points earned per whole currency unit spent on a completed order. */
+  loyalty_points_per_currency?: number
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean
