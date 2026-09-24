@@ -20,10 +20,10 @@
         </button>
 
         <nav class="hidden items-center gap-4 text-sm font-medium text-ink-muted md:flex">
-          <NuxtLink to="/" class="hover:text-brand-700">Home</NuxtLink>
-          <NuxtLink to="/menu" class="hover:text-brand-700">Menu</NuxtLink>
-          <NuxtLink v-if="reservations" to="/reserve" class="hover:text-brand-700">Reserve</NuxtLink>
-          <NuxtLink to="/cart" class="relative hover:text-brand-700">
+          <NuxtLink to="/" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/') }" :aria-current="isActive('/') ? 'page' : undefined">Home</NuxtLink>
+          <NuxtLink to="/menu" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/menu') }" :aria-current="isActive('/menu') ? 'page' : undefined">Menu</NuxtLink>
+          <NuxtLink v-if="reservations" to="/reserve" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/reserve') }" :aria-current="isActive('/reserve') ? 'page' : undefined">Reserve</NuxtLink>
+          <NuxtLink to="/cart" class="relative hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined">
             Cart
             <span
               v-if="cartCount"
@@ -33,14 +33,14 @@
             </span>
           </NuxtLink>
           <template v-if="signedIn">
-            <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
-            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="hover:text-brand-700">Reviews</NuxtLink>
-            <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
-            <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
-            <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700">Platform</NuxtLink>
+            <NuxtLink to="/orders" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined">Orders</NuxtLink>
+            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined">Reviews</NuxtLink>
+            <NuxtLink to="/profile" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined">Profile</NuxtLink>
+            <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined">Admin</NuxtLink>
+            <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined">Platform</NuxtLink>
           </template>
           <template v-else>
-            <NuxtLink to="/login" class="hover:text-brand-700">Sign in</NuxtLink>
+            <NuxtLink to="/login" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/login') }" :aria-current="isActive('/login') ? 'page' : undefined">Sign in</NuxtLink>
             <NuxtLink
               to="/register"
               class="rounded-lg bg-brand-700 px-3 py-1.5 text-white hover:bg-brand-800"
@@ -56,21 +56,21 @@
         class="border-t border-brand-100 px-4 py-4 md:hidden"
       >
         <div class="flex flex-col gap-2 text-sm font-medium text-ink-muted">
-          <NuxtLink to="/" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Home</NuxtLink>
-          <NuxtLink to="/menu" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Menu</NuxtLink>
-          <NuxtLink v-if="reservations" to="/reserve" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Reserve</NuxtLink>
-          <NuxtLink to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">
+          <NuxtLink to="/" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/') }" :aria-current="isActive('/') ? 'page' : undefined" @click="mobileOpen = false">Home</NuxtLink>
+          <NuxtLink to="/menu" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/menu') }" :aria-current="isActive('/menu') ? 'page' : undefined" @click="mobileOpen = false">Menu</NuxtLink>
+          <NuxtLink v-if="reservations" to="/reserve" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/reserve') }" :aria-current="isActive('/reserve') ? 'page' : undefined" @click="mobileOpen = false">Reserve</NuxtLink>
+          <NuxtLink to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined" @click="mobileOpen = false">
             Cart<span v-if="cartCount"> ({{ cartCount }})</span>
           </NuxtLink>
           <template v-if="signedIn">
-            <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Orders</NuxtLink>
-            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Reviews</NuxtLink>
-            <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Profile</NuxtLink>
-            <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Admin</NuxtLink>
-            <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Platform</NuxtLink>
+            <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined" @click="mobileOpen = false">Orders</NuxtLink>
+            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined" @click="mobileOpen = false">Reviews</NuxtLink>
+            <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined" @click="mobileOpen = false">Profile</NuxtLink>
+            <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined" @click="mobileOpen = false">Admin</NuxtLink>
+            <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined" @click="mobileOpen = false">Platform</NuxtLink>
           </template>
           <template v-else>
-            <NuxtLink to="/login" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Sign in</NuxtLink>
+            <NuxtLink to="/login" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/login') }" :aria-current="isActive('/login') ? 'page' : undefined" @click="mobileOpen = false">Sign in</NuxtLink>
             <NuxtLink to="/register" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Register</NuxtLink>
           </template>
         </div>
@@ -110,6 +110,13 @@ const platformIn = computed(() => ready.value && auth.isPlatformAdmin)
 const cartCount = computed(() => (ready.value ? cart.itemCount : 0))
 
 const hiddenCartBarRoutes = new Set(['/cart', '/checkout'])
+
+// "/" only matches the home page itself; every other link also covers its own sub-pages
+// (e.g. "/orders" stays active on "/orders/42") so a detail page still shows where you are.
+function isActive(path: string): boolean {
+  if (path === '/') return route.path === '/'
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
 
 const showCartPad = computed(() => {
   if (!ready.value || cart.isEmpty) return false
