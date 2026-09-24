@@ -31,6 +31,8 @@ class OrderCreate(BaseModel):
     customer_phone: str | None = Field(default=None, max_length=30)
     # Prices, discounts and the table are decided by the server — never by the client.
     # (Unknown fields such as `discount` or `table_id` in a request are ignored.)
+    # A coupon is named by its code only; what it is worth is worked out server-side.
+    coupon_code: str | None = Field(default=None, max_length=40)
     reservation_id: int | None = None
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)

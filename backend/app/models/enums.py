@@ -56,6 +56,11 @@ class WaitlistStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class CouponDiscountType(str, enum.Enum):
+    PERCENT = "PERCENT"  # discount_value is a percentage of the subtotal
+    FIXED = "FIXED"      # discount_value is an amount off
+
+
 class LoyaltyReason(str, enum.Enum):
     EARNED = "EARNED"      # from a completed order
     REDEEMED = "REDEEMED"  # spent on a discount

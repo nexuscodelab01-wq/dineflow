@@ -25,4 +25,5 @@ FEATURES: dict[str, Feature] = {
     "custom_branding": Feature(False, "Restaurant's own logo, colours and fonts on its site"),
     "reviews": Feature(False, "Guests can rate and review a completed visit; shown on the site"),
     "loyalty": Feature(False, "Customers earn points on completed orders and can view their balance"),
+    "coupons": Feature(False, "Discount codes customers can apply at checkout"),
 }

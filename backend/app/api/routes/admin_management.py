@@ -64,12 +64,14 @@ from app.schemas.reservation import (
     ReservationUpdate,
 )
 from app.schemas.restaurant import RestaurantRead
+from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
+from app.services.coupon_service import CouponService
 from app.services.loyalty_service import LoyaltyService
 from app.services.review_service import ReviewService
 from app.services.waitlist_service import WaitlistService
@@ -97,6 +99,10 @@ def get_reservation_service(db: Annotated[Session, Depends(get_db)]) -> Reservat
 
 def get_waitlist_service(db: Annotated[Session, Depends(get_db)]) -> WaitlistService:
     return WaitlistService(db)
+
+
+def get_coupon_service(db: Annotated[Session, Depends(get_db)]) -> CouponService:
+    return CouponService(db)
 
 
 def get_loyalty_service(db: Annotated[Session, Depends(get_db)]) -> LoyaltyService:
@@ -875,6 +881,57 @@ def reply_to_review(
 ) -> AdminReviewRead:
     try:
         return service.reply(review_id, restaurant_id, data.reply)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+# ------------------------------------------------------------------ coupons
+
+@router.get("/coupons", response_model=list[CouponRead], dependencies=[Depends(requires_feature("coupons"))])
+def list_coupons(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[CouponService, Depends(get_coupon_service)],
+) -> list[CouponRead]:
+    return service.list_for_restaurant(restaurant_id)
+
+
+@router.post("/coupons", response_model=CouponRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(requires_feature("coupons"))])
+def create_coupon(
+    data: CouponCreate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[CouponService, Depends(get_coupon_service)],
+) -> CouponRead:
+    try:
+        return service.create(restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/coupons/{coupon_id}", response_model=CouponRead, dependencies=[Depends(requires_feature("coupons"))])
+def update_coupon(
+    coupon_id: int,
+    data: CouponUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[CouponService, Depends(get_coupon_service)],
+) -> CouponRead:
+    try:
+        return service.update(coupon_id, restaurant_id, data)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(requires_feature("coupons"))])
+def delete_coupon(
+    coupon_id: int,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[CouponService, Depends(get_coupon_service)],
+) -> None:
+    try:
+        service.delete(coupon_id, restaurant_id)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 

@@ -29,6 +29,8 @@ from datetime import UTC, datetime
 from app.core.hours import status_at
 from app.core.tenancy import ensure_customer_of
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
+from app.services.coupon_service import CouponService
+from app.services.feature_service import FeatureService
 from app.services.notifications import notify_order_placed
 from app.services.payment_service import PaymentService
 from app.services.reservation_service import ReservationService
@@ -44,6 +46,8 @@ class OrderService:
         self.menu = MenuRepository(db)
         self.payments = PaymentService()
         self.reservations = ReservationService(db)
+        self.features = FeatureService(db)
+        self.coupons = CouponService(db)
 
     def create_order(self, data: OrderCreate, user: User) -> OrderRead:
         ensure_customer_of(user, data.restaurant_id)  # first: another restaurant's rows are invisible to this customer
@@ -122,6 +126,13 @@ class OrderService:
 
         subtotal, email_lines = self._add_lines(order, data.items, items_by_id)
 
+        # A coupon sets the discount from the server's own subtotal; the request only named a code.
+        coupon = None
+        if data.coupon_code:
+            if not self.features.is_enabled(restaurant.id, "coupons"):
+                raise AppError("Discount codes are not available for this restaurant")
+            coupon, order.discount = self.coupons.apply_to_order(restaurant.id, data.coupon_code, subtotal, user)
+
         delivery_fee = restaurant.delivery_fee if data.order_type == OrderType.DELIVERY else Decimal("0.00")
         taxable = max(subtotal - order.discount, Decimal("0.00"))
         tax = (taxable * restaurant.tax_rate).quantize(Decimal("0.01"))
@@ -132,17 +143,27 @@ class OrderService:
         order.delivery_fee = delivery_fee
         order.total = total
 
-        payment_result = self.payments.process(total)
-        if not payment_result.success:
-            raise AppError(payment_result.message or "Payment failed")
+        if coupon is not None:
+            self.coupons.record_redemption(coupon, order, user, order.discount)
+
+        # A coupon can cover the whole bill. There is nothing to charge then, so the gateway is not
+        # called at all (it rightly refuses a zero amount) — but the order still gets a payment row
+        # of 0.00 so "every confirmed order has a payment" stays true for the rest of the system.
+        if total > Decimal("0.00"):
+            payment_result = self.payments.process(total)
+            if not payment_result.success:
+                raise AppError(payment_result.message or "Payment failed")
+            payment_status, provider_reference = payment_result.status, payment_result.provider_reference
+        else:
+            payment_status, provider_reference = PaymentStatus.COMPLETED, None
 
         self.db.add(
             Payment(
                 order_id=order.id,
                 amount=total,
-                status=payment_result.status,
+                status=payment_status,
                 payment_method=PaymentMethod.MOCK,
-                provider_reference=payment_result.provider_reference,
+                provider_reference=provider_reference,
             )
         )
         self.db.add(
