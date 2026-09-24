@@ -30,6 +30,9 @@ const comment = ref('')
 const submitting = ref(false)
 const error = ref('')
 
+// Your own review already shows under "Your reviews" above — drop it here so it isn't listed twice.
+const otherReviews = computed(() => publicReviews.value.filter(pr => !mine.value.some(m => m.id === pr.id)))
+
 async function loadPublic() {
   if (!restaurant.current) return
   loadingPublic.value = true
@@ -161,7 +164,7 @@ async function submit() {
                     <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z" stroke-linejoin="round" />
                   </svg>
                 </span>
-                <span v-if="!r.is_published" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Hidden by the restaurant</span>
+                <span v-if="!r.is_published" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Only visible to you</span>
               </div>
               <p v-if="r.comment" class="mt-2 text-sm text-ink">{{ r.comment }}</p>
               <p v-if="r.staff_reply" class="mt-2 rounded-lg bg-brand-50 p-2.5 text-xs text-ink-muted">
@@ -180,10 +183,12 @@ async function submit() {
           <div v-for="n in 3" :key="n" class="h-20 animate-pulse rounded-2xl bg-brand-100/60" />
         </div>
 
-        <p v-else-if="!publicReviews.length" class="mt-4 text-sm text-ink-subtle">No reviews yet — be the first.</p>
+        <p v-else-if="!otherReviews.length" class="mt-4 text-sm text-ink-subtle">
+          {{ mine.length ? "No other reviews yet." : "No reviews yet — be the first." }}
+        </p>
 
         <ul v-else class="mt-4 space-y-3">
-          <li v-for="r in publicReviews" :key="r.id" class="rounded-2xl border border-brand-100 bg-surface-elevated p-4">
+          <li v-for="r in otherReviews" :key="r.id" class="rounded-2xl border border-brand-100 bg-surface-elevated p-4">
             <div class="flex items-center justify-between gap-2">
               <span class="flex text-amber-500">
                 <svg v-for="n in 5" :key="n" viewBox="0 0 20 20" class="h-4 w-4" :fill="n <= r.rating ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.2">
