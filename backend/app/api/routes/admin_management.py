@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, Depends, File, Header, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, Query, Response, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
@@ -140,6 +140,25 @@ def analytics(
         )
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/analytics/export.csv")
+def export_analytics_csv(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AnalyticsService, Depends(get_analytics_service)],
+    preset: DateRangePreset = Query(default=DateRangePreset.LAST_7_DAYS, alias="range"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+) -> Response:
+    try:
+        csv_text = service.export_orders_csv(restaurant_id, preset, start_date=start_date, end_date=end_date)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return Response(
+        content=csv_text, media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="orders-{preset.value}.csv"'},
+    )
 
 
 @router.get("/categories", response_model=list[CategoryRead])

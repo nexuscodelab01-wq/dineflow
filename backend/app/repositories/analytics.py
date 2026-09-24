@@ -7,11 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
-from app.models.enums import OrderStatus, PaymentStatus
+from app.models.enums import OrderStatus, PaymentStatus, ReservationStatus
 from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
+from app.models.reservation import Reservation
 
 
 class AnalyticsRepository:
@@ -179,3 +180,55 @@ class AnalyticsRepository:
         )
         rows = self.db.execute(stmt).all()
         return [{"status": row[0], "count": row[1]} for row in rows]
+
+    def sales_by_hour(self, restaurant_id: int, start: datetime, end: datetime) -> list[dict]:
+        """Orders/revenue by hour of day (0-23, restaurant's own timestamps) — when the rush actually is."""
+        stmt = (
+            select(
+                func.extract("hour", Order.created_at).label("hour"),
+                func.count(Order.id).label("orders"),
+                func.coalesce(func.sum(Order.total), 0).label("revenue"),
+            )
+            .where(*self._order_filter(restaurant_id, start, end))
+            .group_by("hour")
+        )
+        by_hour = {int(row.hour): row for row in self.db.execute(stmt).all()}
+        return [
+            {
+                "hour": hour,
+                "orders": by_hour[hour].orders if hour in by_hour else 0,
+                "revenue": Decimal(by_hour[hour].revenue).quantize(Decimal("0.01")) if hour in by_hour else Decimal("0.00"),
+            }
+            for hour in range(24)
+        ]
+
+    def no_show_stats(self, restaurant_id: int, start: datetime, end: datetime) -> dict:
+        """Of bookings whose visit fell in this range, how many were auto-expired as a no-show
+        (the guest never showed and never ordered) — EXPIRED is exactly that state (see reservation_service)."""
+        total = self.db.scalar(
+            select(func.count(Reservation.id)).where(
+                Reservation.restaurant_id == restaurant_id,
+                Reservation.starts_at >= start,
+                Reservation.starts_at <= end,
+                Reservation.status != ReservationStatus.HELD,  # an abandoned hold was never a real booking
+            )
+        ) or 0
+        no_shows = self.db.scalar(
+            select(func.count(Reservation.id)).where(
+                Reservation.restaurant_id == restaurant_id,
+                Reservation.starts_at >= start,
+                Reservation.starts_at <= end,
+                Reservation.status == ReservationStatus.EXPIRED,
+            )
+        ) or 0
+        rate = round((no_shows / total) * 100, 1) if total else 0.0
+        return {"total_reservations": total, "no_shows": no_shows, "rate": rate}
+
+    def orders_for_export(self, restaurant_id: int, start: datetime, end: datetime, limit: int = 10000) -> list[Order]:
+        stmt = (
+            select(Order)
+            .where(*self._order_filter(restaurant_id, start, end))
+            .order_by(Order.created_at)
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())

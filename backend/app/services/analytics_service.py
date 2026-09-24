@@ -1,5 +1,7 @@
 """Analytics business logic."""
 
+import csv
+import io
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -10,6 +12,8 @@ from app.schemas.admin import DashboardStats
 from app.schemas.analytics import (
     AnalyticsResponse,
     CategoryBreakdown,
+    HourlyBreakdown,
+    NoShowStats,
     PopularItem,
     StatusBreakdown,
     TimeSeriesPoint,
@@ -57,4 +61,33 @@ class AnalyticsService:
                 StatusBreakdown(status=row["status"], count=row["count"])
                 for row in self.analytics.status_distribution(restaurant_id, start, end)
             ],
+            sales_by_hour=[HourlyBreakdown(**row) for row in self.analytics.sales_by_hour(restaurant_id, start, end)],
+            no_show=NoShowStats(**self.analytics.no_show_stats(restaurant_id, start, end)),
         )
+
+    def export_orders_csv(
+        self,
+        restaurant_id: int,
+        preset: DateRangePreset,
+        *,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> str:
+        try:
+            start, end = resolve_date_range(preset, start_date=start_date, end_date=end_date)
+        except ValueError as exc:
+            raise AppError(str(exc)) from exc
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            "order_number", "created_at", "status", "order_type", "customer_name", "customer_email",
+            "subtotal", "tax", "delivery_fee", "discount", "total",
+        ])
+        for order in self.analytics.orders_for_export(restaurant_id, start, end):
+            writer.writerow([
+                order.order_number, order.created_at.isoformat(), order.status.value, order.order_type.value,
+                order.customer_name, order.customer_email or "",
+                order.subtotal, order.tax, order.delivery_fee, order.discount, order.total,
+            ])
+        return buffer.getvalue()

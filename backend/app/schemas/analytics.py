@@ -31,6 +31,18 @@ class StatusBreakdown(BaseModel):
     count: int
 
 
+class HourlyBreakdown(BaseModel):
+    hour: int  # 0-23
+    orders: int
+    revenue: Decimal
+
+
+class NoShowStats(BaseModel):
+    total_reservations: int
+    no_shows: int
+    rate: float  # percent, 0-100
+
+
 class AnalyticsResponse(BaseModel):
     preset: str
     start_date: str
@@ -41,3 +53,5 @@ class AnalyticsResponse(BaseModel):
     orders_by_category: list[CategoryBreakdown]
     popular_items: list[PopularItem]
     order_status_distribution: list[StatusBreakdown]
+    sales_by_hour: list[HourlyBreakdown]
+    no_show: NoShowStats
