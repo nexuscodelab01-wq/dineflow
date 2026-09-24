@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AnalyticsResponse, DateRangePreset } from '~/types/analytics'
-import { fetchAnalytics } from '~/services/admin'
+import { exportAnalyticsCsv, fetchAnalytics } from '~/services/admin'
 import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
@@ -56,6 +56,31 @@ const statusLabels = computed(() =>
 const statusValues = computed(() =>
   analytics.value?.order_status_distribution.map(s => s.count) ?? [],
 )
+
+const hourLabels = computed(() => analytics.value?.sales_by_hour.map(h => `${h.hour}:00`) ?? [])
+const hourValues = computed(() => analytics.value?.sales_by_hour.map(h => h.orders) ?? [])
+
+const exporting = ref(false)
+const ui = useUiStore()
+async function exportCsv() {
+  if (!admin.restaurantId || exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportAnalyticsCsv(admin.restaurantId, preset.value, startDate.value || undefined, endDate.value || undefined)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `orders-${preset.value}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not export the CSV')
+  }
+  finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -67,22 +92,30 @@ const statusValues = computed(() =>
           {{ analytics.start_date }} — {{ analytics.end_date }}
         </p>
       </div>
-      <DateRangeFilter
-        v-model:preset="preset"
-        v-model:start-date="startDate"
-        v-model:end-date="endDate"
-        @change="load"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        <DateRangeFilter
+          v-model:preset="preset"
+          v-model:start-date="startDate"
+          v-model:end-date="endDate"
+          @change="load"
+        />
+        <button
+          type="button" class="rounded-lg border border-brand-200 px-3 py-1.5 text-sm font-medium hover:bg-brand-50 disabled:opacity-50"
+          :disabled="!analytics || exporting" @click="exportCsv"
+        >
+          {{ exporting ? 'Exporting…' : 'Export CSV' }}
+        </button>
+      </div>
     </div>
 
     <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
 
-    <div v-if="loading" class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <div v-for="n in 5" :key="n" class="h-28 animate-pulse rounded-2xl bg-brand-100/60" />
+    <div v-if="loading" class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div v-for="n in 6" :key="n" class="h-28 animate-pulse rounded-2xl bg-brand-100/60" />
     </div>
 
     <div v-else-if="analytics" class="mt-6 space-y-6">
-      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <p class="text-xs uppercase tracking-wide text-ink-subtle">Orders</p>
           <p class="mt-2 text-3xl font-semibold text-brand-900">{{ analytics.summary.today_orders }}</p>
@@ -103,12 +136,18 @@ const statusValues = computed(() =>
           <p class="text-xs uppercase tracking-wide text-ink-subtle">Avg order</p>
           <p class="mt-2 text-3xl font-semibold text-brand-900">{{ formatCurrency(Number(analytics.summary.average_order_value)) }}</p>
         </div>
+        <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+          <p class="text-xs uppercase tracking-wide text-ink-subtle">No-show rate</p>
+          <p class="mt-2 text-3xl font-semibold text-brand-900">{{ analytics.no_show.rate }}%</p>
+          <p class="mt-1 text-xs text-ink-subtle">{{ analytics.no_show.no_shows }} of {{ analytics.no_show.total_reservations }} bookings</p>
+        </div>
       </div>
 
       <ClientOnly>
         <div class="grid gap-6 lg:grid-cols-2">
           <AnalyticsLineChart title="Revenue over time" :labels="revenueLabels" :values="revenueValues" color="#2c6f53" />
           <AnalyticsLineChart title="Orders over time" :labels="revenueLabels" :values="orderValues" color="#3a8b68" />
+          <AnalyticsBarChart title="Sales by hour of day" :labels="hourLabels" :values="hourValues" color="#8a6d3b" />
           <AnalyticsBarChart title="Orders by category" :labels="categoryLabels" :values="categoryValues" color="#5aa784" />
           <AnalyticsBarChart title="Popular menu items" :labels="popularLabels" :values="popularValues" color="#255944" />
           <AnalyticsDoughnutChart

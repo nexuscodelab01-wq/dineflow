@@ -2,7 +2,7 @@ import type { AnalyticsResponse, DateRangePreset } from '~/types/analytics'
 import type { CustomerDetail, CustomerProfileUpdate, CustomerSummary, DashboardStats, KitchenBoard } from '~/types/admin'
 import type { Category, MenuItemDetail, MenuModifier, Restaurant, RestaurantTable } from '~/types/menu'
 import type { Order, OrderListResponse, OrderStatus } from '~/types/order'
-import { apiFetch } from '~/services/http'
+import { apiFetch, apiFetchBlob } from '~/services/http'
 
 function q(restaurantId: number, extra = '') {
   return `/api/v1/admin${extra}${extra.includes('?') ? '&' : '?'}restaurant_id=${restaurantId}`
@@ -27,6 +27,20 @@ export function fetchAnalytics(
     params.set('end_date', endDate)
   }
   return apiFetch<AnalyticsResponse>(`/api/v1/admin/analytics?${params}`)
+}
+
+export function exportAnalyticsCsv(
+  restaurantId: number,
+  range: DateRangePreset = 'last_7_days',
+  startDate?: string,
+  endDate?: string,
+) {
+  const params = new URLSearchParams({ restaurant_id: String(restaurantId), range })
+  if (range === 'custom' && startDate && endDate) {
+    params.set('start_date', startDate)
+    params.set('end_date', endDate)
+  }
+  return apiFetchBlob(`/api/v1/admin/analytics/export.csv?${params}`)
 }
 
 export function fetchAdminCategories(restaurantId: number) {

@@ -32,6 +32,18 @@ export type StatusBreakdown = {
   count: number
 }
 
+export type HourlyBreakdown = {
+  hour: number // 0-23
+  orders: number
+  revenue: string
+}
+
+export type NoShowStats = {
+  total_reservations: number
+  no_shows: number
+  rate: number // percent, 0-100
+}
+
 export type AnalyticsResponse = {
   preset: string
   start_date: string
@@ -42,6 +54,8 @@ export type AnalyticsResponse = {
   orders_by_category: CategoryBreakdown[]
   popular_items: PopularItem[]
   order_status_distribution: StatusBreakdown[]
+  sales_by_hour: HourlyBreakdown[]
+  no_show: NoShowStats
 }
 
 export const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [

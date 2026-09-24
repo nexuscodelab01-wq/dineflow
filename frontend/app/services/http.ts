@@ -71,4 +71,37 @@ export async function apiFetch<T>(
   return await response.json() as T
 }
 
+/** For a non-JSON download (a CSV export, say). Shares auth/refresh/error handling with `apiFetch`,
+ * but returns the raw Blob instead of parsing a body that was never JSON. */
+export async function apiFetchBlob(path: string, options: RequestInit & { retried?: boolean } = {}): Promise<Blob> {
+  const { retried, ...fetchOptions } = options
+  const base = getApiBaseUrl()
+  const headers = new Headers(options.headers)
+  const token = getAccessToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+
+  let response: Response
+  try {
+    response = await fetch(`${base}${path}`, { ...fetchOptions, headers })
+  }
+  catch {
+    throw new ApiError('Unable to reach the server. Check your connection and try again.', 0)
+  }
+
+  if (!response.ok) {
+    let body: unknown = null
+    try {
+      body = await response.json()
+    }
+    catch { /* ignore — most failures here are plain-text or empty */ }
+    const error = parseApiErrorBody(body, response.status)
+    if (error.isUnauthorized && !retried && import.meta.client && await refreshSession({ baseUrl: base, storage: localStorage })) {
+      return apiFetchBlob(path, { ...options, retried: true })
+    }
+    throw error
+  }
+
+  return await response.blob()
+}
+
 export { ApiError }
