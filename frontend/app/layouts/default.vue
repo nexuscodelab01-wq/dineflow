@@ -34,6 +34,7 @@
           </NuxtLink>
           <template v-if="signedIn">
             <NuxtLink to="/orders" class="hover:text-brand-700">Orders</NuxtLink>
+            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="hover:text-brand-700">Reviews</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700">Platform</NuxtLink>
@@ -63,6 +64,7 @@
           </NuxtLink>
           <template v-if="signedIn">
             <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Orders</NuxtLink>
+            <NuxtLink v-if="reviewsEnabled" to="/reviews" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Reviews</NuxtLink>
             <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Platform</NuxtLink>
@@ -92,6 +94,7 @@ const year = new Date().getFullYear()
 const auth = useAuthStore()
 const cart = useCartStore()
 const reservations = useFeature('reservations')
+const reviewsEnabled = useFeature('reviews')
 const branding = useBranding()
 const mobileOpen = ref(false)
 const route = useRoute()

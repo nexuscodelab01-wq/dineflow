@@ -7,11 +7,13 @@ import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ middleware: ['auth'] })
 
+const reviewsEnabled = useFeature('reviews')
 const route = useRoute()
 const orderId = computed(() => Number(route.params.id))
 const order = ref<Order | null>(null)
 const loading = ref(true)
 const error = ref('')
+const isDone = computed(() => order.value?.status === 'COMPLETED' || order.value?.status === 'DELIVERED')
 
 async function loadOrder() {
   loading.value = true
@@ -60,6 +62,19 @@ onUnmounted(() => {
             {{ order.status.replace('_', ' ') }}
           </span>
         </div>
+      </section>
+
+      <section
+        v-if="reviewsEnabled && isDone"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-5"
+      >
+        <p class="text-sm font-medium text-ink">How was it? Let us know what you thought.</p>
+        <NuxtLink
+          to="/reviews"
+          class="inline-flex items-center rounded-full bg-brand-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-800"
+        >
+          Leave a review
+        </NuxtLink>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6">
