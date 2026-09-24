@@ -2,6 +2,7 @@
 import type { OrderType } from '~/types/order'
 import type { Reservation } from '~/types/reservation'
 import { createOrder } from '~/services/orders'
+import { previewCoupon } from '~/services/coupons'
 import { fetchMyReservations } from '~/services/reservations'
 import { formatCurrency } from '~/utils/format'
 
@@ -57,9 +58,56 @@ onMounted(async () => {
   if (orderType.value === 'DINE_IN') await loadReservations()
 })
 
+// Coupons: the code is checked here only so the customer can see what it's worth before paying.
+// The order endpoint works the discount out again from its own subtotal, so this is never the
+// number that's charged.
+const couponsEnabled = useFeature('coupons')
+const couponCode = ref('')
+const appliedCoupon = ref<{ code: string, discount: number } | null>(null)
+const couponError = ref('')
+const checkingCoupon = ref(false)
+
 const totals = computed(() => {
   if (!restaurant.current) return null
-  return cart.computeTotals(restaurant.current, orderType.value)
+  return cart.computeTotals(restaurant.current, orderType.value, appliedCoupon.value?.discount ?? 0)
+})
+
+async function applyCoupon() {
+  const code = couponCode.value.trim()
+  if (!code || checkingCoupon.value || !totals.value) return
+  checkingCoupon.value = true
+  couponError.value = ''
+  try {
+    const preview = await previewCoupon(code, totals.value.subtotal)
+    appliedCoupon.value = { code: preview.code, discount: Number(preview.discount) }
+    couponCode.value = ''
+  }
+  catch (err) {
+    appliedCoupon.value = null
+    couponError.value = err instanceof Error ? err.message : "That code isn't valid here"
+  }
+  finally {
+    checkingCoupon.value = false
+  }
+}
+
+function removeCoupon() {
+  appliedCoupon.value = null
+  couponError.value = ''
+}
+
+// A cart edit in another tab can change the subtotal out from under a minimum-spend coupon, so
+// re-check it rather than showing a discount the server would then refuse.
+watch(() => totals.value?.subtotal, async (subtotal, previous) => {
+  if (!appliedCoupon.value || subtotal === previous || subtotal === undefined) return
+  try {
+    const preview = await previewCoupon(appliedCoupon.value.code, subtotal)
+    appliedCoupon.value = { code: preview.code, discount: Number(preview.discount) }
+  }
+  catch (err) {
+    couponError.value = err instanceof Error ? err.message : 'That code no longer applies'
+    appliedCoupon.value = null
+  }
 })
 
 function formatWhen(iso: string) {
@@ -88,6 +136,7 @@ async function submitOrder() {
       customer_name: form.customer_name,
       customer_email: form.customer_email,
       customer_phone: form.customer_phone || undefined,
+      coupon_code: appliedCoupon.value?.code,
       reservation_id: orderType.value === 'DINE_IN' ? reservationId.value : undefined,
       delivery_address: orderType.value === 'DELIVERY'
         ? {
@@ -188,8 +237,31 @@ async function submitOrder() {
               <span>{{ formatCurrency(line.unit_price * line.quantity) }}</span>
             </li>
           </ul>
+          <div v-if="couponsEnabled" class="mt-4 border-t border-brand-100 pt-4">
+            <div v-if="appliedCoupon" class="flex items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm">
+              <span class="font-semibold text-brand-800">{{ appliedCoupon.code }} applied</span>
+              <button type="button" class="text-xs font-medium text-ink-subtle hover:underline" @click="removeCoupon">Remove</button>
+            </div>
+            <form v-else class="flex gap-2" @submit.prevent="applyCoupon">
+              <input
+                v-model="couponCode" type="text" placeholder="Discount code" autocomplete="off"
+                class="min-w-0 flex-1 rounded-lg border border-brand-200 px-3 py-2 text-sm uppercase placeholder:normal-case"
+              >
+              <button
+                type="submit" class="shrink-0 rounded-lg border border-brand-200 px-3 py-2 text-sm font-medium hover:bg-brand-50 disabled:opacity-50"
+                :disabled="!couponCode.trim() || checkingCoupon"
+              >
+                {{ checkingCoupon ? 'Checking…' : 'Apply' }}
+              </button>
+            </form>
+            <p v-if="couponError" class="mt-2 text-xs text-red-600" role="alert">{{ couponError }}</p>
+          </div>
+
           <div v-if="totals" class="mt-4 space-y-1 border-t border-brand-100 pt-4 text-sm">
             <div class="flex justify-between"><span>Subtotal</span><span>{{ formatCurrency(totals.subtotal) }}</span></div>
+            <div v-if="totals.discount" class="flex justify-between text-emerald-700">
+              <span>Discount</span><span>−{{ formatCurrency(totals.discount) }}</span>
+            </div>
             <div class="flex justify-between"><span>Tax</span><span>{{ formatCurrency(totals.tax) }}</span></div>
             <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ formatCurrency(totals.delivery_fee) }}</span></div>
             <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ formatCurrency(totals.total) }}</span></div>

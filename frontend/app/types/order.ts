@@ -94,6 +94,8 @@ export type CreateOrderPayload = {
   customer_name: string
   customer_email: string
   customer_phone?: string
+  /** Only the code — what it is worth is decided by the server. */
+  coupon_code?: string
   reservation_id?: number
   delivery_address?: DeliveryAddressInput
   delivery_instructions?: string

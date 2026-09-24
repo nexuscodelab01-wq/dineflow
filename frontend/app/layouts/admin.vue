@@ -39,6 +39,7 @@ const allNav = [
   { to: '/admin/waitlist', label: 'Waitlist', feature: 'reservations' },
   { to: '/admin/reviews', label: 'Reviews', feature: 'reviews' },
   { to: '/admin/loyalty', label: 'Loyalty', feature: 'loyalty' },
+  { to: '/admin/coupons', label: 'Discount codes', feature: 'coupons' },
   { to: '/admin/waiter', label: 'Waiter view', feature: 'qr_table_ordering' },
   { to: '/admin/qr', label: 'Table ordering', feature: 'qr_table_ordering' },
   { to: '/admin/customers', label: 'Customers' },
