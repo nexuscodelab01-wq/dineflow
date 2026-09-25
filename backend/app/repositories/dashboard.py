@@ -16,12 +16,16 @@ class DashboardRepository:
         self.db = db
 
     def stats(self, restaurant_id: int) -> dict[str, Decimal | int]:
+        """A cancelled order never happened, so it counts toward none of these — same rule as
+        AnalyticsRepository (see its docstring)."""
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        not_cancelled = Order.status != OrderStatus.CANCELLED
 
         today_orders = self.db.scalar(
             select(func.count(Order.id)).where(
                 Order.restaurant_id == restaurant_id,
                 Order.created_at >= today_start,
+                not_cancelled,
             )
         ) or 0
 
@@ -31,6 +35,7 @@ class DashboardRepository:
             .where(
                 Order.restaurant_id == restaurant_id,
                 Order.created_at >= today_start,
+                not_cancelled,
                 Payment.status == PaymentStatus.COMPLETED,
             )
         ) or Decimal("0.00")

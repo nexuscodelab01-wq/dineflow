@@ -213,6 +213,8 @@ GOOD = dict(
     JWT_REFRESH_SECRET="b" * 40,
     DATABASE_URL="postgresql+psycopg://app:s3cret-prod@db:5432/app",
     APP_DATABASE_URL="postgresql+psycopg://app_restricted:s3cret-prod-2@db:5432/app",   # not the environment's
+    EMAIL_BACKEND="smtp",
+    STORAGE_BACKEND="s3",
 )
 
 
@@ -230,6 +232,16 @@ def test_production_refuses_the_development_password_for_the_restricted_role() -
     with pytest.raises(RuntimeError) as exc:
         Settings(**{**GOOD, "APP_DATABASE_URL": "postgresql+psycopg://dineflow_app:dineflow_app_dev_password@db/x"}).assert_production_ready()
     assert "restricted role" in str(exc.value)
+
+
+def test_production_refuses_email_that_only_logs_and_storage_that_disappears() -> None:
+    with pytest.raises(RuntimeError, match="EMAIL_BACKEND=console"):
+        Settings(**{**GOOD, "EMAIL_BACKEND": "console"}).assert_production_ready()
+    with pytest.raises(RuntimeError, match="STORAGE_BACKEND=local"):
+        Settings(**{**GOOD, "STORAGE_BACKEND": "local"}).assert_production_ready()
+    # Case shouldn't matter — an operator typing "Console" or "LOCAL" is still unsafe.
+    with pytest.raises(RuntimeError, match="EMAIL_BACKEND=console"):
+        Settings(**{**GOOD, "EMAIL_BACKEND": "Console"}).assert_production_ready()
 
 
 def test_row_level_security_is_reported_as_enforced_only_with_a_different_restricted_role() -> None:

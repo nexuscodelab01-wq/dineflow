@@ -40,7 +40,7 @@ def test_analytics_endpoint(client: TestClient, db: Session) -> None:
     restaurant = Restaurant(name="Analytics Kitchen", slug="analytics-kitchen", tax_rate=Decimal("0.10"))
     db.add_all([admin, restaurant])
     db.flush()
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
 
     category = Category(restaurant_id=restaurant.id, name="Pizza", slug="pizza", sort_order=0)
     db.add(category)
@@ -118,7 +118,7 @@ def analytics_world(client, db):
     db.add(restaurant)
     db.flush()
     admin = make_user(db, "analytics2-admin@iso-demo.com", RoleName.RESTAURANT_ADMIN)
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
     table = RestaurantTable(restaurant_id=restaurant.id, table_number="A1", capacity=4, status=TableStatus.AVAILABLE)
     db.add(table)
     db.flush()
@@ -201,3 +201,46 @@ def test_only_staff_can_export(analytics_world):
     w.db.commit()
     r = w.client.get(f"/api/v1/admin/analytics/export.csv?restaurant_id={w.rid}&range=last_7_days", headers=header(customer))
     assert r.status_code == 403
+
+
+# ------------------------------------------------------------------ a cancelled order never happened
+
+def _paid_order(w, *, number, status, total=Decimal("22.00")):
+    """A COMPLETED payment attached to an order of any status — this is exactly the shape a real
+    cancellation leaves behind: the charge went through before the guest (or staff) cancelled."""
+    order = Order(
+        restaurant_id=w.rid, user_id=w.admin.id, order_number=number, order_type=OrderType.PICKUP,
+        status=status, subtotal=Decimal("20.00"), tax=Decimal("2.00"), total=total,
+        customer_name="Guest", customer_email="guest@example.com",
+    )
+    w.db.add(order)
+    w.db.flush()
+    w.db.add(Payment(order_id=order.id, amount=total, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.MOCK))
+    w.db.commit()
+    return order
+
+
+def test_cancelled_orders_are_excluded_from_every_report(analytics_world):
+    w = analytics_world
+    _paid_order(w, number="A2-KEEP", status=OrderStatus.COMPLETED, total=Decimal("22.00"))
+    _paid_order(w, number="A2-CANCELLED", status=OrderStatus.CANCELLED, total=Decimal("999.00"))
+
+    body = w.client.get(f"{'/api/v1'}/admin/analytics?restaurant_id={w.rid}&range=last_7_days", headers=header(w.admin)).json()
+    assert body["summary"]["today_orders"] == 1
+    assert Decimal(body["summary"]["today_revenue"]) == Decimal("22.00")
+    assert sum(Decimal(p["revenue"]) for p in body["revenue_over_time"]) == Decimal("22.00")
+    assert sum(p["orders"] for p in body["orders_over_time"]) == 1
+    # The status breakdown is the one place cancelled orders are meant to show up.
+    statuses = {row["status"]: row["count"] for row in body["order_status_distribution"]}
+    assert statuses.get("CANCELLED") == 1
+
+    dashboard = w.client.get(f"/api/v1/admin/dashboard?restaurant_id={w.rid}", headers=header(w.admin)).json()
+    assert dashboard["today_orders"] == 1
+    assert Decimal(dashboard["today_revenue"]) == Decimal("22.00")
+
+
+def test_the_csv_export_still_lists_a_cancelled_order(analytics_world):
+    w = analytics_world
+    _paid_order(w, number="A2-CANCELLED", status=OrderStatus.CANCELLED, total=Decimal("999.00"))
+    r = w.client.get(f"/api/v1/admin/analytics/export.csv?restaurant_id={w.rid}&range=last_7_days", headers=header(w.admin))
+    assert "A2-CANCELLED" in r.text  # the export is a raw bookkeeping record, not a revenue figure

@@ -56,6 +56,26 @@ def test_placing_an_order_queues_a_branded_confirmation(menu_world, memory_mail)
     assert sent.to == "am-cust@demo.com" and sent.from_name == "Alpha" and sent.html.startswith("<!doctype html>")
 
 
+def test_the_email_uses_the_restaurants_own_colour_not_a_fixed_default(menu_world, memory_mail):
+    w = menu_world
+    w.a.primary_color = "#c0392b"
+    w.db.commit()
+    r = place_order(w, items=[{"menu_item_id": w.item.id, "quantity": 1, "modifier_option_ids": []}])
+    assert r.status_code == 201
+    [job] = queued(w.db)
+    assert "#c0392b" in job.payload["html"]
+    assert notifications.DEFAULT_COLOR not in job.payload["html"]
+
+
+def test_a_restaurant_with_no_colour_set_falls_back_to_the_default(menu_world):
+    w = menu_world
+    assert w.a.primary_color is None
+    r = place_order(w, items=[{"menu_item_id": w.item.id, "quantity": 1, "modifier_option_ids": []}])
+    assert r.status_code == 201
+    [job] = queued(w.db)
+    assert notifications.DEFAULT_COLOR in job.payload["html"]
+
+
 def test_user_supplied_text_is_html_escaped_in_emails(menu_world):
     w = menu_world
     r = place_order(w, customer_name='<script>alert("x")</script>', items=[{

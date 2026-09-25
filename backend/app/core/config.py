@@ -130,6 +130,20 @@ class Settings(BaseSettings):
             problems.append("DATABASE_URL still uses the development database password")
         if "dineflow_app_dev_password" in self.APP_DATABASE_URL:
             problems.append("APP_DATABASE_URL still uses the development password for the restricted role")
+        # These two don't error at request time — they fail by quietly doing the wrong thing forever:
+        # an order confirmation that never leaves the log, a logo that's gone after the next deploy.
+        # Loud and immediate here beats "why didn't the customer get an email" three weeks later.
+        if self.EMAIL_BACKEND.strip().lower() == "console":
+            problems.append(
+                "EMAIL_BACKEND=console in production — every order confirmation and password reset "
+                "would only be written to the log, never sent. Set EMAIL_BACKEND=smtp."
+            )
+        if self.STORAGE_BACKEND.strip().lower() == "local":
+            problems.append(
+                "STORAGE_BACKEND=local in production — uploaded logos and menu photos live on this "
+                "server's disk and are lost on redeploy or when running more than one server "
+                "(docker-compose.prod.yml mounts no volume for them). Set STORAGE_BACKEND=s3."
+            )
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 

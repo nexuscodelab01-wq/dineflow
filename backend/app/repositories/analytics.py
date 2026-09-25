@@ -16,15 +16,26 @@ from app.models.reservation import Reservation
 
 
 class AnalyticsRepository:
+    """Reporting queries.
+
+    A **cancelled order never happened** as far as money and volume are concerned, so every revenue,
+    count, item and category figure here leaves it out. Two places deliberately keep it: the status
+    breakdown (showing the mix is its whole purpose) and the CSV export (a raw record for bookkeeping,
+    with a status column of its own).
+    """
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _order_filter(self, restaurant_id: int, start: datetime, end: datetime):
-        return (
+    def _order_filter(self, restaurant_id: int, start: datetime, end: datetime, *, include_cancelled: bool = False):
+        filters = [
             Order.restaurant_id == restaurant_id,
             Order.created_at >= start,
             Order.created_at <= end,
-        )
+        ]
+        if not include_cancelled:
+            filters.append(Order.status != OrderStatus.CANCELLED)
+        return tuple(filters)
 
     def summary(self, restaurant_id: int, start: datetime, end: datetime) -> dict:
         filters = self._order_filter(restaurant_id, start, end)
@@ -85,23 +96,14 @@ class AnalyticsRepository:
             if day_end.tzinfo is None:
                 day_end = day_end.replace(tzinfo=UTC)
 
-            orders = self.db.scalar(
-                select(func.count(Order.id)).where(
-                    Order.restaurant_id == restaurant_id,
-                    Order.created_at >= day_start,
-                    Order.created_at <= day_end,
-                )
-            ) or 0
+            day_filters = self._order_filter(restaurant_id, day_start, day_end)
+
+            orders = self.db.scalar(select(func.count(Order.id)).where(*day_filters)) or 0
 
             revenue = self.db.scalar(
                 select(func.coalesce(func.sum(Payment.amount), 0))
                 .join(Order, Payment.order_id == Order.id)
-                .where(
-                    Order.restaurant_id == restaurant_id,
-                    Order.created_at >= day_start,
-                    Order.created_at <= day_end,
-                    Payment.status == PaymentStatus.COMPLETED,
-                )
+                .where(*day_filters, Payment.status == PaymentStatus.COMPLETED)
             ) or Decimal("0.00")
 
             points.append({
@@ -122,12 +124,7 @@ class AnalyticsRepository:
             .join(MenuItem, MenuItem.category_id == Category.id)
             .join(OrderItem, OrderItem.menu_item_id == MenuItem.id)
             .join(Order, Order.id == OrderItem.order_id)
-            .where(
-                Order.restaurant_id == restaurant_id,
-                Category.restaurant_id == restaurant_id,
-                Order.created_at >= start,
-                Order.created_at <= end,
-            )
+            .where(*self._order_filter(restaurant_id, start, end), Category.restaurant_id == restaurant_id)
             .group_by(Category.name)
             .order_by(func.sum(OrderItem.line_total).desc())
         )
@@ -149,11 +146,7 @@ class AnalyticsRepository:
                 func.sum(OrderItem.line_total).label("revenue"),
             )
             .join(Order, Order.id == OrderItem.order_id)
-            .where(
-                Order.restaurant_id == restaurant_id,
-                Order.created_at >= start,
-                Order.created_at <= end,
-            )
+            .where(*self._order_filter(restaurant_id, start, end))
             .group_by(OrderItem.item_name)
             .order_by(func.sum(OrderItem.quantity).desc())
             .limit(limit)
@@ -225,9 +218,11 @@ class AnalyticsRepository:
         return {"total_reservations": total, "no_shows": no_shows, "rate": rate}
 
     def orders_for_export(self, restaurant_id: int, start: datetime, end: datetime, limit: int = 10000) -> list[Order]:
+        """Every order in range, cancelled included — this is a raw record for bookkeeping, and it
+        carries its own `status` column, unlike the revenue/count figures above."""
         stmt = (
             select(Order)
-            .where(*self._order_filter(restaurant_id, start, end))
+            .where(*self._order_filter(restaurant_id, start, end, include_cancelled=True))
             .order_by(Order.created_at)
             .limit(limit)
         )

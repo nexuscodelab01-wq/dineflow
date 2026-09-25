@@ -18,7 +18,11 @@ from app.jobs.queue import cancel_by_dedupe_key, enqueue
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COLOR = "#2c6f53"
+DEFAULT_COLOR = "#2c6f53"  # used only when a restaurant hasn't set (or cleared) a primary colour
+
+
+def _brand_color(restaurant) -> str:
+    return getattr(restaurant, "primary_color", None) or DEFAULT_COLOR
 
 
 def _logo_url(restaurant) -> str | None:
@@ -44,10 +48,11 @@ def _layout(restaurant, heading: str, body_html: str, footer: str = "") -> str:
         f'<img src="{escape(logo, quote=True)}" alt="{name}" style="max-height:48px;max-width:200px">' if logo else f'<span style="font-size:20px;font-weight:700">{name}</span>'
     )
     contact = " · ".join(escape(p) for p in (getattr(restaurant, "phone", None), getattr(restaurant, "address", None)) if p)
+    color = _brand_color(restaurant)
     return f"""<!doctype html><html><body style="margin:0;background:#f7f5f1;font-family:Arial,Helvetica,sans-serif;color:#1a1f1c">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
-<tr><td style="background:{DEFAULT_COLOR};padding:18px 24px;color:#ffffff">{header}</td></tr>
+<tr><td style="background:{color};padding:18px 24px;color:#ffffff">{header}</td></tr>
 <tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px">{escape(heading)}</h1>{body_html}</td></tr>
 <tr><td style="padding:16px 24px;background:#f1efe9;font-size:12px;color:#6b6f6c">{footer}{escape(restaurant.name)}{(' · ' + contact) if contact else ''}</td></tr>
 </table></td></tr></table></body></html>"""
@@ -101,7 +106,7 @@ def notify_order_placed(db: Session, restaurant, order, lines: list[dict[str, An
         f"<p>Hi {escape(order.customer_name)}, thanks! Your {escape(type_label.lower())} order <strong>{escape(order.order_number)}</strong> is confirmed.</p>"
         f'<ul style="padding-left:18px;margin:16px 0">{"".join(html_items)}</ul>'
         f'<p style="font-size:16px"><strong>Total: ${escape(str(order.total))}</strong></p>'
-        f'<p><a href="{escape(track, quote=True)}" style="display:inline-block;background:{DEFAULT_COLOR};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none">Track your order</a></p>'
+        f'<p><a href="{escape(track, quote=True)}" style="display:inline-block;background:{_brand_color(restaurant)};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none">Track your order</a></p>'
     )
     _queue_email(db, restaurant, order.customer_email, subject, "\n".join(text_lines), _layout(restaurant, "Order confirmed", body), f"email:order:{order.id}:placed")
 
@@ -121,7 +126,7 @@ def notify_reservation_confirmed(db: Session, restaurant, reservation, table_num
     text += f" {manage_link}\n\nThis link works until shortly after your booking time." if manage_link else f" Sign in at {settings.PUBLIC_SITE_URL.rstrip('/')}/reserve or contact us."
     text += f"\n\n— {restaurant.name}"
     manage = (
-        _button(manage_link, "Manage your reservation")
+        _button(manage_link, "Manage your reservation", _brand_color(restaurant))
         if manage_link else
         f'<p>Need to change it? <a href="{escape(settings.PUBLIC_SITE_URL.rstrip("/") + "/reserve", quote=True)}">Manage your reservation</a> or contact us.</p>'
     )
@@ -172,9 +177,9 @@ class _Platform:
     slug = ""
 
 
-def _button(link: str, label: str) -> str:
+def _button(link: str, label: str, color: str = DEFAULT_COLOR) -> str:
     return (
-        f'<p><a href="{escape(link, quote=True)}" style="display:inline-block;background:{DEFAULT_COLOR};color:#ffffff;'
+        f'<p><a href="{escape(link, quote=True)}" style="display:inline-block;background:{color};color:#ffffff;'
         f'padding:10px 18px;border-radius:8px;text-decoration:none">{escape(label)}</a></p>'
         f'<p style="font-size:12px;color:#6b6f6c;word-break:break-all">If the button does not work, copy this address into your browser:<br>{escape(link)}</p>'
     )
@@ -194,7 +199,7 @@ def notify_password_reset(db: Session, restaurant, to: str, first_name: str, lin
         text += "\nIf you did not ask for this, you can ignore this email: your password stays the same."
     html = _layout(
         restaurant, heading,
-        f"<p>Hi {escape(first_name)},</p><p>{escape(intro)}</p>{_button(link, 'Set your password' if invite else 'Choose a new password')}"
+        f"<p>Hi {escape(first_name)},</p><p>{escape(intro)}</p>{_button(link, 'Set your password' if invite else 'Choose a new password', _brand_color(restaurant))}"
         f"<p style=\"font-size:13px\">This link works once and expires in {escape(valid)}."
         f"{'' if invite else ' If you did not ask for this, ignore this email: your password stays the same.'}</p>",
     )
@@ -229,7 +234,7 @@ def notify_reservation_reminder(db: Session, restaurant, reservation, table_numb
     text += f"\n\nLet us know you're coming, or cancel if your plans changed: {manage_link}" if manage_link else ""
     text += f"\n\n— {restaurant.name}"
     manage = (
-        f'<p>{_button(manage_link, "I\'ll be there / Cancel")}</p>'
+        f'<p>{_button(manage_link, "I\'ll be there / Cancel", _brand_color(restaurant))}</p>'
         if manage_link else ""
     )
     body = (
