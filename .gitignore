@@ -71,3 +71,11 @@ backend/uploads/
 # database backups (contain personal data)
 backups/
 .env.lan-backup
+
+# Personal planning notes — kept on the maintainer's machine, not part of the shipped code.
+# (These were tracked earlier in the project; older commits still contain them.)
+ROADMAP.md
+OUTSTANDING.md
+KIOSK-POS-ROADMAP.md
+COMMIT_PLAN.md
+Test.md
