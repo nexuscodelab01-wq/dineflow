@@ -224,6 +224,38 @@ Two behaviours worth knowing:
 
 A pause stops pre-orders too — "stop taking orders" means that. The automatic busy cap does not, since a slot next Tuesday isn't in tonight's queue.
 
+## Staff management
+**Staff** (admin sidebar, admin only) invites someone by email, first/last name and role (Admin or
+Staff). It reuses the same invite-link mechanism as an owner's own account: a hashed, single-use, 7-day
+link is emailed, and setting a password on it is what "accepts" the invite (shown as **Invite
+pending** until then). An email that already belongs to a staff/admin account elsewhere is *reused*,
+not duplicated — the same person can work at more than one restaurant on one login.
+
+Deactivating someone removes their access to *that* restaurant immediately (checked on their very next
+request, no need to wait for a token to expire) without touching their login elsewhere. Two rails stop
+you locking a restaurant out of itself: you can't remove your own admin access, and you can't leave a
+restaurant with zero active admins.
+
+Promoting someone to Admin takes effect immediately, everywhere. Demoting them only takes away their
+access *at that restaurant* — their account-wide role does not automatically step down, because a
+request is already scoped to one restaurant by the time this runs (row-level security), so there is no
+safe way to check whether they're still an admin somewhere else. This is a known, documented seam, not
+a bug — see `restaurant_user.py`'s docstring if it ever needs revisiting.
+
+## SEO, social sharing and legal pages
+Every page gets a description, Open Graph/Twitter tags, and a canonical URL from the restaurant's own
+`description`/`about_text` (`app.vue`). The home page also carries `Restaurant` JSON-LD structured
+data — hours, address, phone — for search engines. `frontend/public/` holds the fallback favicon and a
+default share image, used only when a restaurant hasn't turned on `custom_branding` or set a gallery
+photo. `/terms`, `/privacy` and `/cookies` are generic placeholder pages, linked from the footer — meant
+to be replaced with a client's own reviewed copy before it matters for a real launch.
+
+**Worth knowing:** any URL that ends up in rendered markup (an image, the favicon, a share-image) must
+be built with `resolveMediaUrl`/`getPublicApiBaseUrl()`, never `getApiBaseUrl()` directly — the latter
+is for the Nuxt server's *own* outgoing requests only (it may point at an internal Docker hostname the
+browser can't reach). Mixing the two up is exactly how every image on the site was silently broken in
+the server-rendered HTML until client-side hydration repainted it — see ROADMAP.md §4.2 if it recurs.
+
 ## Row-level security (the database keeps restaurants apart)
 Besides the checks in the code, PostgreSQL itself refuses to show or change another restaurant's rows. Every tenant table has a policy; when a request is *bound to a restaurant* the database only exposes that restaurant's rows, even if a query forgets its `WHERE restaurant_id = …`.
 - **Which requests are bound:** staff routes (the restaurant they are working in, after the membership check), signed-in customers (their own restaurant) and table guests (their table's restaurant). Sign-in, public menus, QR lookups, background jobs and the CLI run unbound (as before) and still filter explicitly in code.
