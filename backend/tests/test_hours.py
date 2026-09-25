@@ -8,6 +8,7 @@ import pytest
 from app.core.hours import (
     InvalidHours,
     describe_hours,
+    local_now,
     status_at,
     valid_timezone,
     validate_closures,
@@ -114,5 +115,15 @@ def test_closed_now_reports_when_it_next_opens():
 
 
 def test_describe_hours_names_todays_window():
+    # `describe_hours` reads the real clock, and WEEKLY is not the same every day — so the expected
+    # window has to be looked up for whatever day the suite is running on. Hard-coding one day's times
+    # made this pass Monday to Thursday and fail at the weekend.
     r = restaurant(hours=WEEKLY)
-    assert "11:00" in describe_hours(r) and "22:00" in describe_hours(r)
+    today = WEEKLY[local_now(r).strftime("%A").lower()]
+    described = describe_hours(r)
+    if today == "closed":
+        assert "closed today" in described
+    else:
+        opens, closes = today.split("-")
+        assert opens in described and closes in described
+    assert "America/Los_Angeles" in described
