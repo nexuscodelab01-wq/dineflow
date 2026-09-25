@@ -40,8 +40,8 @@ def world(client, db):
     staff = make_user(db, "slot-staff@iso-demo.com", RoleName.RESTAURANT_STAFF)
     customer = make_user(db, "slot-cust@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
     db.add_all([
-        RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id),
-        RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id),
+        RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN),
+        RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id, role=RoleName.RESTAURANT_STAFF),
     ])
     category = Category(restaurant_id=restaurant.id, name="Mains", slug="mains")
     db.add(category)

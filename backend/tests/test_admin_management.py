@@ -48,9 +48,9 @@ def world(client: TestClient, db: Session):
     customer = _user(db, "am-cust@demo.com", RoleName.CUSTOMER, "Cara", restaurant_id=a.id)
     admin_b = _user(db, "am-admin-b@demo.com", RoleName.RESTAURANT_ADMIN, "Bea")
     db.add_all([
-        RestaurantUser(restaurant_id=a.id, user_id=admin.id),
-        RestaurantUser(restaurant_id=a.id, user_id=staff.id),
-        RestaurantUser(restaurant_id=b.id, user_id=admin_b.id),
+        RestaurantUser(restaurant_id=a.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN),
+        RestaurantUser(restaurant_id=a.id, user_id=staff.id, role=RoleName.RESTAURANT_STAFF),
+        RestaurantUser(restaurant_id=b.id, user_id=admin_b.id, role=RoleName.RESTAURANT_ADMIN),
     ])
     cat = Category(restaurant_id=a.id, name="Mains", slug="mains")
     db.add(cat)

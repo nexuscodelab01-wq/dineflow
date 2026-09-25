@@ -29,7 +29,7 @@ def world(client, db):
     db.add(restaurant)
     db.flush()
     admin = make_user(db, "combine-admin@iso-demo.com", RoleName.RESTAURANT_ADMIN)
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
     cat = Category(restaurant_id=restaurant.id, name="Mains", slug="mains")
     db.add(cat)
     db.flush()

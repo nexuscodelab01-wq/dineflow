@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.models.enums import RoleName
 from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.core.security import create_access_token
@@ -29,7 +30,7 @@ def test_admin_ping_requires_admin_role(
     restaurant = Restaurant(name="Ping Kitchen", slug="ping-kitchen")
     db.add(restaurant)
     db.flush()
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin_user.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin_user.id, role=RoleName.RESTAURANT_ADMIN))
     db.flush()
     ping = f"/api/v1/admin/ping?restaurant_id={restaurant.id}"
 

@@ -29,6 +29,7 @@ def user_can_access_restaurant(db: Session, user: User, restaurant_id: int) -> b
             select(RestaurantUser).where(
                 RestaurantUser.restaurant_id == restaurant_id,
                 RestaurantUser.user_id == user.id,
+                RestaurantUser.is_active.is_(True),
             )
         )
         return membership is not None
@@ -42,7 +43,8 @@ def list_accessible_restaurants(db: Session, user: User) -> list:
         pass
     elif role in {RoleName.RESTAURANT_ADMIN.value, RoleName.RESTAURANT_STAFF.value}:
         stmt = stmt.join(RestaurantUser, RestaurantUser.restaurant_id == Restaurant.id).where(
-            RestaurantUser.user_id == user.id
+            RestaurantUser.user_id == user.id,
+            RestaurantUser.is_active.is_(True),
         )
     else:
         return []

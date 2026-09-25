@@ -34,8 +34,8 @@ def world(client, db):
     customer = make_user(db, "coupon-cust@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
     other = make_user(db, "coupon-other@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
     db.add_all([
-        RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id),
-        RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id),
+        RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN),
+        RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id, role=RoleName.RESTAURANT_STAFF),
     ])
     category = Category(restaurant_id=restaurant.id, name="Mains", slug="mains")
     db.add(category)

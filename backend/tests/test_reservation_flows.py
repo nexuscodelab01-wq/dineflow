@@ -42,7 +42,7 @@ def world(client: TestClient, db: Session):
     db.flush()
     customer.restaurant_id = restaurant.id
     db.flush()
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
     tables = [RestaurantTable(restaurant_id=restaurant.id, table_number=n, capacity=c, status=TableStatus.AVAILABLE)
               for n, c in (("T1", 2), ("T2", 2), ("T3", 6))]
     db.add_all(tables)

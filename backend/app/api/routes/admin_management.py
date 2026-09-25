@@ -65,6 +65,7 @@ from app.schemas.reservation import (
 )
 from app.schemas.restaurant import RestaurantRead
 from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
+from app.schemas.staff import StaffInvite, StaffInviteRead, StaffRead, StaffUpdate
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
@@ -72,6 +73,7 @@ from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
 from app.services.coupon_service import CouponService
+from app.services.staff_service import StaffService
 from app.services.loyalty_service import LoyaltyService
 from app.services.review_service import ReviewService
 from app.services.waitlist_service import WaitlistService
@@ -103,6 +105,10 @@ def get_waitlist_service(db: Annotated[Session, Depends(get_db)]) -> WaitlistSer
 
 def get_coupon_service(db: Annotated[Session, Depends(get_db)]) -> CouponService:
     return CouponService(db)
+
+
+def get_staff_service(db: Annotated[Session, Depends(get_db)]) -> StaffService:
+    return StaffService(db)
 
 
 def get_loyalty_service(db: Annotated[Session, Depends(get_db)]) -> LoyaltyService:
@@ -883,6 +889,58 @@ def reply_to_review(
         return service.reply(review_id, restaurant_id, data.reply)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+# ------------------------------------------------------------------ staff
+
+@router.get("/staff", response_model=list[StaffRead])
+def list_staff(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> list[StaffRead]:
+    return service.list_for_restaurant(restaurant_id)
+
+
+@router.post("/staff", response_model=StaffInviteRead, status_code=status.HTTP_201_CREATED)
+def invite_staff(
+    data: StaffInvite,
+    admin: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> StaffInviteRead:
+    try:
+        return service.invite(restaurant_id, data, admin)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.patch("/staff/{membership_id}", response_model=StaffRead)
+def update_staff(
+    membership_id: int,
+    data: StaffUpdate,
+    admin: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> StaffRead:
+    try:
+        return service.update(membership_id, restaurant_id, data, admin)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/staff/{membership_id}/resend-invite")
+def resend_staff_invite(
+    membership_id: int,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> dict[str, str]:
+    try:
+        link = service.resend_invite(membership_id, restaurant_id)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return {"invite_link": link}
 
 
 # ------------------------------------------------------------------ coupons

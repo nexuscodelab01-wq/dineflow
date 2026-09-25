@@ -31,7 +31,7 @@ def world(client, db):
     admin = make_user(db, "waitlist-admin@iso-demo.com", RoleName.RESTAURANT_ADMIN)
     staff = make_user(db, "waitlist-staff@iso-demo.com", RoleName.RESTAURANT_STAFF)
     customer = make_user(db, "waitlist-cust@iso-demo.com", RoleName.CUSTOMER, restaurant_id=restaurant.id)
-    db.add_all([RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id), RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id)])
+    db.add_all([RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN), RestaurantUser(restaurant_id=restaurant.id, user_id=staff.id, role=RoleName.RESTAURANT_STAFF)])
     cat = Category(restaurant_id=restaurant.id, name="Mains", slug="mains")
     db.add(cat)
     db.flush()

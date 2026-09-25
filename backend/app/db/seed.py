@@ -253,8 +253,8 @@ def seed() -> None:
             create_user("customer3@demo.com", "Jordan", "Lee", RoleName.CUSTOMER, "+14155550113", restaurant.id),
         ]
 
-        for user in (admin, staff):
-            db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=user.id))
+        for user, role in ((admin, RoleName.RESTAURANT_ADMIN), (staff, RoleName.RESTAURANT_STAFF)):
+            db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=user.id, role=role))
 
         category_defs = [
             ("Appetizers", "appetizers", "Shareable starters"),

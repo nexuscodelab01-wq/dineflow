@@ -166,7 +166,7 @@ def provision_tenant(
 
     owner, is_new = _owner(db, owner_email, owner_name)
     restaurant_id = restaurant.id
-    db.add(RestaurantUser(restaurant_id=restaurant_id, user_id=owner.id))
+    db.add(RestaurantUser(restaurant_id=restaurant_id, user_id=owner.id, role=RoleName.RESTAURANT_ADMIN))
     db.add(AuditLog(
         restaurant_id=restaurant.id, actor_label="cli", action="tenant.create", target=slug,
         details={"template": template, "color": color, "owner": owner.email},
