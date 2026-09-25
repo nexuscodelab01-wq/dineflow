@@ -84,7 +84,12 @@
     </main>
 
     <footer class="border-t border-brand-100/80 py-6 text-center text-sm text-ink-subtle">
-      © {{ year }} {{ branding.name.value ?? 'DineFlow' }}
+      <p>© {{ year }} {{ branding.name.value ?? 'DineFlow' }}</p>
+      <nav class="mt-2 flex items-center justify-center gap-4 text-xs">
+        <NuxtLink to="/terms" class="hover:text-ink hover:underline">Terms</NuxtLink>
+        <NuxtLink to="/privacy" class="hover:text-ink hover:underline">Privacy</NuxtLink>
+        <NuxtLink to="/cookies" class="hover:text-ink hover:underline">Cookies</NuxtLink>
+      </nav>
     </footer>
 
     <FloatingCartBar />

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /platform
+Disallow: /checkout
+Disallow: /cart
+Disallow: /orders
+Disallow: /profile
+Disallow: /reset-password

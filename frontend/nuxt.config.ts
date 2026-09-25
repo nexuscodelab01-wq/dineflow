@@ -22,6 +22,12 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  app: {
+    head: {
+      htmlAttrs: { lang: 'en' },
+    },
+  },
+
   runtimeConfig: {
     // Server-only: used for SSR fetches inside Docker (e.g. http://backend:8000)
     apiUrl: process.env.NUXT_API_URL || process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8000',

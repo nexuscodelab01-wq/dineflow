@@ -6,6 +6,7 @@ import type { PublicReview } from '~/types/review'
 import { fetchMenu } from '~/services/menu'
 import { fetchPublicReviews } from '~/services/reviews'
 import { resolveMediaUrl } from '~/utils/media'
+import { getPublicApiBaseUrl } from '~/services/http'
 import { formatCurrency } from '~/utils/format'
 import { wallClockIn } from '~/utils/timezone'
 import { weeklyHoursLabels } from '~/utils/hours'
@@ -14,6 +15,40 @@ const restaurant = useRestaurantStore()
 const { status: openStatus, todayLabel } = useOpeningStatus()
 const current = computed(() => restaurant.current)
 const reviewsEnabled = useFeature('reviews')
+
+// Structured data: the single highest-value SEO addition for a restaurant, and free given the data
+// already exists — a search engine can show hours, address and a "book a table" action directly.
+// `useRequestURL`/`getApiBaseUrl` need Nuxt's runtime context, and `useHead`'s callback runs later and
+// outside it — resolved eagerly here in plain setup scope instead. (Not with runWithContext: on the
+// server that wraps even a synchronous callback in a Promise, and useHead silently drops a callback
+// that returns one instead of a plain object — see useBranding.ts for the same pitfall.)
+const siteOrigin = useRequestURL().origin
+const apiBase = getPublicApiBaseUrl()
+useHead(() => {
+  const r = current.value
+  if (!r) return {}
+  const openingHours = Object.entries(r.opening_hours || {})
+    .filter(([, hours]) => hours && hours.toLowerCase() !== 'closed')
+    .map(([day, hours]) => {
+      const [opens, closes] = hours.split('-')
+      return { '@type': 'OpeningHoursSpecification', dayOfWeek: `https://schema.org/${day[0]!.toUpperCase()}${day.slice(1)}`, opens, closes }
+    })
+  const jsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    name: r.name,
+    url: siteOrigin,
+    ...(r.description ? { description: r.description } : {}),
+    ...(r.logo_url ? { image: resolveMediaUrl(r.logo_url, apiBase) } : {}),
+    ...(r.phone ? { telephone: r.phone } : {}),
+    ...(r.address ? {
+      address: { '@type': 'PostalAddress', streetAddress: r.address, addressLocality: r.city || undefined, postalCode: r.postal_code || undefined },
+    } : {}),
+    ...(r.latitude && r.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: r.latitude, longitude: r.longitude } } : {}),
+    ...(openingHours.length ? { openingHoursSpecification: openingHours } : {}),
+  }
+  return { script: [{ key: 'restaurant-jsonld', type: 'application/ld+json', innerHTML: JSON.stringify(jsonLd) }] }
+})
 
 // A handful of popular dishes give the home page something real to show beyond stock copy — fetched
 // once alongside the restaurant itself so it's there on first paint, not a layout jump after mount.

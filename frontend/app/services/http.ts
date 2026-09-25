@@ -1,6 +1,11 @@
 import { ApiError, parseApiErrorBody } from '~/utils/api-error'
 import { ACCESS_TOKEN_KEY, refreshSession } from '~/utils/session-refresh'
 
+/** For the Nuxt server's *own* outgoing requests (apiFetch during SSR) — the internal Docker hostname
+ * when there is one, since that's faster and doesn't round-trip through the public port mapping.
+ * Never use this for a URL that ends up in rendered markup (an `<img src>`, a `<link href>`, a JSON-LD
+ * `image` field…) — the browser has to fetch that itself, and it cannot resolve an internal-only
+ * hostname like `backend:8000`. Use `getPublicApiBaseUrl()` for those; see resolveMediaUrl. */
 export function getApiBaseUrl(): string {
   const config = useRuntimeConfig()
   // During SSR in Docker, call the backend service hostname — not localhost.
@@ -8,6 +13,15 @@ export function getApiBaseUrl(): string {
     return (config.apiUrl as string) || (config.public.apiUrl as string)
   }
   return config.public.apiUrl as string
+}
+
+/** The API's address as the *browser* can reach it — same on client and server. Anything embedded in
+ * markup (image/link URLs) must use this, not getApiBaseUrl(), or the server-rendered HTML points at
+ * an address only the Nuxt server's own network can resolve (masked in normal use once client-side
+ * hydration silently repaints it with the right URL — but broken for a crawler, a share-link preview
+ * bot, or anyone viewing the page source, and a real flash of missing images before hydration). */
+export function getPublicApiBaseUrl(): string {
+  return useRuntimeConfig().public.apiUrl as string
 }
 
 function getAccessToken(): string | null {
