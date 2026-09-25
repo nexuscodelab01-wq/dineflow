@@ -160,8 +160,14 @@ Build order matters; each step is flag-gated (`qr_ordering`, `kds_v2`, `pay_at_t
 
 **Exit:** every item above is done. Stage C is complete.
 
-### Stage D — Growth features · ongoing, one flag at a time
-Loyalty · reviews · coupons/gift cards · scheduled pickup slots · delivery zones/fees · order throttling when busy · analytics 2.0 · multi-language · web push · smart features (§7.6).
+### Stage D — Growth features · ongoing, one flag at a time · *in progress*
+- [x] **Reviews** (`reviews`): a guest rates one completed order or booking (one review per visit, resubmitting edits it); staff hide/publish and reply; published reviews and an average show on the site. `/reviews` is a public page — everyone's reviews, plus your own visits to rate when signed in.
+- [x] **Loyalty points** (`loyalty`): earned on a completed order at a per-restaurant rate, credited once per order (DB-enforced), guest orders excluded. Customers see their balance and history; staff adjust by hand with a floor at zero.
+- [x] **Coupons** (`coupons`): percentage or fixed discount codes with minimum order, a cap on percentage discounts, an active window, and total/per-customer limits. The client only ever sends a *code* — the amount is worked out server-side, off the subtotal, before tax. The total cap is checked under a row lock; one coupon per order is a unique constraint.
+- [x] **Analytics 2.0**: sales by hour of day, no-show rate, and a CSV export of orders for a date range. No flag — internal staff reporting on data that already existed.
+- [x] **Scheduled collection slots** (`scheduled_orders`) **and capacity controls**: slots generated from the opening hours, with a per-slot cap and a kitchen lead time; a scheduled order stays off the kitchen screen until nearly due. Plus a manual "pause online ordering" switch (with a customer-facing message) and an automatic pause once a set number of orders are open.
+- [ ] Still to do in D: **gift cards** (deliberately deferred — a gift card is a *payment instrument*, not a discount, so it needs the partial-payment and refund semantics that come with B4/Stripe rather than the mock gateway) · delivery zones/fees · multi-language · web push · smart features (§7.6) · course firing and an expo screen (from B2) · re-order last visit.
+- [ ] Also not done, and needing a small expand migration rather than a pure read: **table turn time** and **average dining duration** for analytics — `Reservation` has `starts_at`/`ends_at` and a status, but no `seated_at`/`completed_at` to measure against.
 
 ### Stage E — SaaS shell · ~6–8 weeks, when a client is ready · *first slice built early, at the user's request*
 - [x] **Platform console** (`/platform`, platform admins only): lists every tenant and creates a new one from a form — name, slug (auto-filled, editable), owner email/name, brand colour, logo, menu template, timezone and an optional custom domain — the same thing `create-tenant` does, now with no terminal needed. Shows the site link and a one-time owner invite link on success.

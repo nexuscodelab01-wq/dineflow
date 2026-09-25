@@ -194,6 +194,36 @@ The confirmation and reminder emails carry a link to `/reservations/manage?token
 ## Guest profiles
 **Customers** (admin sidebar) lists every registered customer of the restaurant, not only those who have ordered — someone who has only booked a table, or who has just signed up, shows up too, since a customer account already lives in that restaurant's own table (`users.restaurant_id`). "Last seen" is the more recent of their last order and last booking. Open a customer to see their order and booking history and set **notes**, **allergies** and a **VIP** tag — staff-only, never shown to the guest. A customer's own account page has no access to this (`GET`/`PATCH /admin/customers/{id}` are staff routes).
 
+## Reviews (flag: `reviews`)
+A customer rates one completed order or booking out of five, with an optional comment — one review per visit; sending it again edits the existing one. **Reviews** (admin sidebar) lists everything with the reviewer's name and email: **Hide** takes a review off the site, **Reply** adds a public answer under it. Reviews are published by default, so hide is a correction, not a gate.
+
+`/reviews` on the restaurant's site is public: any visitor reads every published review and the average. A signed-in customer also sees their own completed visits waiting to be rated, and their own reviews, above that shared list. A hidden review is still shown to the person who wrote it, marked "Only visible to you", so they aren't left wondering where it went. The home page carries the six most recent, with a link through. Reviewers appear publicly as a first name and last initial ("Sam T.") — never the full name or email.
+
+## Loyalty points (flag: `loyalty`)
+Points are credited when an order is marked **COMPLETED**, at **Settings → Loyalty → points per $1** (default 1), floored to whole points off the order total. They are credited once per order — enforced by a unique constraint, not just by care — and an order placed by a table guest with no account earns nothing. Turning the flag on does **not** backdate: orders already completed stay at zero, because points are credited at the moment of completion.
+
+Customers see their balance and history at `/loyalty` ("Points" in the site header). **Loyalty** (admin sidebar) lists balances, most points first, and lets staff adjust one by hand for goodwill or to fix a mistake — a deduction can't take a balance below zero, and every change is a row in the ledger, so the balance can always be explained.
+
+## Discount codes (flag: `coupons`)
+**Discount codes** (admin sidebar, admin only) creates a code that is either a percentage or a fixed amount off, optionally with a minimum order, a cap on what a percentage can take off, a last day, a total number of uses and a limit per customer. Codes are stored upper-cased, so `save10` and `SAVE10` are the same code and customers can type either.
+
+The customer enters it at checkout and sees what it is worth before paying. **The amount is never taken from the request** — only the code is sent, and the discount is worked out on the server from its own subtotal, coming off *before* tax and capped at the subtotal (so a code can reduce a bill to zero but never pay anything out; a zero-total order skips the payment gateway and records a `0.00` payment). A "first N customers" cap is checked under a database row lock, so two people checking out at the same moment can't both take the last use.
+
+**Retire** a code that has been used rather than deleting it — past orders keep their history. An unused code is deleted outright.
+
+## Ordering ahead and order capacity
+**Settings → Order capacity** holds two things that work whether or not any flag is on:
+- **Pause online ordering** stops new customer orders and shows them the message you set ("we're extremely busy tonight"). Staff can still put an order in for a guest.
+- **Pause automatically at this many open orders** does the same once the kitchen has that many orders still open. Leave it empty for no limit.
+
+With the **`scheduled_orders`** flag on, checkout also offers **Order ahead**: the customer picks a day and a collection time. Slots come from the restaurant's own opening hours, so there is nothing separate to keep in step — set the hours and the slots follow. **Settings → Ordering ahead** controls the slot length, how many orders each slot takes, how many days ahead you accept orders, and how long before the collection time the kitchen should see the ticket.
+
+Two behaviours worth knowing:
+- A customer **can order ahead while you are closed** — the slot itself proves you are open then, which is the point of pre-ordering. Ordering for *now* still requires you to be open.
+- A scheduled order **stays off the kitchen screen** until it is within the lead time, so the board shows what to cook now, not everything booked for the week. Once staff start it, it stays on the board. The board is ordered by when food is wanted rather than when it was ordered, and the admin order list badges anything that is for later.
+
+A pause stops pre-orders too — "stop taking orders" means that. The automatic busy cap does not, since a slot next Tuesday isn't in tonight's queue.
+
 ## Row-level security (the database keeps restaurants apart)
 Besides the checks in the code, PostgreSQL itself refuses to show or change another restaurant's rows. Every tenant table has a policy; when a request is *bound to a restaurant* the database only exposes that restaurant's rows, even if a query forgets its `WHERE restaurant_id = …`.
 - **Which requests are bound:** staff routes (the restaurant they are working in, after the membership check), signed-in customers (their own restaurant) and table guests (their table's restaurant). Sign-in, public menus, QR lookups, background jobs and the CLI run unbound (as before) and still filter explicitly in code.
