@@ -31,6 +31,7 @@ from app.core.tenancy import ensure_customer_of
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.coupon_service import CouponService
 from app.services.feature_service import FeatureService
+from app.services.scheduling_service import SchedulingService
 from app.services.notifications import notify_order_placed
 from app.services.payment_service import PaymentService
 from app.services.reservation_service import ReservationService
@@ -48,6 +49,7 @@ class OrderService:
         self.reservations = ReservationService(db)
         self.features = FeatureService(db)
         self.coupons = CouponService(db)
+        self.scheduling = SchedulingService(db)
 
     def create_order(self, data: OrderCreate, user: User) -> OrderRead:
         ensure_customer_of(user, data.restaurant_id)  # first: another restaurant's rows are invisible to this customer
@@ -55,9 +57,22 @@ class OrderService:
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
         ensure_customer_of(user, restaurant.id)
-        open_now = status_at(restaurant, datetime.now(UTC))
-        if not open_now.open:
-            raise AppError(f"{restaurant.name} is closed right now ({open_now.reason}). Please try again during opening hours.")
+
+        # Ordering ahead for a later slot: the slot itself proves the restaurant is open then, so "are
+        # you open right now" must not apply — pre-ordering tomorrow's lunch tonight is the whole point.
+        scheduled_for: datetime | None = None
+        if data.scheduled_for is not None:
+            if not self.features.is_enabled(restaurant.id, "scheduled_orders"):
+                raise AppError("Ordering ahead is not available for this restaurant")
+            if data.order_type == OrderType.DINE_IN:
+                raise AppError("A dine-in order is served at your booking time, so it can't be scheduled separately")
+            scheduled_for = self.scheduling.validate_scheduled_for(restaurant, data.scheduled_for)
+
+        self.scheduling.ensure_accepting_orders(restaurant, scheduled=scheduled_for is not None)
+        if scheduled_for is None:
+            open_now = status_at(restaurant, datetime.now(UTC))
+            if not open_now.open:
+                raise AppError(f"{restaurant.name} is closed right now ({open_now.reason}). Please try again during opening hours.")
 
         # The table always comes from the customer's reservation (dine-in), never from the request.
         table_id: int | None = None
@@ -108,6 +123,7 @@ class OrderService:
             delivery_instructions=data.delivery_instructions,
             notes=data.notes,
             table_id=table_id,
+            scheduled_for=scheduled_for,
         )
 
         if data.order_type == OrderType.DELIVERY and data.delivery_address:

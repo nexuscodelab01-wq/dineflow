@@ -84,6 +84,23 @@ class Restaurant(TimestampMixin, Base):
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     # Whole loyalty points earned per whole currency unit spent on a completed order (floor of total * rate).
     loyalty_points_per_currency: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    # Capacity controls. Paused stops new online orders outright ("we're slammed"); max_pending_orders
+    # does it automatically once that many orders are still open in the kitchen. Null = no cap.
+    # Neither applies to staff, who can always put an order in on a guest's behalf.
+    online_ordering_paused: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    ordering_pause_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    max_pending_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Scheduled ("order for later") collection slots, behind the `scheduled_orders` flag.
+    slot_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    max_orders_per_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)  # null = no cap
+    scheduled_order_days_ahead: Mapped[int] = mapped_column(Integer, default=7, server_default="7", nullable=False)
+    # How long before the collection time the kitchen should see the ticket — a scheduled order sits
+    # out of the way until then, so the screen shows what to cook *now*.
+    scheduled_order_lead_minutes: Mapped[int] = mapped_column(
+        Integer, default=30, server_default="30", nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     staff: Mapped[list["RestaurantUser"]] = relationship(

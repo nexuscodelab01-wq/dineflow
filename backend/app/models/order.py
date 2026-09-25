@@ -1,9 +1,10 @@
 """Order ORM model."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -62,6 +63,9 @@ class Order(TimestampMixin, Base):
     session_guest_id: Mapped[int | None] = mapped_column(ForeignKey("session_guests.id", ondelete="SET NULL"), nullable=True)
     round_no: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1, 2, 3… within the table session
     client_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Set when the customer chose a later collection slot instead of "as soon as possible". The kitchen
+    # only sees the ticket once it is within the restaurant's lead time (see kitchen_orders).
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     delivery_instructions: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

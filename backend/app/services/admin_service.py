@@ -293,7 +293,9 @@ class AdminService:
         return self.get_order(order_id, restaurant_id)
 
     def kitchen_board(self, restaurant_id: int) -> KitchenBoard:
-        groups = self.orders.kitchen_orders(restaurant_id)
+        restaurant = self.restaurants.get_by_id(restaurant_id)
+        lead_minutes = restaurant.scheduled_order_lead_minutes if restaurant else 30
+        groups = self.orders.kitchen_orders(restaurant_id, lead_minutes=lead_minutes)
         return KitchenBoard(
             new_orders=[OrderRead.model_validate(o) for o in groups["new_orders"]],
             preparing=[OrderRead.model_validate(o) for o in groups["preparing"]],

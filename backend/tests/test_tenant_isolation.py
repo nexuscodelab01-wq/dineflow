@@ -46,6 +46,7 @@ PUBLIC = {
     ("GET", "/restaurants/{identifier}"), ("GET", "/restaurants/{identifier}/tables"),
     ("GET", "/restaurants/{identifier}/reservations/availability"),
     ("GET", "/restaurants/{identifier}/reviews"),
+    ("GET", "/restaurants/{identifier}/pickup-slots"),
     ("GET", "/tenant"),
     ("GET", "/reservations/actions/{token}"), ("POST", "/reservations/actions/{token}/confirm"), ("POST", "/reservations/actions/{token}/cancel"),
 }

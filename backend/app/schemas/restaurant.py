@@ -41,6 +41,13 @@ class RestaurantRead(BaseModel):
     latitude: Decimal | None = None
     longitude: Decimal | None = None
     loyalty_points_per_currency: int = 1
+    online_ordering_paused: bool = False
+    ordering_pause_reason: str | None = None
+    max_pending_orders: int | None = None
+    slot_interval_minutes: int = 15
+    max_orders_per_slot: int | None = None
+    scheduled_order_days_ahead: int = 7
+    scheduled_order_lead_minutes: int = 30
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool

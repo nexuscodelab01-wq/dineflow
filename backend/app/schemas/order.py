@@ -33,6 +33,9 @@ class OrderCreate(BaseModel):
     # (Unknown fields such as `discount` or `table_id` in a request are ignored.)
     # A coupon is named by its code only; what it is worth is worked out server-side.
     coupon_code: str | None = Field(default=None, max_length=40)
+    # A later collection slot instead of "as soon as possible". Checked against the restaurant's own
+    # slot grid on the server, so a stale page can't book a slot that has closed or filled up.
+    scheduled_for: datetime | None = None
     reservation_id: int | None = None
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)
@@ -101,6 +104,7 @@ class OrderRead(BaseModel):
     customer_phone: str | None = None
     delivery_instructions: str | None = None
     notes: str | None = None
+    scheduled_for: datetime | None = None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemRead] = Field(default_factory=list)

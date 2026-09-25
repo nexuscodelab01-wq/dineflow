@@ -26,4 +26,5 @@ FEATURES: dict[str, Feature] = {
     "reviews": Feature(False, "Guests can rate and review a completed visit; shown on the site"),
     "loyalty": Feature(False, "Customers earn points on completed orders and can view their balance"),
     "coupons": Feature(False, "Discount codes customers can apply at checkout"),
+    "scheduled_orders": Feature(False, "Customers can order ahead for a later collection slot"),
 }

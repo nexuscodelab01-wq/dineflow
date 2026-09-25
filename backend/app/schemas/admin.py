@@ -293,6 +293,14 @@ class RestaurantSettingsUpdate(BaseModel):
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
     loyalty_points_per_currency: int | None = Field(default=None, ge=0, le=1000)
+    # Ordering capacity and scheduled collection slots.
+    online_ordering_paused: bool | None = None
+    ordering_pause_reason: str | None = Field(default=None, max_length=200)
+    max_pending_orders: int | None = Field(default=None, ge=1, le=500)
+    slot_interval_minutes: int | None = Field(default=None, ge=5, le=120)
+    max_orders_per_slot: int | None = Field(default=None, ge=1, le=100)
+    scheduled_order_days_ahead: int | None = Field(default=None, ge=0, le=60)
+    scheduled_order_lead_minutes: int | None = Field(default=None, ge=0, le=480)
 
     @field_validator("logo_url")
     @classmethod

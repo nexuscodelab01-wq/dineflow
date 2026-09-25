@@ -1,7 +1,7 @@
 """Admin order and table data access."""
 
 import math
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -73,17 +73,30 @@ class AdminOrderRepository:
         )
         return self.db.scalar(stmt)
 
-    def kitchen_orders(self, restaurant_id: int) -> dict[str, list[Order]]:
+    def kitchen_orders(self, restaurant_id: int, *, lead_minutes: int = 30) -> dict[str, list[Order]]:
         active_statuses = [
             OrderStatus.CONFIRMED,
             OrderStatus.PREPARING,
             OrderStatus.READY,
         ]
+        # An order for a later collection slot stays off the screen until it is within the kitchen's
+        # lead time, so the board shows what to cook now rather than everything booked for the week.
+        # Once staff start it (PREPARING/READY) it stays visible whatever its slot says.
+        due_by = datetime.now(UTC) + timedelta(minutes=lead_minutes)
         stmt = (
             select(Order)
             .options(selectinload(Order.items).selectinload(OrderItem.modifiers), joinedload(Order.table))
-            .where(Order.restaurant_id == restaurant_id, Order.status.in_(active_statuses))
-            .order_by(Order.created_at.asc())
+            .where(
+                Order.restaurant_id == restaurant_id,
+                Order.status.in_(active_statuses),
+                or_(
+                    Order.scheduled_for.is_(None),
+                    Order.scheduled_for <= due_by,
+                    Order.status != OrderStatus.CONFIRMED,
+                ),
+            )
+            # Soonest first: a scheduled order is ordered by when it's wanted, not when it was placed.
+            .order_by(func.coalesce(Order.scheduled_for, Order.created_at).asc())
         )
         orders = list(self.db.scalars(stmt).unique().all())
         return {

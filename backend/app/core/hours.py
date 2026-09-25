@@ -157,6 +157,50 @@ def _next_open(restaurant, local: datetime) -> datetime | None:
     return None
 
 
+def window_for_day(restaurant, local_date: date) -> tuple[datetime, datetime] | None:
+    """The opening window that *starts* on `local_date`, as aware datetimes in the restaurant's zone.
+
+    None when that day is closed (weekly hours or a closure). A window ending before it starts runs
+    past midnight, so the returned end is on the following day — the same reading as `status_at`.
+    A restaurant with no hours set has no defined window, so callers that need one (scheduling) treat
+    that as "no slots"; being always *open* isn't the same as having a known open/close time.
+    """
+    hours = getattr(restaurant, "opening_hours", None)
+    if not hours or closure_label(restaurant, local_date):
+        return None
+    window = parse_day(hours.get(DAYS[local_date.weekday()]))
+    if window is None:
+        return None
+    opens, closes = window
+    zone = _zone(restaurant)
+    start = datetime.combine(local_date, opens, tzinfo=zone)
+    end = datetime.combine(local_date, closes, tzinfo=zone)
+    if closes <= opens:
+        end += timedelta(days=1)
+    return start, end
+
+
+def slots_for_day(restaurant, local_date: date, interval_minutes: int) -> list[datetime]:
+    """Every collection time on `local_date`, `interval_minutes` apart, that finishes by closing time.
+
+    Only the grid — whether a slot is still bookable (in the future, not full) is the scheduling
+    service's business, since that needs the clock and the orders already taken.
+    """
+    if interval_minutes <= 0:
+        raise ValueError("interval_minutes must be positive")
+    window = window_for_day(restaurant, local_date)
+    if window is None:
+        return []
+    start, end = window
+    step = timedelta(minutes=interval_minutes)
+    slots: list[datetime] = []
+    cursor = start
+    while cursor + step <= end:  # the last slot ends at closing time, never after it
+        slots.append(cursor)
+        cursor += step
+    return slots
+
+
 def describe_hours(restaurant) -> str:
     """One line for an error message, e.g. 'Hours today: 11:00–22:00 (America/Los_Angeles)'."""
     hours = getattr(restaurant, "opening_hours", None)

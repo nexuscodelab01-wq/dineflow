@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from datetime import date
+
 from app.core.exceptions import ForbiddenError, NotFoundError, raise_http_for_app_error
+from app.core.hours import local_now
 from app.core.tenancy import resolve_tenant
 from app.db.session import get_db
 from app.dependencies.auth import require_roles
@@ -15,9 +18,11 @@ from app.models.restaurant_table import RestaurantTable
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.restaurant import RestaurantRead
 from app.schemas.review import PublicReviewList
+from app.schemas.scheduling import PickupSlot, PickupSlotsResponse
 from app.services.feature_service import FeatureService
 from app.services.reservation_service import ReservationService
 from app.services.review_service import ReviewService
+from app.services.scheduling_service import SchedulingService
 
 router = APIRouter(prefix="/restaurants")
 
@@ -74,6 +79,31 @@ def list_tables(
         }
         for table in tables
     ]
+
+
+@router.get("/{identifier}/pickup-slots", response_model=PickupSlotsResponse)
+def list_pickup_slots(
+    identifier: str,
+    db: Annotated[Session, Depends(get_db)],
+    on: date | None = Query(default=None, description="Local date (YYYY-MM-DD); defaults to today"),
+) -> PickupSlotsResponse:
+    """Collection times still bookable on a given day. Public: a visitor can see when they could
+    collect before signing in, the same way the menu and opening hours are public."""
+    restaurant = RestaurantRepository(db).get_by_id_or_slug(identifier)
+    if restaurant is None or not restaurant.is_active:
+        raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
+    if not FeatureService(db).is_enabled(restaurant.id, "scheduled_orders"):
+        raise raise_http_for_app_error(ForbiddenError("Ordering ahead is not available for this restaurant"))
+
+    local_today = local_now(restaurant).date()
+    slots = SchedulingService(db).available_slots(restaurant, on or local_today)
+    return PickupSlotsResponse(
+        date=(on or local_today).isoformat(),
+        timezone=restaurant.timezone or "UTC",
+        days_ahead=restaurant.scheduled_order_days_ahead,
+        interval_minutes=restaurant.slot_interval_minutes,
+        slots=[PickupSlot(at=slot.at, remaining=slot.remaining) for slot in slots],
+    )
 
 
 @router.get("/{identifier}/reviews", response_model=PublicReviewList)
