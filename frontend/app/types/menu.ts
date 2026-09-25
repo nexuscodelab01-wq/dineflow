@@ -41,6 +41,15 @@ export type Restaurant = {
   longitude?: string | null
   /** Points earned per whole currency unit spent on a completed order. */
   loyalty_points_per_currency?: number
+  /** Order capacity controls. */
+  online_ordering_paused?: boolean
+  ordering_pause_reason?: string | null
+  max_pending_orders?: number | null
+  /** Scheduled collection slots. */
+  slot_interval_minutes?: number
+  max_orders_per_slot?: number | null
+  scheduled_order_days_ahead?: number
+  scheduled_order_lead_minutes?: number
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean

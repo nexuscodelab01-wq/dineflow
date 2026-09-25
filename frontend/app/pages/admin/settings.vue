@@ -9,6 +9,7 @@ definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
 const admin = useAdminStore()
 const loyaltyEnabled = useFeature('loyalty')
+const scheduledOrdersEnabled = useFeature('scheduled_orders')
 const settings = ref<Restaurant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -48,6 +49,13 @@ const form = reactive({
   latitude: '',
   longitude: '',
   loyalty_points_per_currency: 1,
+  online_ordering_paused: false,
+  ordering_pause_reason: '',
+  max_pending_orders: null as number | null,
+  slot_interval_minutes: 15,
+  max_orders_per_slot: null as number | null,
+  scheduled_order_days_ahead: 7,
+  scheduled_order_lead_minutes: 30,
 })
 
 const dayLabels: Record<Day, string> = {
@@ -118,6 +126,13 @@ onMounted(async () => {
       latitude: settings.value.latitude || '',
       longitude: settings.value.longitude || '',
       loyalty_points_per_currency: settings.value.loyalty_points_per_currency ?? 1,
+      online_ordering_paused: settings.value.online_ordering_paused ?? false,
+      ordering_pause_reason: settings.value.ordering_pause_reason || '',
+      max_pending_orders: settings.value.max_pending_orders ?? null,
+      slot_interval_minutes: settings.value.slot_interval_minutes ?? 15,
+      max_orders_per_slot: settings.value.max_orders_per_slot ?? null,
+      scheduled_order_days_ahead: settings.value.scheduled_order_days_ahead ?? 7,
+      scheduled_order_lead_minutes: settings.value.scheduled_order_lead_minutes ?? 30,
     })
     timezone.value = settings.value.timezone || 'UTC'
     customTimezone.value = !COMMON_TIMEZONES.some(t => t.value === timezone.value)
@@ -250,6 +265,9 @@ async function save() {
       // An emptied number input leaves the ref as '' rather than null.
       max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
       max_covers_per_slot: form.max_covers_per_slot === '' || form.max_covers_per_slot == null ? null : Number(form.max_covers_per_slot),
+      ordering_pause_reason: form.ordering_pause_reason || null,
+      max_pending_orders: form.max_pending_orders === '' || form.max_pending_orders == null ? null : Number(form.max_pending_orders),
+      max_orders_per_slot: form.max_orders_per_slot === '' || form.max_orders_per_slot == null ? null : Number(form.max_orders_per_slot),
       about_text: form.about_text || null,
       social_links: Object.fromEntries(Object.entries(form.social_links).filter(([, v]) => v.trim())),
       latitude: form.latitude === '' ? null : form.latitude,
@@ -393,6 +411,41 @@ async function save() {
         <label class="block text-sm font-medium">Points per $1 spent
           <input v-model.number="form.loyalty_points_per_currency" type="number" min="0" max="1000" class="mt-1 w-32 rounded-lg border px-3 py-2 text-sm">
         </label>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
+        <div>
+          <h2 class="font-semibold">Order capacity</h2>
+          <p class="mt-1 text-xs text-ink-subtle">Turn online orders off when you're slammed, or let them pause themselves. Staff can always add an order for a guest.</p>
+        </div>
+        <label class="flex items-center gap-2 text-sm font-medium">
+          <input v-model="form.online_ordering_paused" type="checkbox"> Pause online ordering now
+        </label>
+        <label v-if="form.online_ordering_paused" class="block text-sm font-medium">Message for customers
+          <input v-model="form.ordering_pause_reason" maxlength="200" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="we're extremely busy tonight">
+        </label>
+        <label class="block text-sm font-medium">Pause automatically at this many open orders <span class="font-normal text-ink-subtle">(optional)</span>
+          <input v-model.number="form.max_pending_orders" type="number" min="1" max="500" class="mt-1 w-32 rounded-lg border px-3 py-2 text-sm" placeholder="No limit">
+        </label>
+
+        <div v-if="scheduledOrdersEnabled" class="border-t border-brand-100 pt-4">
+          <h3 class="text-sm font-semibold">Ordering ahead</h3>
+          <p class="mt-1 text-xs text-ink-subtle">Collection slots are built from your opening hours.</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <label class="block text-sm font-medium">Slot length (minutes)
+              <input v-model.number="form.slot_interval_minutes" type="number" min="5" max="120" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+            <label class="block text-sm font-medium">Orders per slot <span class="font-normal text-ink-subtle">(optional)</span>
+              <input v-model.number="form.max_orders_per_slot" type="number" min="1" max="100" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="No limit">
+            </label>
+            <label class="block text-sm font-medium">How many days ahead
+              <input v-model.number="form.scheduled_order_days_ahead" type="number" min="0" max="60" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+            <label class="block text-sm font-medium">Kitchen sees it this long before
+              <input v-model.number="form.scheduled_order_lead_minutes" type="number" min="0" max="480" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+          </div>
+        </div>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">

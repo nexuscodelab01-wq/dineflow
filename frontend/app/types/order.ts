@@ -58,6 +58,8 @@ export type Order = {
   customer_phone?: string | null
   delivery_instructions?: string | null
   notes?: string | null
+  /** Set when the customer ordered ahead for a later collection slot. */
+  scheduled_for?: string | null
   created_at: string
   updated_at: string
   items: OrderItem[]
@@ -96,6 +98,8 @@ export type CreateOrderPayload = {
   customer_phone?: string
   /** Only the code — what it is worth is decided by the server. */
   coupon_code?: string
+  /** A later collection slot (ISO). Omit for "as soon as possible". */
+  scheduled_for?: string
   reservation_id?: number
   delivery_address?: DeliveryAddressInput
   delivery_instructions?: string

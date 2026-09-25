@@ -57,6 +57,10 @@ onUnmounted(() => {
           <div>
             <h1 class="font-display text-2xl font-semibold text-brand-900">{{ order.order_number }}</h1>
             <p class="mt-1 text-sm text-ink-muted">Placed {{ new Date(order.created_at).toLocaleString() }}</p>
+            <p v-if="order.scheduled_for" class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-sm font-medium text-brand-800">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3.5 2" /></svg>
+              For {{ new Date(order.scheduled_for).toLocaleString() }}
+            </p>
           </div>
           <span class="rounded-full bg-brand-100 px-3 py-1 text-sm font-medium text-brand-800">
             {{ order.status.replace('_', ' ') }}

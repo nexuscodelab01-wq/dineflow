@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { OrderType } from '~/types/order'
 import type { Reservation } from '~/types/reservation'
+import type { PickupSlot } from '~/types/scheduling'
 import { createOrder } from '~/services/orders'
 import { previewCoupon } from '~/services/coupons'
+import { fetchPickupSlots } from '~/services/scheduling'
 import { fetchMyReservations } from '~/services/reservations'
 import { formatCurrency } from '~/utils/format'
 
@@ -56,6 +58,75 @@ watch(orderType, async (type) => {
 
 onMounted(async () => {
   if (orderType.value === 'DINE_IN') await loadReservations()
+})
+
+// Ordering ahead: the slot list comes from the server (built from the restaurant's opening hours in
+// its own timezone), and the chosen slot is re-checked there when the order goes in.
+const scheduledOrdersEnabled = useFeature('scheduled_orders')
+const WHEN_MODES = [
+  { value: 'asap', label: 'As soon as possible' },
+  { value: 'later', label: 'Order ahead' },
+] as const
+const whenMode = ref<'asap' | 'later'>('asap')
+const slotDate = ref('')
+const slots = ref<PickupSlot[]>([])
+const chosenSlot = ref('')
+const slotTimezone = ref('')
+const loadingSlots = ref(false)
+const slotError = ref('')
+const slotDays = ref<{ value: string, label: string }[]>([])
+
+// Dine-in is served at the booking time, so ordering ahead only applies to pickup and delivery.
+const canScheduleThisOrder = computed(() => scheduledOrdersEnabled.value && orderType.value !== 'DINE_IN')
+
+function formatSlot(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: 'numeric', minute: '2-digit', timeZone: slotTimezone.value || undefined,
+  })
+}
+
+async function loadSlots() {
+  if (!restaurant.current || !slotDate.value) return
+  loadingSlots.value = true
+  slotError.value = ''
+  try {
+    const result = await fetchPickupSlots(restaurant.current.slug, slotDate.value)
+    slots.value = result.slots
+    slotTimezone.value = result.timezone
+    if (!result.slots.some(s => s.at === chosenSlot.value)) chosenSlot.value = ''
+    if (!slotDays.value.length) {
+      // Offer today plus however many days ahead this restaurant accepts.
+      const start = new Date(`${result.date}T00:00:00`)
+      slotDays.value = Array.from({ length: result.days_ahead + 1 }, (_, i) => {
+        const day = new Date(start)
+        day.setDate(day.getDate() + i)
+        const value = day.toISOString().slice(0, 10)
+        const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+        return { value, label }
+      })
+    }
+  }
+  catch (err) {
+    slots.value = []
+    slotError.value = err instanceof Error ? err.message : 'Could not load collection times'
+  }
+  finally {
+    loadingSlots.value = false
+  }
+}
+
+watch(whenMode, async (mode) => {
+  if (mode !== 'later') {
+    chosenSlot.value = ''
+    return
+  }
+  if (!slotDate.value) slotDate.value = new Date().toISOString().slice(0, 10)
+  await loadSlots()
+})
+watch(slotDate, loadSlots)
+// Switching to dine-in makes a slot meaningless — drop back to "as soon as possible".
+watch(orderType, (type) => {
+  if (type === 'DINE_IN') whenMode.value = 'asap'
 })
 
 // Coupons: the code is checked here only so the customer can see what it's worth before paying.
@@ -127,6 +198,10 @@ async function submitOrder() {
     error.value = 'Select a reservation, or book a table first. Walk-ins are seated by staff.'
     return
   }
+  if (whenMode.value === 'later' && !chosenSlot.value) {
+    error.value = 'Pick a collection time, or switch back to as soon as possible.'
+    return
+  }
   submitting.value = true
   try {
     const order = await createOrder({
@@ -137,6 +212,7 @@ async function submitOrder() {
       customer_email: form.customer_email,
       customer_phone: form.customer_phone || undefined,
       coupon_code: appliedCoupon.value?.code,
+      scheduled_for: whenMode.value === 'later' ? chosenSlot.value : undefined,
       reservation_id: orderType.value === 'DINE_IN' ? reservationId.value : undefined,
       delivery_address: orderType.value === 'DELIVERY'
         ? {
@@ -179,6 +255,46 @@ async function submitOrder() {
             >
               {{ type.replace('_', ' ') }}
             </button>
+          </div>
+        </section>
+
+        <section v-if="canScheduleThisOrder" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+          <h2 class="font-semibold text-ink">When</h2>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              v-for="mode in WHEN_MODES" :key="mode.value" type="button"
+              class="rounded-lg px-3 py-2 text-sm font-medium"
+              :class="whenMode === mode.value ? 'bg-brand-700 text-white' : 'bg-brand-100 text-brand-800'"
+              @click="whenMode = mode.value"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
+
+          <div v-if="whenMode === 'later'" class="mt-4 space-y-3">
+            <label class="block text-sm font-medium">Day
+              <select v-model="slotDate" class="mt-1 w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
+                <option v-for="day in slotDays" :key="day.value" :value="day.value">{{ day.label }}</option>
+              </select>
+            </label>
+
+            <div v-if="loadingSlots" class="h-10 animate-pulse rounded-lg bg-brand-100/60" />
+            <p v-else-if="slotError" class="text-sm text-red-600">{{ slotError }}</p>
+            <p v-else-if="!slots.length" class="text-sm text-ink-subtle">No collection times left that day. Try another.</p>
+            <div v-else>
+              <p class="text-sm font-medium">Collection time</p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button
+                  v-for="slot in slots" :key="slot.at" type="button"
+                  class="rounded-lg px-3 py-1.5 text-sm font-medium"
+                  :class="chosenSlot === slot.at ? 'bg-brand-700 text-white' : 'border border-brand-200 hover:bg-brand-50'"
+                  @click="chosenSlot = slot.at"
+                >
+                  {{ formatSlot(slot.at) }}
+                </button>
+              </div>
+              <p v-if="slotTimezone" class="mt-2 text-xs text-ink-subtle">Times shown in {{ slotTimezone }}</p>
+            </div>
           </div>
         </section>
 

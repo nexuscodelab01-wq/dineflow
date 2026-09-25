@@ -80,6 +80,13 @@ watch(statusFilter, load)
               <NuxtLink :to="`/admin/orders/${order.id}`" class="font-medium text-brand-700 hover:underline">
                 {{ order.order_number }}
               </NuxtLink>
+              <span
+                v-if="order.scheduled_for"
+                class="ml-2 whitespace-nowrap rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800"
+                :title="`Collection: ${new Date(order.scheduled_for).toLocaleString()}`"
+              >
+                for {{ new Date(order.scheduled_for).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }}
+              </span>
             </td>
             <td class="px-4 py-3">{{ order.customer_name }}</td>
             <td class="px-4 py-3">{{ order.order_type.replace('_', ' ') }}</td>
