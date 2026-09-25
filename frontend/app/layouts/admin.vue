@@ -43,6 +43,7 @@ const allNav = [
   { to: '/admin/waiter', label: 'Waiter view', feature: 'qr_table_ordering' },
   { to: '/admin/qr', label: 'Table ordering', feature: 'qr_table_ordering' },
   { to: '/admin/customers', label: 'Customers' },
+  { to: '/admin/staff', label: 'Staff', adminOnly: true },
   { to: '/admin/settings', label: 'Settings', adminOnly: true },
 ]
 // Staff can run the floor; menu edits, tables and settings need an admin.
