@@ -152,6 +152,16 @@ Open **Kitchen** in the admin area (works full screen on a cheap tablet: use the
 - **Sound:** *Sound on* plays a ding for each new ticket. Browsers only allow sound after a tap, so after reloading a tablet touch the screen once.
 - **86:** the *Still to make* list shows what is open across the tickets shown; **86** takes a dish off every menu and QR ordering at once (guests already at the table get a clear "unavailable" message if they send it). *Sold out* lists dishes that are off, with *Bring back*. Kitchen staff may 86; editing the menu itself stays admin-only.
 
+## Allergens (menu compliance)
+Every dish has an `allergens` list — tag it in **Menu → Add/Edit item** against the 14 UK/EU
+declarable allergens (`backend/app/core/allergens.py`; the frontend's copy is
+`frontend/app/utils/allergens.ts` — codes must match exactly). Customers see a "Contains: …" line on
+the menu, the item card and the item page, and can open **Hide dishes containing…** on `/menu` to
+filter out anything tagged with the allergens they pick (`GET /api/v1/menu?exclude_allergens=milk&…`,
+repeatable). The kitchen ticket shows a red "Contains: …" line per dish too — copied from the dish
+**at order time** (same reasoning as the dish's station), so changing a menu item's allergens later
+never rewrites a ticket already sitting on a screen.
+
 ## Live updates (customers and guests)
 Besides the kitchen screen, a signed-in customer's order page (`GET /api/v1/orders/{id}/stream`, owner only) and a table's guests (`GET /api/v1/table-session/stream`, table pass only) follow their order over the same SSE channel. Status changes, new rounds and closing a tab reach them immediately; the pages also re-fetch every 30–60 s in case the connection dropped. Each open stream counts toward `REALTIME_MAX_STREAMS`.
 
