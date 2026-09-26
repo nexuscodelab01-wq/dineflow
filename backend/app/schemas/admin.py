@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.allergens import ALLERGENS
 from app.core.config import settings
 from app.core.hours import InvalidHours, validate_closures, validate_opening_hours, valid_timezone
 from app.core.stations import STATIONS
@@ -71,16 +72,29 @@ class MenuItemCreate(BaseModel):
     is_popular: bool = False
     sort_order: int = 0
     modifier_ids: list[int] = Field(default_factory=list)
+    allergens: list[str] = Field(default_factory=list)
 
     @field_validator("station")
     @classmethod
     def _station(cls, value: str) -> str:
         return _check_station(value)
 
+    @field_validator("allergens")
+    @classmethod
+    def _allergens(cls, value: list[str]) -> list[str]:
+        return _check_allergens(value)
+
 
 def _check_station(value):
     if value is not None and value not in STATIONS:
         raise ValueError(f"Station must be one of: {', '.join(STATIONS)}")
+    return value
+
+
+def _check_allergens(value: list[str]) -> list[str]:
+    unknown = sorted(set(value) - ALLERGENS.keys())
+    if unknown:
+        raise ValueError(f"Unknown allergen code(s): {', '.join(unknown)}")
     return value
 
 
@@ -103,11 +117,17 @@ class MenuItemUpdate(BaseModel):
     is_popular: bool | None = None
     sort_order: int | None = None
     modifier_ids: list[int] | None = None
+    allergens: list[str] | None = None
 
     @field_validator("station")
     @classmethod
     def _station(cls, value: str | None) -> str | None:
         return _check_station(value)
+
+    @field_validator("allergens")
+    @classmethod
+    def _allergens(cls, value: list[str] | None) -> list[str] | None:
+        return value if value is None else _check_allergens(value)
 
 
 class ModifierOptionCreate(BaseModel):

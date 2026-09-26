@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.category import Category
@@ -34,6 +34,7 @@ class MenuRepository:
         is_popular: bool | None = None,
         price_min: Decimal | None = None,
         price_max: Decimal | None = None,
+        exclude_allergens: list[str] | None = None,
         sort: str = "popular",
         page: int = 1,
         page_size: int = 20,
@@ -59,6 +60,10 @@ class MenuRepository:
             stmt = stmt.where(MenuItem.price >= price_min)
         if price_max is not None:
             stmt = stmt.where(MenuItem.price <= price_max)
+        for allergen in exclude_allergens or []:
+            # JSONB containment (@>): true when `allergens` includes this one element, so a dish
+            # tagged with it is excluded. "Hide dishes containing X" for however many X are picked.
+            stmt = stmt.where(not_(MenuItem.allergens.contains([allergen])))
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = self.db.scalar(count_stmt) or 0

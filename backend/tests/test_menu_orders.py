@@ -107,6 +107,45 @@ def test_list_menu_and_create_order(client: TestClient, db: Session) -> None:
     app.dependency_overrides.clear()
 
 
+def test_order_item_snapshots_the_dishs_allergens_at_order_time(client: TestClient, db: Session) -> None:
+    """The kitchen ticket must show what a dish contained *when ordered* — see order_item.py's docstring."""
+    app.dependency_overrides[get_db] = override_get_db(db)
+    restaurant, item, user = _seed_menu(db)
+    item.allergens = ["milk", "nuts"]
+    db.flush()
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user.email, "password": "Test1234!", "restaurant_id": restaurant.id},
+    )
+    token = login.json()["access_token"]
+
+    order_response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "restaurant_id": restaurant.id,
+            "order_type": "PICKUP",
+            "items": [{"menu_item_id": item.id, "quantity": 1, "modifier_option_ids": []}],
+            "customer_name": user.full_name,
+            "customer_email": user.email,
+        },
+    )
+    assert order_response.status_code == 201
+    assert order_response.json()["items"][0]["allergens"] == ["milk", "nuts"]
+
+    # Changing the dish afterwards doesn't rewrite tickets already placed.
+    item.allergens = ["fish"]
+    db.flush()
+    unchanged = client.get(
+        f"/api/v1/orders/{order_response.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unchanged.json()["items"][0]["allergens"] == ["milk", "nuts"]
+
+    app.dependency_overrides.clear()
+
+
 def test_unavailable_item_rejected(client: TestClient, db: Session) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
     restaurant, item, user = _seed_menu(db)

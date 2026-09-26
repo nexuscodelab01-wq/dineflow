@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -33,6 +34,9 @@ class OrderItem(Base):
     special_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Copied from the dish when ordered, so changing a dish's station later doesn't move tickets already on a screen.
     station: Mapped[str] = mapped_column(String(20), default="KITCHEN", server_default="KITCHEN", nullable=False)
+    # Also copied at order time, same reasoning as `station`: the kitchen ticket must show what the
+    # dish contained *when ordered*, not whatever the menu says now.
+    allergens: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
     # NEW until its station bumps it, then READY. Recall puts it back to NEW.
     status: Mapped[str] = mapped_column(String(10), default="NEW", server_default="NEW", nullable=False)
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

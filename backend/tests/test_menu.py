@@ -85,6 +85,33 @@ def test_menu_search_filter(client: TestClient, db: Session) -> None:
     app.dependency_overrides.clear()
 
 
+def test_menu_item_has_no_allergens_by_default(client: TestClient, db: Session) -> None:
+    app.dependency_overrides[get_db] = override_get_db(db)
+    restaurant, item = _seed_menu(db)
+
+    detail = client.get(f"/api/v1/menu/{item.id}?restaurant_id={restaurant.id}").json()
+    assert detail["allergens"] == []
+
+    app.dependency_overrides.clear()
+
+
+def test_hide_dishes_containing_a_chosen_allergen(client: TestClient, db: Session) -> None:
+    app.dependency_overrides[get_db] = override_get_db(db)
+    restaurant, item = _seed_menu(db)
+    item.allergens = ["milk", "nuts"]
+    db.flush()
+
+    # Excluding an allergen the dish doesn't have leaves it visible.
+    still_visible = client.get(f"/api/v1/menu?restaurant_id={restaurant.id}&exclude_allergens=fish").json()
+    assert any(i["id"] == item.id for i in still_visible["items"])
+
+    # Excluding one it does have hides it.
+    hidden = client.get(f"/api/v1/menu?restaurant_id={restaurant.id}&exclude_allergens=milk").json()
+    assert all(i["id"] != item.id for i in hidden["items"])
+
+    app.dependency_overrides.clear()
+
+
 def test_list_restaurants(client: TestClient, db: Session) -> None:
     app.dependency_overrides[get_db] = override_get_db(db)
     restaurant, _item = _seed_menu(db)

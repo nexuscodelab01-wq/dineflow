@@ -64,6 +64,7 @@ class OrderItemRead(BaseModel):
     station: str = "KITCHEN"
     status: str = "NEW"
     ready_at: datetime | None = None
+    allergens: list[str] = Field(default_factory=list)
     modifiers: list[OrderItemModifierRead] = Field(default_factory=list)
 
 

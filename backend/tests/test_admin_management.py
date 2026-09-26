@@ -159,13 +159,17 @@ def test_menu_item_crud_and_validation(world):
     assert made.status_code == 201, made.text
     iid = made.json()["id"]
     assert made.json()["category_name"] == "Mains" and made.json()["is_vegetarian"] is True
+    assert made.json()["allergens"] == []
 
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "price": "0"}).status_code == 422
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "name": ""}).status_code == 422
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "category_id": 999999}).status_code == 404
+    assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "allergens": ["shellfish"]}).status_code == 422
 
-    upd = w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"price": "15.00", "is_available": False})
+    upd = w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"price": "15.00", "is_available": False, "allergens": ["milk", "cereals_gluten"]})
     assert upd.status_code == 200 and Decimal(upd.json()["price"]) == Decimal("15.00") and upd.json()["is_available"] is False
+    assert upd.json()["allergens"] == ["milk", "cereals_gluten"]
+    assert w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"allergens": ["not-a-real-allergen"]}).status_code == 422
     public = w.client.get(f"/api/v1/menu?restaurant_id={w.a.id}").json()
     assert all(i["id"] != iid for i in public["items"])                       # unavailable items are hidden from customers
     assert w.client.delete(url(w, f"/menu/{iid}"), headers=w.admin).status_code == 204

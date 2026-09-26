@@ -245,6 +245,7 @@ class OrderService:
                 line_total=line_total,
                 special_instructions=line.special_instructions,
                 station=menu_item.station,
+                allergens=menu_item.allergens,
             )
             self.db.add(order_item)
             self.db.flush()

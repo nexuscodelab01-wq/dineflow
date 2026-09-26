@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,6 +38,9 @@ class MenuItem(TimestampMixin, Base):
     is_spicy: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_popular: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Codes from app.core.allergens.ALLERGENS, e.g. ["milk", "nuts"]. Follows the same JSONB-list
+    # pattern as Restaurant.gallery — no join table, since the set of allergens is fixed by regulation.
+    allergens: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="menu_items")
     category: Mapped["Category"] = relationship("Category", back_populates="menu_items")

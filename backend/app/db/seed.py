@@ -368,6 +368,36 @@ def seed() -> None:
             ("Seasonal Risotto", "specials", "24.00", True, False, False, 18),
         ]
 
+        # A realistic-enough allergen tag per dish, so a demo can actually show the "hide dishes
+        # containing…" filter doing something. Not exhaustive — a real restaurant tags its own menu.
+        menu_allergens: dict[str, list[str]] = {
+            "Garlic Bread": ["cereals_gluten"],
+            "Bruschetta Trio": ["cereals_gluten"],
+            "Calamari Fritti": ["molluscs", "cereals_gluten", "eggs"],
+            "Grilled Salmon": ["fish"],
+            "Eggplant Parmigiana": ["milk"],
+            "Ribeye Steak": ["milk"],
+            "Margherita Pizza": ["cereals_gluten", "milk"],
+            "Pepperoni Pizza": ["cereals_gluten", "milk"],
+            "BBQ Chicken Pizza": ["cereals_gluten", "milk"],
+            "Veggie Supreme Pizza": ["cereals_gluten", "milk"],
+            "Classic Smash Burger": ["cereals_gluten", "milk", "mustard"],
+            "Mushroom Swiss Burger": ["cereals_gluten", "milk"],
+            "Spicy Jalapeño Burger": ["cereals_gluten", "milk"],
+            "Veggie Burger": ["cereals_gluten", "soybeans"],
+            "Fettuccine Alfredo": ["cereals_gluten", "milk", "eggs"],
+            "Spaghetti Bolognese": ["cereals_gluten"],
+            "Pesto Penne": ["cereals_gluten", "nuts", "milk"],
+            "Caesar Salad": ["cereals_gluten", "milk", "fish", "eggs"],
+            "Truffle Fries": ["milk"],
+            "Craft Lemonade": [],
+            "Tiramisu": ["cereals_gluten", "milk", "eggs"],
+            "Chocolate Lava Cake": ["cereals_gluten", "milk", "eggs"],
+            "Panna Cotta": ["milk"],
+            "Chef's Tasting Board": ["cereals_gluten", "milk", "nuts"],
+            "Seasonal Risotto": ["milk"],
+        }
+
         pizza_items: list[MenuItem] = []
         burger_items: list[MenuItem] = []
         for idx, (name, cat_slug, price, veg, spicy, popular, prep) in enumerate(menu_defs):
@@ -384,6 +414,7 @@ def seed() -> None:
                 is_spicy=spicy,
                 is_popular=popular,
                 sort_order=idx,
+                allergens=menu_allergens.get(name, []),
             )
             db.add(item)
             db.flush()
