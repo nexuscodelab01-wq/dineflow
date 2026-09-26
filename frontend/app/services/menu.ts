@@ -28,6 +28,7 @@ export function fetchMenu(restaurantId: number, filters: MenuFilters = {}) {
   if (filters.is_popular) params.set('is_popular', 'true')
   if (filters.price_min != null) params.set('price_min', String(filters.price_min))
   if (filters.price_max != null) params.set('price_max', String(filters.price_max))
+  for (const code of filters.exclude_allergens || []) params.append('exclude_allergens', code)
   if (filters.sort) params.set('sort', filters.sort)
   if (filters.page) params.set('page', String(filters.page))
   if (filters.page_size) params.set('page_size', String(filters.page_size))

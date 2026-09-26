@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuItemDetail } from '~/types/menu'
 import { fetchMenuItem } from '~/services/menu'
+import { allergenLabel } from '~/utils/allergens'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
 
@@ -124,6 +125,9 @@ function addToCart() {
       </div>
       <h1 class="font-display mt-3 text-3xl font-semibold text-brand-900">{{ item.name }}</h1>
       <p v-if="item.description" class="mt-2 text-ink-muted">{{ item.description }}</p>
+      <p v-if="item.allergens?.length" class="mt-2 text-sm text-ink-subtle">
+        <span class="font-medium text-ink">Contains:</span> {{ item.allergens.map(allergenLabel).join(', ') }}
+      </p>
       <p class="mt-4 text-2xl font-semibold text-brand-800">{{ formatCurrency(unitPrice) }}</p>
 
       <div v-for="modifier in item.modifiers" :key="modifier.id" class="mt-6 border-t border-brand-100 pt-6">

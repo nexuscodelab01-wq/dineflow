@@ -30,6 +30,8 @@ export type OrderItem = {
   /** NEW until its station bumps it, then READY. */
   status?: 'NEW' | 'READY'
   ready_at?: string | null
+  /** Snapshotted from the dish when ordered — codes from `~/utils/allergens`. */
+  allergens?: string[]
   modifiers: OrderItemModifier[]
 }
 

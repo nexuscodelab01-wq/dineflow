@@ -101,6 +101,8 @@ export type MenuItem = {
   is_popular: boolean
   /** Which kitchen screen makes it: KITCHEN, BAR or DESSERT. */
   station?: string
+  /** Codes from `~/utils/allergens`, e.g. ["milk", "nuts"]. */
+  allergens?: string[]
 }
 
 export type MenuItemDetail = MenuItem & {
@@ -123,6 +125,8 @@ export type MenuFilters = {
   is_popular?: boolean
   price_min?: number
   price_max?: number
+  /** Hide dishes tagged with any of these allergen codes. */
+  exclude_allergens?: string[]
   sort?: 'popular' | 'name' | 'price_asc' | 'price_desc'
   page?: number
   page_size?: number

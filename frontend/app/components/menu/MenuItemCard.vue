@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { allergenLabel } from '~/utils/allergens'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl, thumbnailUrl } from '~/utils/media'
 
@@ -12,6 +13,7 @@ const props = defineProps<{
   isSpicy?: boolean
   isPopular?: boolean
   unavailable?: boolean
+  allergens?: string[]
 }>()
 
 defineEmits<{ click: [] }>()
@@ -57,6 +59,9 @@ const resolvedImage = computed(() =>
       </p>
       <p v-if="description" class="mt-2 line-clamp-2 text-sm text-ink-muted">
         {{ description }}
+      </p>
+      <p v-if="allergens?.length" class="mt-1 text-xs text-ink-subtle">
+        Contains: {{ allergens.map(allergenLabel).join(', ') }}
       </p>
       <p class="mt-auto pt-3 text-lg font-semibold text-brand-800">
         {{ formatCurrency(Number(price)) }}

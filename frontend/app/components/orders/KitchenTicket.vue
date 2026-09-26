@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Ticket } from '~/utils/kitchen'
 import { ageMs, formatTimer, urgency } from '~/utils/kitchen'
+import { allergenLabel } from '~/utils/allergens'
 
 /**
  * One ticket on the kitchen screen. The timer and its colour show how long the order has waited; each dish is a
@@ -56,6 +57,9 @@ const openCount = computed(() => props.ticket.items.filter(i => i.status !== 'RE
             <span v-for="mod in item.modifiers" :key="mod.id" class="block text-sm font-semibold text-ink">+ {{ mod.option_name }}</span>
             <span v-if="item.special_instructions" class="mt-1 block rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-sm font-bold text-amber-950" data-testid="special-instructions">
               <span class="mr-1 uppercase tracking-wide">Note:</span>{{ item.special_instructions }}
+            </span>
+            <span v-if="item.allergens?.length" class="mt-1 block rounded-md border border-red-300 bg-red-100 px-2 py-1 text-sm font-bold text-red-950" data-testid="item-allergens">
+              <span class="mr-1 uppercase tracking-wide">Contains:</span>{{ item.allergens.map(allergenLabel).join(', ') }}
             </span>
           </span>
           <span v-if="item.station && item.station !== 'KITCHEN'" class="shrink-0 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-900">{{ item.station }}</span>

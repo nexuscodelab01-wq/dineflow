@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Category, MenuItem, MenuFilters } from '~/types/menu'
 import { fetchCategories, fetchMenu } from '~/services/menu'
+import { ALLERGENS } from '~/utils/allergens'
 import { useDebounceFn } from '@vueuse/core'
 
 const restaurant = useRestaurantStore()
@@ -22,10 +23,13 @@ const filters = reactive<MenuFilters>({
   is_vegetarian: undefined,
   is_spicy: undefined,
   is_popular: undefined,
+  exclude_allergens: [],
   sort: 'popular',
   page: 1,
   page_size: 12,
 })
+
+const showAllergenFilter = ref(false)
 
 async function loadMenu() {
   if (!restaurant.current) return
@@ -58,8 +62,9 @@ const debouncedSearch = useDebounceFn(() => {
 
 watch(() => filters.search, () => debouncedSearch())
 watch(
-  () => [filters.category_id, filters.is_vegetarian, filters.is_spicy, filters.is_popular, filters.sort, filters.page],
+  () => [filters.category_id, filters.is_vegetarian, filters.is_spicy, filters.is_popular, filters.exclude_allergens, filters.sort, filters.page],
   () => loadMenu(),
+  { deep: true },
 )
 
 onMounted(loadMenu)
@@ -131,10 +136,34 @@ function goToItem(id: number) {
       </button>
     </div>
 
-    <div class="mb-6 flex flex-wrap gap-4 text-sm">
+    <div class="mb-4 flex flex-wrap gap-4 text-sm">
       <label class="flex items-center gap-2"><input v-model="filters.is_vegetarian" type="checkbox" :true-value="true" :false-value="undefined"> Vegetarian</label>
       <label class="flex items-center gap-2"><input v-model="filters.is_spicy" type="checkbox" :true-value="true" :false-value="undefined"> Spicy</label>
       <label class="flex items-center gap-2"><input v-model="filters.is_popular" type="checkbox" :true-value="true" :false-value="undefined"> Popular</label>
+    </div>
+
+    <div class="mb-6">
+      <button
+        type="button"
+        class="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
+        :aria-expanded="showAllergenFilter"
+        aria-controls="allergen-filter-panel"
+        @click="showAllergenFilter = !showAllergenFilter"
+      >
+        Hide dishes containing…
+        <span aria-hidden="true">{{ showAllergenFilter ? '▲' : '▼' }}</span>
+        <span v-if="filters.exclude_allergens?.length" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs text-brand-800">{{ filters.exclude_allergens.length }}</span>
+      </button>
+      <div
+        v-if="showAllergenFilter"
+        id="allergen-filter-panel"
+        class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-brand-100 bg-brand-50/40 p-3 text-sm sm:grid-cols-3"
+      >
+        <label v-for="a in ALLERGENS" :key="a.code" class="flex items-center gap-2">
+          <input v-model="filters.exclude_allergens" type="checkbox" :value="a.code">
+          {{ a.label }}
+        </label>
+      </div>
     </div>
 
     <ErrorState v-if="error" :message="error" @retry="loadMenu" />
@@ -161,6 +190,7 @@ function goToItem(id: number) {
           isSpicy: item.is_spicy,
           isPopular: item.is_popular,
           unavailable: !item.is_available,
+          allergens: item.allergens,
         }"
         @click="goToItem(item.id)"
       />

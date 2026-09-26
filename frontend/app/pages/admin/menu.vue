@@ -10,6 +10,7 @@ import {
   uploadMenuImage,
 } from '~/services/admin'
 import { STATIONS } from '~/utils/kitchen'
+import { ALLERGENS, allergenLabel } from '~/utils/allergens'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
 
@@ -41,6 +42,7 @@ const form = reactive({
   is_vegetarian: false,
   is_spicy: false,
   is_popular: false,
+  allergens: [] as string[],
 })
 
 const previewUrl = computed(() => resolveMediaUrl(form.image_url || null))
@@ -80,6 +82,7 @@ function resetFormDefaults() {
     is_vegetarian: false,
     is_spicy: false,
     is_popular: false,
+    allergens: [],
   })
   showNewCategory.value = false
   newCategoryName.value = ''
@@ -105,6 +108,7 @@ function openEdit(item: MenuItemDetail) {
     is_vegetarian: item.is_vegetarian,
     is_spicy: item.is_spicy,
     is_popular: item.is_popular,
+    allergens: [...(item.allergens || [])],
   })
   showNewCategory.value = false
   newCategoryName.value = ''
@@ -192,6 +196,7 @@ async function saveItem() {
       is_vegetarian: form.is_vegetarian,
       is_spicy: form.is_spicy,
       is_popular: form.is_popular,
+      allergens: form.allergens,
     }
     const wasEditing = Boolean(editing.value)
     if (editing.value) {
@@ -275,7 +280,10 @@ async function removeItem(item: MenuItemDetail) {
                   >
                   <span v-else class="flex h-full items-center justify-center text-xs text-brand-700/40">{{ item.name.charAt(0) }}</span>
                 </div>
-                <span class="font-medium">{{ item.name }}</span>
+                <div>
+                  <span class="font-medium">{{ item.name }}</span>
+                  <p v-if="item.allergens?.length" class="text-xs text-ink-subtle">Contains: {{ item.allergens.map(allergenLabel).join(', ') }}</p>
+                </div>
               </div>
             </td>
             <td class="px-4 py-3 text-ink-muted">{{ item.category_name }}</td>
@@ -385,6 +393,17 @@ async function removeItem(item: MenuItemDetail) {
             <label class="flex items-center gap-2"><input v-model="form.is_popular" type="checkbox"> Popular</label>
             <label class="flex items-center gap-2"><input v-model="form.is_vegetarian" type="checkbox"> Vegetarian</label>
             <label class="flex items-center gap-2"><input v-model="form.is_spicy" type="checkbox"> Spicy</label>
+          </div>
+
+          <div>
+            <span class="block text-sm font-medium text-ink">Allergens</span>
+            <p class="mt-0.5 text-xs text-ink-subtle">What this dish contains, so guests with allergies can avoid it.</p>
+            <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
+              <label v-for="a in ALLERGENS" :key="a.code" class="flex items-center gap-2">
+                <input v-model="form.allergens" type="checkbox" :value="a.code">
+                {{ a.label }}
+              </label>
+            </div>
           </div>
           <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
           <div class="flex gap-2 pt-2">
