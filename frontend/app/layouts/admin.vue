@@ -101,6 +101,8 @@ async function handleLogout() {
             type="button"
             class="rounded-lg p-2 text-ink-muted hover:bg-brand-50 lg:hidden"
             aria-label="Toggle admin navigation"
+            aria-controls="admin-mobile-nav"
+            :aria-expanded="mobileOpen"
             @click="mobileOpen = !mobileOpen"
           >
             <span class="text-xl leading-none">{{ mobileOpen ? '×' : '☰' }}</span>
@@ -110,6 +112,7 @@ async function handleLogout() {
 
       <nav
         v-if="mobileOpen"
+        id="admin-mobile-nav"
         class="border-t border-brand-100 px-4 py-3 lg:hidden"
       >
         <div class="flex flex-col gap-1">

@@ -3,6 +3,13 @@
     class="flex min-h-screen flex-col bg-surface text-ink"
     :class="{ 'pb-24': showCartPad }"
   >
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-800 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+    >
+      Skip to content
+    </a>
+
     <header class="border-b border-brand-100/80 bg-surface-elevated/80 backdrop-blur-sm">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <NuxtLink to="/" class="font-display text-2xl font-semibold tracking-tight text-brand-800">
@@ -14,6 +21,8 @@
           type="button"
           class="inline-flex items-center justify-center rounded-lg p-2 text-ink-muted hover:bg-brand-50 md:hidden"
           aria-label="Toggle navigation"
+          aria-controls="mobile-nav"
+          :aria-expanded="mobileOpen"
           @click="mobileOpen = !mobileOpen"
         >
           <span class="text-xl leading-none">{{ mobileOpen ? '×' : '☰' }}</span>
@@ -54,6 +63,7 @@
 
       <nav
         v-if="mobileOpen"
+        id="mobile-nav"
         class="border-t border-brand-100 px-4 py-4 md:hidden"
       >
         <div class="flex flex-col gap-2 text-sm font-medium text-ink-muted">
@@ -79,7 +89,7 @@
       </nav>
     </header>
 
-    <main class="flex-1">
+    <main id="main-content" tabindex="-1" class="flex-1 focus:outline-none">
       <slot />
     </main>
 
