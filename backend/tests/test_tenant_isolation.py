@@ -67,7 +67,7 @@ CUSTOMER = {
     ("POST", "/coupons/preview"),
 }
 # Guests at a table: a table pass (not an account) bound to one restaurant's open session; see test_table_ordering.py.
-GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "/table-session/stream"), ("POST", "/table-session/requests")}
+GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "/table-session/stream"), ("POST", "/table-session/requests"), ("POST", "/table-session/pay")}
 # Platform-only.
 PLATFORM = {
     ("GET", "/restaurants"),

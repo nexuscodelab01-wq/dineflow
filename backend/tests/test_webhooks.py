@@ -20,6 +20,10 @@ from app.models.order import Order
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
 from app.models.restaurant import Restaurant
+from app.models.restaurant_table import RestaurantTable
+from app.models.table_session import CLOSED
+from app.models.table_session import OPEN as SESSION_OPEN
+from app.models.table_session import TableSession
 from tests.conftest import override_get_db
 
 SECRET = "whsec_test_secret"
@@ -63,6 +67,26 @@ def _pending_order_awaiting_stripe(db: Session, restaurant: Restaurant, *, inten
     db.flush()
     db.expire_all()
     return order, payment
+
+
+def _pending_table_session_awaiting_stripe(db: Session, restaurant: Restaurant, *, intent_id: str) -> tuple[TableSession, Payment]:
+    """A table session with a real payment mid-flight — the shape TableSessionService.pay() leaves one
+    in under a real (non-mock) provider."""
+    table = RestaurantTable(restaurant_id=restaurant.id, table_number=f"WH-{intent_id}", capacity=2)
+    db.add(table)
+    db.flush()
+    session = TableSession(restaurant_id=restaurant.id, table_id=table.id, state=SESSION_OPEN)
+    db.add(session)
+    db.flush()
+    payment = Payment(
+        table_session_id=session.id, order_id=None, restaurant_id=restaurant.id, amount=Decimal("22.00"),
+        currency="usd", status=PaymentStatus.REQUIRES_ACTION, payment_method=PaymentMethod.CARD,
+        provider="STRIPE", provider_intent_id=intent_id,
+    )
+    db.add(payment)
+    db.flush()
+    db.expire_all()
+    return session, payment
 
 
 def _restaurant(db: Session, slug: str) -> Restaurant:
@@ -141,6 +165,28 @@ def test_payment_failed_marks_the_payment_and_leaves_the_order_pending_for_a_ret
     refreshed_payment = db.get(Payment, payment.id)
     assert refreshed_payment.status == PaymentStatus.FAILED
     assert refreshed_payment.failure_message == "Your card was declined."
+    app.dependency_overrides.clear()
+
+
+def test_payment_succeeded_settles_a_table_session_payment_and_closes_the_tab(client: TestClient, db: Session, monkeypatch):
+    """The pay-at-table equivalent of test_payment_succeeded_confirms_the_order_exactly_once — no single
+    order to confirm here, since every round on the tab is already CONFIRMED; settling means closing."""
+    app.dependency_overrides[get_db] = override_get_db(db)
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    restaurant = _restaurant(db, "webhook-table-pay")
+    session, payment = _pending_table_session_awaiting_stripe(db, restaurant, intent_id="pi_table_1")
+    db.commit()
+
+    r = _post(client, _event("payment_intent.succeeded", {"id": "pi_table_1"}))
+    assert r.status_code == 200
+
+    db.expire_all()
+    assert db.get(TableSession, session.id).state == CLOSED
+    assert db.get(Payment, payment.id).status == PaymentStatus.COMPLETED
+
+    # Replayed delivery: the session is already closed, so this must be a no-op, not an error.
+    replay = _post(client, _event("payment_intent.succeeded", {"id": "pi_table_1"}))
+    assert replay.status_code == 200
     app.dependency_overrides.clear()
 
 
