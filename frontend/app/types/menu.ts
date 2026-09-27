@@ -53,6 +53,11 @@ export type Restaurant = {
   custom_domain?: string | null
   domain_verified_at?: string | null
   is_active: boolean
+  currency?: string
+  /** Whether this restaurant can take a real payment yet (its Stripe Connect account is live). */
+  stripe_charges_enabled?: boolean
+  /** Not secret — needed to initialise Stripe.js in this restaurant's connected-account context. */
+  stripe_account_id?: string | null
   /** Feature flags for this restaurant's site (only present on the /tenant response). */
   features?: Record<string, boolean>
 }

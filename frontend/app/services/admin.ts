@@ -160,6 +160,15 @@ export function updateAdminSettings(restaurantId: number, payload: Partial<Resta
   })
 }
 
+/** A Stripe-hosted onboarding link for this restaurant; redirect the browser to `url`. */
+export function startStripeOnboarding(restaurantId: number) {
+  return apiFetch<{ url: string }>(q(restaurantId, '/settings/stripe/onboard'), { method: 'POST' })
+}
+
+export function fetchStripeStatus(restaurantId: number) {
+  return apiFetch<{ connected: boolean, charges_enabled: boolean }>(q(restaurantId, '/settings/stripe/status'))
+}
+
 export function createMenuItem(restaurantId: number, payload: Record<string, unknown>) {
   return apiFetch<MenuItemDetail>(q(restaurantId, '/menu'), {
     method: 'POST',

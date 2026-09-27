@@ -67,6 +67,9 @@ export type Order = {
   items: OrderItem[]
   status_history: OrderStatusHistory[]
   payments: { id: number; amount: string; status: string; payment_method: string }[]
+  /** Only present on the response to creating an order that still needs a real payment confirmed
+   * (Stripe, amount > 0) — pass straight to stripe.confirmPayment(). Never fetched again afterwards. */
+  client_secret?: string | null
 }
 
 export type OrderListResponse = {

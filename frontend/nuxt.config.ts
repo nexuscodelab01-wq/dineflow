@@ -34,6 +34,10 @@ export default defineNuxtConfig({
     public: {
       // Browser-facing API URL (e.g. http://localhost:8000)
       apiUrl: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8000',
+      // Stripe's publishable key is not secret (it identifies your platform account to Stripe.js, same
+      // key for every restaurant — which connected account it acts on behalf of is set separately, per
+      // checkout, via `stripeAccount`). Empty when payments aren't configured yet.
+      stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
     },
   },
 

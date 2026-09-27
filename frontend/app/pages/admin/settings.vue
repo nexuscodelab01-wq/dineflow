@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Restaurant } from '~/types/menu'
-import { fetchAdminSettings, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
+import { fetchAdminSettings, startStripeOnboarding, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
 import { resolveMediaUrl } from '~/utils/media'
 import { DAYS, type Day, parseDay } from '~/utils/hours'
 import { COMMON_TIMEZONES } from '~/utils/timezones'
@@ -22,6 +22,9 @@ const logoError = ref('')
 const gallery = ref<string[]>([])
 const uploadingGallery = ref(false)
 const galleryError = ref('')
+
+const connectingStripe = ref(false)
+const stripeError = ref('')
 
 const form = reactive({
   name: '',
@@ -250,6 +253,20 @@ function removeClosure(date: string) {
   closures.value = closures.value.filter(c => c.date !== date)
 }
 
+async function connectStripe() {
+  if (!admin.restaurantId) return
+  connectingStripe.value = true
+  stripeError.value = ''
+  try {
+    const { url } = await startStripeOnboarding(admin.restaurantId)
+    window.location.href = url // Stripe-hosted onboarding; it redirects back to this same page
+  }
+  catch (err) {
+    stripeError.value = err instanceof Error ? err.message : 'Could not start Stripe onboarding'
+    connectingStripe.value = false
+  }
+}
+
 async function save() {
   if (!admin.restaurantId) return
   saving.value = true
@@ -456,6 +473,24 @@ async function save() {
         <div class="grid gap-3 sm:grid-cols-2">
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">Payments</h2>
+        <p class="text-xs text-ink-subtle">Take real card payments through Stripe. Your restaurant is its own merchant — card fees and payouts are yours, DineFlow never holds your money.</p>
+        <div v-if="settings?.stripe_charges_enabled" class="flex items-center gap-2 text-sm">
+          <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Connected</span>
+          <span class="text-ink-muted">Online orders can take a real payment.</span>
+        </div>
+        <div v-else class="space-y-2">
+          <p v-if="settings?.stripe_account_id" class="text-sm">
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Onboarding incomplete</span>
+          </p>
+          <AppButton :disabled="connectingStripe" @click="connectStripe">
+            {{ connectingStripe ? 'Redirecting…' : settings?.stripe_account_id ? 'Finish connecting with Stripe' : 'Connect with Stripe' }}
+          </AppButton>
+          <p v-if="stripeError" class="text-sm text-red-600">{{ stripeError }}</p>
         </div>
       </section>
 

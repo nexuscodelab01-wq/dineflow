@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StripeElements } from '@stripe/stripe-js'
 import type { OrderType } from '~/types/order'
 import type { Reservation } from '~/types/reservation'
 import type { PickupSlot } from '~/types/scheduling'
@@ -6,6 +7,7 @@ import { createOrder } from '~/services/orders'
 import { previewCoupon } from '~/services/coupons'
 import { fetchPickupSlots } from '~/services/scheduling'
 import { fetchMyReservations } from '~/services/reservations'
+import { getStripe } from '~/services/stripe'
 import { formatCurrency } from '~/utils/format'
 
 definePageMeta({ middleware: ['auth'] })
@@ -26,6 +28,16 @@ const reservations = ref<Reservation[]>([])
 const reservationId = ref<number | undefined>()
 const error = ref('')
 const submitting = ref(false)
+
+// Set once the order exists and a real payment still needs confirming (Stripe, amount > 0) — the order
+// is already PENDING at that point, so the rest of the form is done; this step only collects a card.
+// Left null the whole time for the mock provider or a zero-total order, which confirm instantly.
+const pendingOrderId = ref<number | null>(null)
+const clientSecret = ref<string | null>(null)
+const paymentElementContainer = ref<HTMLElement | null>(null)
+const stripeElements = shallowRef<StripeElements | null>(null)
+const confirmingPayment = ref(false)
+const paymentError = ref('')
 
 const form = reactive({
   customer_name: auth.user?.first_name ? `${auth.user.first_name} ${auth.user.last_name}` : '',
@@ -225,14 +237,75 @@ async function submitOrder() {
       delivery_instructions: form.delivery_instructions || undefined,
       notes: form.notes || undefined,
     })
-    cart.clear()
-    await router.push(`/orders/${order.id}`)
+    if (!order.client_secret) {
+      // Already confirmed — the mock provider (dev/demo) or a coupon covering the whole bill.
+      cart.clear()
+      await router.push(`/orders/${order.id}`)
+      return
+    }
+    // A real payment is still needed. The order already exists (PENDING) — cart items are committed
+    // server-side, so it's not cleared until the payment actually goes through.
+    pendingOrderId.value = order.id
+    clientSecret.value = order.client_secret
+    await nextTick()
+    await mountPaymentElement(order.client_secret)
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : 'Checkout failed'
   }
   finally {
     submitting.value = false
+  }
+}
+
+async function mountPaymentElement(secret: string) {
+  paymentError.value = ''
+  const accountId = restaurant.current?.stripe_account_id
+  if (!accountId) {
+    paymentError.value = "This restaurant's payments aren't set up correctly. Please contact them directly."
+    return
+  }
+  const stripe = await getStripe(accountId)
+  if (!stripe || !paymentElementContainer.value) {
+    paymentError.value = 'Could not load the payment form. Please try again.'
+    return
+  }
+  const elements = stripe.elements({ clientSecret: secret })
+  elements.create('payment').mount(paymentElementContainer.value)
+  stripeElements.value = elements
+}
+
+async function payNow() {
+  if (!stripeElements.value || !pendingOrderId.value) return
+  const accountId = restaurant.current?.stripe_account_id
+  if (!accountId) return
+  const stripe = await getStripe(accountId)
+  if (!stripe) return
+
+  confirmingPayment.value = true
+  paymentError.value = ''
+  try {
+    const { error: confirmError } = await stripe.confirmPayment({
+      elements: stripeElements.value,
+      // Only a redirect-based method (rare for a card-first flow) actually navigates; a card that
+      // needs no extra step resolves right here instead.
+      redirect: 'if_required',
+      confirmParams: { return_url: `${window.location.origin}/orders/${pendingOrderId.value}` },
+    })
+    if (confirmError) {
+      paymentError.value = confirmError.message || 'Payment failed. Please try a different card.'
+      return
+    }
+    // Confirmed with Stripe — the order itself flips to CONFIRMED once the webhook lands, generally
+    // within a second or two; the order page already live-updates over SSE and shows it arriving.
+    cart.clear()
+    await router.push(`/orders/${pendingOrderId.value}`)
+  }
+  catch (err) {
+    paymentError.value = err instanceof Error ? err.message : 'Payment failed'
+  }
+  finally {
+    confirmingPayment.value = false
   }
 }
 </script>
@@ -338,9 +411,18 @@ async function submitOrder() {
           </div>
         </section>
 
-        <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+        <section v-if="pendingOrderId" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <h2 class="font-semibold text-ink">Payment</h2>
-          <p class="mt-2 text-sm text-ink-muted">Mock payment — no card required for this demo.</p>
+          <p class="mt-1 text-sm text-ink-muted">Your order is saved — just card details left.</p>
+          <div ref="paymentElementContainer" class="mt-4" />
+          <p v-if="paymentError" class="mt-3 text-sm text-red-600" role="alert">{{ paymentError }}</p>
+          <AppButton class="mt-4 w-full" :disabled="confirmingPayment" @click="payNow">
+            {{ confirmingPayment ? 'Confirming…' : totals ? `Pay ${formatCurrency(totals.total)}` : 'Pay' }}
+          </AppButton>
+        </section>
+        <section v-else class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+          <h2 class="font-semibold text-ink">Payment</h2>
+          <p class="mt-2 text-sm text-ink-muted">Card details are collected securely by Stripe on the next step.</p>
         </section>
       </div>
 
@@ -383,9 +465,10 @@ async function submitOrder() {
             <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ formatCurrency(totals.total) }}</span></div>
           </div>
           <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
-          <AppButton class="mt-4 w-full" :disabled="submitting" @click="submitOrder">
+          <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting" @click="submitOrder">
             {{ submitting ? 'Placing order…' : 'Place order' }}
           </AppButton>
+          <p v-else class="mt-4 text-center text-sm text-ink-subtle">Enter your card details on the left to finish.</p>
         </div>
       </aside>
     </div>
