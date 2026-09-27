@@ -2,8 +2,12 @@
 
 Uses the **Accounts v2 API** (`/v2/core/accounts`), not the deprecated v1 `type: 'express'` pattern —
 v2 configures three independent dimensions instead of a fixed account "type":
-- `dashboard: "express"` — a lightweight, DineFlow-branded dashboard (self-serve SaaS default; a small
-  restaurant doesn't need the full independent Stripe Dashboard `"full"` would give it).
+- `dashboard: "full"` — the restaurant manages its own Stripe account directly at dashboard.stripe.com.
+  (`dashboard: "express"` paired with Stripe collecting fees/losses on a *direct* charge is a newer,
+  public-preview combination not yet enabled on every platform account — it returned
+  `InvalidRequestError: This account configuration is not supported` in testing. `"full"` is the
+  plain, universally-supported way to get the same direct-charge SaaS model; worth revisiting once
+  that preview is confirmed available, since a lightweight dashboard suits a small restaurant better.)
 - `fees_collector: "stripe"` / `losses_collector: "stripe"` — Stripe bills the restaurant directly for
   card fees and is liable for negative balances, rather than DineFlow.
 - `configuration.merchant.capabilities.card_payments` — required for a connected account to be a
@@ -22,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError
+from app.core.tenancy import site_url
 from app.repositories.restaurant import RestaurantRepository
 
 
@@ -49,12 +54,15 @@ class StripeConnectService:
         if not restaurant.stripe_account_id:
             account_params: dict = {
                 "display_name": restaurant.name,
-                "dashboard": "express",
+                "dashboard": "full",
+                # Stripe requires identity.country before it will accept the merchant configuration (it
+                # determines which regulatory requirements apply) — found the hard way, in testing.
+                # DineFlow has no Restaurant.country field yet (only address/city/postal_code), so this
+                # is hardcoded to the one country every demo/seed restaurant is in today. Add a real
+                # Restaurant.country field and use it here before onboarding a restaurant outside the US.
+                "identity": {"country": "US"},
                 "configuration": {"merchant": {"capabilities": {"card_payments": {"requested": True}}}},
-                "defaults": {
-                    "currency": restaurant.currency,
-                    "responsibilities": {"fees_collector": "stripe", "losses_collector": "stripe"},
-                },
+                "defaults": {"responsibilities": {"fees_collector": "stripe", "losses_collector": "stripe"}},
             }
             if restaurant.email:
                 account_params["contact_email"] = restaurant.email
@@ -62,7 +70,10 @@ class StripeConnectService:
             restaurant.stripe_account_id = account.id
             self.db.commit()
 
-        site = settings.PUBLIC_SITE_URL.rstrip("/")
+        # This restaurant's own address (evacakery.localhost:3000), not the bare platform domain —
+        # a flat PUBLIC_SITE_URL here sent every restaurant back to the platform root instead of their
+        # own site, found the hard way in testing.
+        site = site_url(restaurant).rstrip("/")
         link = client.v2.core.account_links.create({
             "account": restaurant.stripe_account_id,
             "use_case": {

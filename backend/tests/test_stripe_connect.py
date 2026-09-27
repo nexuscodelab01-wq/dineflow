@@ -59,7 +59,12 @@ def fake_stripe_client(monkeypatch):
     monkeypatch.setattr(scs.stripe, "StripeClient", _FakeStripeClient)
     monkeypatch.setattr(settings, "PAYMENT_PROVIDER", "stripe")
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_fake")
-    monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "https://demo.dineflow.app")
+    monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "http://localhost:3000")
+    # Explicit rather than whatever happens to be in the environment: this is what makes site_url()
+    # build a tenant-aware address ({slug}.{platform}) instead of falling back to the bare platform
+    # domain — the exact bug (every restaurant's onboarding returning to the platform root instead of
+    # its own site) that these return_url/refresh_url assertions exist to catch.
+    monkeypatch.setattr(settings, "PLATFORM_DOMAIN", "dineflow.test")
     yield
     _FakeStripeClient.last_instance = None
 
@@ -83,8 +88,8 @@ def test_onboarding_an_unknown_restaurant_is_a_clean_404(db: Session, fake_strip
         StripeConnectService(db).onboarding_link(999999)
 
 
-def test_creates_a_v2_express_account_with_stripe_collecting_fees_and_losses(db: Session, fake_stripe_client):
-    restaurant = _restaurant(db, email="owner@connect-test.demo", currency="gbp")
+def test_creates_a_v2_full_dashboard_account_with_stripe_collecting_fees_and_losses(db: Session, fake_stripe_client):
+    restaurant = _restaurant(db, email="owner@connect-test.demo")
     db.commit()
 
     url = StripeConnectService(db).onboarding_link(restaurant.id)
@@ -93,10 +98,11 @@ def test_creates_a_v2_express_account_with_stripe_collecting_fees_and_losses(db:
     created = _FakeStripeClient.last_instance.v2.core.accounts.create_calls[0]
     # Accounts v2 dimensions, never a v1 `type` — see this module's docstring.
     assert "type" not in created
-    assert created["dashboard"] == "express"
+    assert created["dashboard"] == "full"
+    # Stripe rejects the merchant configuration outright without this — found in testing, not in docs.
+    assert created["identity"] == {"country": "US"}
     assert created["configuration"]["merchant"]["capabilities"]["card_payments"]["requested"] is True
-    assert created["defaults"]["responsibilities"] == {"fees_collector": "stripe", "losses_collector": "stripe"}
-    assert created["defaults"]["currency"] == "gbp"
+    assert created["defaults"] == {"responsibilities": {"fees_collector": "stripe", "losses_collector": "stripe"}}
     assert created["contact_email"] == "owner@connect-test.demo"
 
     db.refresh(restaurant)
@@ -125,7 +131,9 @@ def test_reuses_the_existing_account_instead_of_creating_a_second_one(db: Sessio
     assert link_call["account"] == "acct_already_onboarding"
 
 
-def test_the_account_link_requests_up_front_collection_and_round_trips_to_settings(db: Session, fake_stripe_client):
+def test_the_account_link_requests_up_front_collection_and_returns_to_this_restaurants_own_site(db: Session, fake_stripe_client):
+    """Regression test: an earlier version sent every restaurant back to the bare platform domain
+    (settings.PUBLIC_SITE_URL) instead of its own site — found by hand while testing evacakery."""
     restaurant = _restaurant(db)
     db.commit()
 
@@ -135,8 +143,8 @@ def test_the_account_link_requests_up_front_collection_and_round_trips_to_settin
     onboarding = link_call["use_case"]["account_onboarding"]
     assert onboarding["configurations"] == ["merchant"]
     assert onboarding["collection_options"] == {"fields": "eventually_due"}
-    assert onboarding["return_url"] == "https://demo.dineflow.app/admin/settings"
-    assert onboarding["refresh_url"] == "https://demo.dineflow.app/admin/settings"
+    assert onboarding["return_url"] == "http://connect-test.dineflow.test:3000/admin/settings"
+    assert onboarding["refresh_url"] == "http://connect-test.dineflow.test:3000/admin/settings"
 
 
 def test_status_reflects_connected_and_charges_enabled(db: Session):

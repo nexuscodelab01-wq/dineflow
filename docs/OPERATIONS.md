@@ -263,13 +263,31 @@ A pause stops pre-orders too — "stop taking orders" means that. The automatic 
      `STRIPE_CONNECT_WEBHOOK_SECRET`.
 
 **Connecting a restaurant**: Settings → Payments → *Connect with Stripe*. This redirects to a
-Stripe-hosted onboarding form (an Accounts v2 Express account — `dashboard: "express"`, a lightweight
-DineFlow-branded dashboard; not the deprecated v1 `type: 'express'`) and back. Nothing is enabled until
+Stripe-hosted onboarding form (an Accounts v2 account with `dashboard: "full"` — the restaurant manages
+it directly at dashboard.stripe.com; not the deprecated v1 `type: 'express'`) and back.
+`dashboard: "express"` would be a lighter, DineFlow-branded dashboard, but that combination is currently
+public-preview and returned `This account configuration is not supported` when tried — worth revisiting
+once confirmed available. Nothing is enabled until
 the `v2.core.account[configuration.merchant].capability_status_updated` event confirms it —
 `stripe_charges_enabled` on the restaurant, shown as "Connected" on that same page. That event is a
 **thin** payload (an id and a URL, not the account's data), so the handler always fetches the current
 account before syncing anything — see `webhooks.py`'s docstring. If onboarding is abandoned partway,
 the button becomes "Finish connecting with Stripe" and reuses the same account.
+
+**Identity verification in test mode is not a rubber stamp.** `dashboard: "full"` hosted onboarding runs
+real-shaped identity checks even with fake data — a plausible-looking name, SSN and address that don't
+actually match each other **fails** and demands a government-ID document upload, exactly like
+production. Use Stripe's own magic test values instead so it verifies immediately:
+- Date of birth: `1902-01-01` (immediate successful match; `1901-01-01` also matches but isn't instant)
+- SSN: `000000000` (full) or `0000` (last 4)
+- Address line 1: `address_full_match` (yes, type that literal string)
+- If it still asks for a document: upload Stripe's dedicated always-passes test ID image —
+  `https://d37ugbyn3rpeym.cloudfront.net/docs/identity/success.png` — instead of any real photo.
+
+Because the account was created with `identity.country: "US"` (see the code comment in
+`stripe_connect_service.py` — there's no `Restaurant.country` field yet, so this is hardcoded), keep the
+country as US throughout the onboarding form; a mismatched country/address is one of the realistic ways
+this verification genuinely fails, not a bug.
 
 **Checkout**: `POST /orders` returns a `client_secret` whenever a real payment still needs confirming
 (a positive total, `PAYMENT_PROVIDER=stripe`) — the order already exists as `PENDING`. The checkout page

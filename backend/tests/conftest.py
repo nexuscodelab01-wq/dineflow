@@ -110,3 +110,18 @@ def _rate_limiting_off_by_default(monkeypatch):
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _payment_provider_pinned_to_mock(monkeypatch):
+    """Every order-creation test assumes the mock provider's synchronous, always-succeeds behaviour.
+
+    settings.PAYMENT_PROVIDER is read from the environment, and this container's environment is also
+    used for live manual testing against real Stripe test-mode keys (see docs/OPERATIONS.md) — without
+    this, dropping real keys into .env for a browser session silently makes PAYMENT_PROVIDER=stripe leak
+    into the *next* test run too, and every order-creation test fails with a 400 (no connected account),
+    which is exactly what happened once, the hard way. A test that specifically wants to exercise the
+    Stripe path (test_payments.py, test_webhooks.py) monkeypatches it back for itself."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "PAYMENT_PROVIDER", "mock")
