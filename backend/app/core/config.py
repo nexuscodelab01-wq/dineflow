@@ -106,7 +106,10 @@ class Settings(BaseSettings):
     PAYMENT_PROVIDER: str = "mock"
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""  # verifies a webhook request really came from Stripe
+    STRIPE_WEBHOOK_SECRET: str = ""  # verifies a v1 webhook (payment_intent.*) really came from Stripe
+    # Separate secret: v2 Connect account events (a different "event destination" resource from the v1
+    # webhook endpoint above) are signed independently. See api/routes/webhooks.py.
+    STRIPE_CONNECT_WEBHOOK_SECRET: str = ""
 
     @property
     def runtime_database_url(self) -> str:

@@ -28,7 +28,8 @@ def _minor_units(amount: Decimal, currency: str) -> int:
 
 class StripePaymentProvider(PaymentProvider):
     def __init__(self) -> None:
-        stripe.api_key = settings.STRIPE_SECRET_KEY
+        # An instantiated client, not the deprecated global `stripe.api_key = ...` pattern.
+        self.client = stripe.StripeClient(settings.STRIPE_SECRET_KEY)
 
     def create_intent(
         self,
@@ -46,14 +47,18 @@ class StripePaymentProvider(PaymentProvider):
                 failure_message="This restaurant hasn't connected a Stripe account yet",
             )
         try:
-            intent = stripe.PaymentIntent.create(
-                amount=_minor_units(amount, currency),
-                currency=currency,
-                metadata=metadata,
-                automatic_payment_methods={"enabled": True},
-                stripe_account=connected_account_id,  # a *direct* charge on the restaurant's account
+            intent = self.client.v1.payment_intents.create(
+                {
+                    "amount": _minor_units(amount, currency),
+                    "currency": currency,
+                    "metadata": metadata,
+                    "automatic_payment_methods": {"enabled": True},
+                },
+                # A direct charge: created *on* the restaurant's connected account (Stripe-Account
+                # header), not the platform's — see this module's docstring.
+                options={"stripe_account": connected_account_id},
             )
-        except stripe.error.StripeError as exc:
+        except stripe.StripeError as exc:
             return IntentResult(status=PaymentStatus.FAILED, failure_message=str(exc.user_message or exc))
         return IntentResult(
             status=PaymentStatus.REQUIRES_ACTION,

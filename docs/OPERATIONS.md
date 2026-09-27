@@ -246,20 +246,30 @@ A pause stops pre-orders too — "stop taking orders" means that. The automatic 
 4. Set in `.env`: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY=sk_test_...`,
    `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...` (same value as `STRIPE_PUBLISHABLE_KEY`, just also
    read by the frontend), then restart the backend and frontend containers.
-5. **Webhook secret**: `STRIPE_WEBHOOK_SECRET` verifies a request claiming to be Stripe actually is.
-   For local development, install the Stripe CLI and run
-   `stripe listen --forward-to localhost:8000/api/v1/webhooks/stripe` — it prints a `whsec_...` secret;
-   put that in `.env` as `STRIPE_WEBHOOK_SECRET` and restart the backend. In production, register the
-   webhook URL in the Stripe dashboard (**Developers → Webhooks**) for `payment_intent.succeeded`,
-   `payment_intent.payment_failed` and `account.updated` (with "Listen to events on Connected accounts"
-   switched on, since a restaurant's own charges are events on *its* connected account, not the
-   platform's), and use the signing secret it gives you.
+5. **Two separate webhook secrets** — these are genuinely different Stripe subsystems, each with its own
+   signing secret:
+   - `STRIPE_WEBHOOK_SECRET` (v1, order confirmation). For local development, install the Stripe CLI and
+     run `stripe listen --forward-to localhost:8000/api/v1/webhooks/stripe` — it prints a `whsec_...`
+     secret. In production, register the URL in the Stripe dashboard (**Developers → Webhooks**) for
+     `payment_intent.succeeded` and `payment_intent.payment_failed`, with "Listen to events on Connected
+     accounts" switched on (a restaurant's own charges are events on *its* connected account, not the
+     platform's), and use the signing secret it gives you.
+   - `STRIPE_CONNECT_WEBHOOK_SECRET` (v2, Connect account status). Accounts v2 uses a separate resource
+     called an **event destination**, not the classic webhook endpoint above. Create one (Dashboard:
+     **Developers → Event destinations**, or `stripe.StripeClient(...).v2.core.event_destinations.create`)
+     with `event_payload: "thin"`, `events_from: ["@self"]`,
+     `enabled_events: ["v2.core.account[configuration.merchant].capability_status_updated"]`, pointing at
+     `.../api/v1/webhooks/stripe/connect`. It has its own signing secret — put that in
+     `STRIPE_CONNECT_WEBHOOK_SECRET`.
 
 **Connecting a restaurant**: Settings → Payments → *Connect with Stripe*. This redirects to a
-Stripe-hosted onboarding form (an Express account is created on first use) and back. Nothing is
-enabled until Stripe's own `account.updated` webhook confirms it — `stripe_charges_enabled` on the
-restaurant, shown as "Connected" on that same page. If onboarding is abandoned partway, the button
-becomes "Finish connecting with Stripe" and reuses the same account.
+Stripe-hosted onboarding form (an Accounts v2 Express account — `dashboard: "express"`, a lightweight
+DineFlow-branded dashboard; not the deprecated v1 `type: 'express'`) and back. Nothing is enabled until
+the `v2.core.account[configuration.merchant].capability_status_updated` event confirms it —
+`stripe_charges_enabled` on the restaurant, shown as "Connected" on that same page. That event is a
+**thin** payload (an id and a URL, not the account's data), so the handler always fetches the current
+account before syncing anything — see `webhooks.py`'s docstring. If onboarding is abandoned partway,
+the button becomes "Finish connecting with Stripe" and reuses the same account.
 
 **Checkout**: `POST /orders` returns a `client_secret` whenever a real payment still needs confirming
 (a positive total, `PAYMENT_PROVIDER=stripe`) — the order already exists as `PENDING`. The checkout page
@@ -279,6 +289,11 @@ Element handles the challenge itself).
   not yet a problem while the failure rate is Stripe's test-mode declined-card scenarios only).
 - **Refunds don't exist yet** (Sprint 4 Phase 2) — cancelling an order in the admin panel does not touch
   its payment.
+- `STRIPE_SECRET_KEY` here is a full secret key (`sk_test_...`/`sk_live_...`) for simplicity while
+  building. Before real money moves, switch to a [restricted key](https://docs.stripe.com/keys.md#manage-your-api-keys)
+  (`rk_live_...`) scoped to only the resources this app actually calls (PaymentIntents, and the v2
+  Accounts/Account Links/Event Destinations) — a leaked restricted key can't do anything outside that
+  scope, a leaked secret key can do everything on the account.
 - **Pay-at-table doesn't exist yet** (Sprint 4 Phase 3) — `table_session_service.py` has no payment
   concept, so dine-in orders placed from a QR table session still report zero revenue.
 

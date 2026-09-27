@@ -1,6 +1,7 @@
-"""The Stripe webhook route: signature verification, the two payment outcomes, Connect status sync,
-idempotency, and that one restaurant's event can never touch another's order (test_tenant_isolation.py's
-route registry points here for that last one)."""
+"""The Stripe webhook routes: signature verification, the two payment outcomes (v1), Connect account
+status sync (v2 — see stripe_connect_service.py for why v2, and webhooks.py's docstring for how its
+verification differs from v1's), idempotency, and that one restaurant's event can never touch another's
+order (test_tenant_isolation.py's route registry points here for that last one)."""
 
 import hashlib
 import hmac
@@ -143,18 +144,123 @@ def test_payment_failed_marks_the_payment_and_leaves_the_order_pending_for_a_ret
     app.dependency_overrides.clear()
 
 
-def test_account_updated_syncs_charges_enabled(client: TestClient, db: Session, monkeypatch):
+def _connect_post(client: TestClient, payload: bytes, *, secret: str = SECRET) -> object:
+    return client.post(
+        "/api/v1/webhooks/stripe/connect", content=payload, headers={"Stripe-Signature": _sign(payload, secret)}
+    )
+
+
+def _connect_event(account_id: str) -> bytes:
+    """A v2 *thin* event — an id and a URL, not the account's data (see webhooks.py's docstring: the
+    handler always fetches the current account rather than trusting anything in the payload itself)."""
+    return json.dumps({
+        "id": "evt_test_v2",
+        "object": "v2.core.event",
+        "type": "v2.core.account[configuration.merchant].capability_status_updated",
+        "created": "2026-01-01T00:00:00Z",
+        "related_object": {"id": account_id, "type": "v2.core.account", "url": f"/v2/core/accounts/{account_id}"},
+    }).encode()
+
+
+class _FakeCardPayments:
+    def __init__(self, status: str) -> None:
+        self.status = status
+
+
+class _FakeMerchantCapabilities:
+    def __init__(self, status: str) -> None:
+        self.card_payments = _FakeCardPayments(status)
+
+
+class _FakeMerchantConfig:
+    def __init__(self, status: str) -> None:
+        self.capabilities = _FakeMerchantCapabilities(status)
+
+
+class _FakeConfiguration:
+    def __init__(self, status: str) -> None:
+        self.merchant = _FakeMerchantConfig(status)
+
+
+class _FakeAccount:
+    """Stands in for the real Account v2 object `fetch_related_object()` would return — a live call to
+    Stripe is exactly what these tests must not depend on. See test_stripe_connect.py for the request
+    shapes sent *to* Stripe; this is about what happens once a response comes back."""
+
+    def __init__(self, account_id: str, *, card_payments_status: str) -> None:
+        self.id = account_id
+        self.configuration = _FakeConfiguration(card_payments_status)
+
+
+def _stub_fetch_related_object(monkeypatch, account: "_FakeAccount") -> None:
+    from stripe.events._v2_core_account_including_configuration_merchant_capability_status_updated_event import (
+        V2CoreAccountIncludingConfigurationMerchantCapabilityStatusUpdatedEventNotification,
+    )
+
+    monkeypatch.setattr(
+        V2CoreAccountIncludingConfigurationMerchantCapabilityStatusUpdatedEventNotification,
+        "fetch_related_object",
+        lambda self: account,
+    )
+
+
+def test_connect_webhook_refuses_a_request_with_no_signing_secret_configured(client: TestClient, db: Session, monkeypatch):
     app.dependency_overrides[get_db] = override_get_db(db)
-    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(settings, "STRIPE_CONNECT_WEBHOOK_SECRET", "")
+    r = _connect_post(client, _connect_event("acct_x"))
+    assert r.status_code == 503
+    app.dependency_overrides.clear()
+
+
+def test_connect_webhook_refuses_a_bad_signature(client: TestClient, db: Session, monkeypatch):
+    app.dependency_overrides[get_db] = override_get_db(db)
+    monkeypatch.setattr(settings, "STRIPE_CONNECT_WEBHOOK_SECRET", SECRET)
+    r = _connect_post(client, _connect_event("acct_x"), secret="whsec_someone_elses")
+    assert r.status_code == 400
+    app.dependency_overrides.clear()
+
+
+def test_connect_webhook_syncs_charges_enabled_once_card_payments_is_active(client: TestClient, db: Session, monkeypatch):
+    app.dependency_overrides[get_db] = override_get_db(db)
+    monkeypatch.setattr(settings, "STRIPE_CONNECT_WEBHOOK_SECRET", SECRET)
     restaurant = _restaurant(db, "webhook-connect")
     restaurant.stripe_account_id = "acct_test_1"
     db.commit()
+    _stub_fetch_related_object(monkeypatch, _FakeAccount("acct_test_1", card_payments_status="active"))
 
-    r = _post(client, _event("account.updated", {"id": "acct_test_1", "charges_enabled": True}))
+    r = _connect_post(client, _connect_event("acct_test_1"))
     assert r.status_code == 200
 
     db.expire_all()
     assert db.get(Restaurant, restaurant.id).stripe_charges_enabled is True
+    app.dependency_overrides.clear()
+
+
+def test_connect_webhook_can_also_turn_charges_enabled_back_off(client: TestClient, db: Session, monkeypatch):
+    """A capability can regress (e.g. Stripe needs new information) — the sync must not be one-directional."""
+    app.dependency_overrides[get_db] = override_get_db(db)
+    monkeypatch.setattr(settings, "STRIPE_CONNECT_WEBHOOK_SECRET", SECRET)
+    restaurant = _restaurant(db, "webhook-connect-regress")
+    restaurant.stripe_account_id = "acct_test_2"
+    restaurant.stripe_charges_enabled = True
+    db.commit()
+    _stub_fetch_related_object(monkeypatch, _FakeAccount("acct_test_2", card_payments_status="pending"))
+
+    r = _connect_post(client, _connect_event("acct_test_2"))
+    assert r.status_code == 200
+
+    db.expire_all()
+    assert db.get(Restaurant, restaurant.id).stripe_charges_enabled is False
+    app.dependency_overrides.clear()
+
+
+def test_connect_webhook_for_an_unknown_account_is_a_harmless_no_op(client: TestClient, db: Session, monkeypatch):
+    app.dependency_overrides[get_db] = override_get_db(db)
+    monkeypatch.setattr(settings, "STRIPE_CONNECT_WEBHOOK_SECRET", SECRET)
+    _stub_fetch_related_object(monkeypatch, _FakeAccount("acct_nobody", card_payments_status="active"))
+
+    r = _connect_post(client, _connect_event("acct_nobody"))
+    assert r.status_code == 200
     app.dependency_overrides.clear()
 
 
