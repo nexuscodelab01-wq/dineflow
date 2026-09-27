@@ -1,4 +1,4 @@
-import type { JoinResponse, OpenTableSession, QrTable, ServiceRequest, SessionRound, TableInfo, TableSessionView, WaiterTable } from '~/types/table'
+import type { JoinResponse, OpenTableSession, QrTable, ServiceRequest, SessionRound, TableInfo, TablePaymentResult, TableSessionView, WaiterTable } from '~/types/table'
 import { apiFetch } from '~/services/http'
 
 const json = (body: unknown) => JSON.stringify(body)
@@ -45,8 +45,21 @@ export function closeSession(restaurantId: number, sessionId: number) {
   return apiFetch<void>(`/api/v1/admin/table-sessions/${sessionId}/close?restaurant_id=${restaurantId}`, { method: 'POST' })
 }
 
+/** Record the tab as paid at the counter (cash) and close it, same as an online payment does. */
+export function markSessionPaidCash(restaurantId: number, sessionId: number) {
+  return apiFetch<void>(`/api/v1/admin/table-sessions/${sessionId}/mark-paid?restaurant_id=${restaurantId}`, {
+    method: 'POST', body: json({ method: 'CASH' }),
+  })
+}
+
 export function askForService(token: string, kind: 'WAITER' | 'BILL') {
   return apiFetch<string[]>('/api/v1/table-session/requests', { method: 'POST', body: json({ kind }), auth: false, headers: pass(token) })
+}
+
+/** Pay the table's whole tab. `closed: true` means it's already settled; otherwise confirm
+ * `client_secret` with Stripe.js the same way checkout does. */
+export function payTableSession(token: string) {
+  return apiFetch<TablePaymentResult>('/api/v1/table-session/pay', { method: 'POST', auth: false, headers: pass(token) })
 }
 
 export function fetchServiceRequests(restaurantId: number) {

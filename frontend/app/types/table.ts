@@ -37,6 +37,15 @@ export type TableSessionView = {
   total: string
   /** What this table has asked for and staff haven't answered yet: WAITER and/or BILL. */
   requests: string[]
+  /** Whether this restaurant can take a real payment yet, and its connected-account id, for the
+   * "Pay now" flow — same information checkout.vue gets from the restaurant object. */
+  stripe_account_id?: string | null
+  stripe_charges_enabled?: boolean
+}
+
+export type TablePaymentResult = {
+  client_secret?: string | null
+  closed: boolean
 }
 
 export type QrTable = {

@@ -4,7 +4,7 @@ import type { MenuItemDetail } from '~/types/menu'
 import type { TableSessionView, WaiterTable } from '~/types/table'
 import { fetchAdminMenu, updateOrderStatus, updateTableStatus } from '~/services/admin'
 import { subscribeKitchen } from '~/services/realtime'
-import { closeSession, fetchServiceRequests, fetchTabDetail, fetchWaiterFloor, finishServiceRequest, sendStaffRound, transferTab } from '~/services/table'
+import { closeSession, fetchServiceRequests, fetchTabDetail, fetchWaiterFloor, finishServiceRequest, markSessionPaidCash, sendStaffRound, transferTab } from '~/services/table'
 import type { ServiceRequest } from '~/types/table'
 import { formatCurrency } from '~/utils/format'
 import type { TableLine } from '~/utils/table-cart'
@@ -102,6 +102,17 @@ async function closeTab() {
     destructive: true,
   })
   if (ok) await act(() => closeSession(admin.restaurantId!, s.session!.session_id), 'Could not close the tab', `Table ${s.table_number} closed`)
+}
+
+async function markPaidCash() {
+  const s = selected.value
+  if (!s?.session) return
+  const ok = await ui.confirm({
+    title: `Mark Table ${s.table_number} paid?`,
+    message: 'Records the tab as paid in cash and closes it — guests can no longer order and the table goes to cleaning.',
+    confirmLabel: 'Mark paid',
+  })
+  if (ok) await act(() => markSessionPaidCash(admin.restaurantId!, s.session!.session_id), 'Could not mark it paid', `Table ${s.table_number} marked paid`)
 }
 
 // ---- moving a tab -------------------------------------------------------------------------------------
@@ -253,6 +264,7 @@ const statusLabel = (s: string) => ({ CONFIRMED: 'Received', PREPARING: 'Being p
             <div class="mt-4 grid gap-2">
               <AppButton :disabled="busy" @click="openPicker">Add items for the table</AppButton>
               <button class="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50" :disabled="busy || !targets.length" @click="moving = true">Move to another table</button>
+              <button v-if="Number(selected.session.total) > 0" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800" :disabled="busy" @click="markPaidCash">Mark paid (cash) &amp; close</button>
               <button class="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50" :disabled="busy" @click="closeTab">Close tab &amp; clean table</button>
             </div>
           </template>

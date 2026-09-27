@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { StripeElements } from '@stripe/stripe-js'
 import type { Category, MenuItem, MenuItemDetail } from '~/types/menu'
 import type { TableInfo, TableSessionView } from '~/types/table'
 import { fetchCategories, fetchMenu, fetchMenuItem } from '~/services/menu'
 import { subscribeTableSession } from '~/services/realtime'
-import { askForService, fetchTableInfo, fetchTableSession, joinTable, sendRound } from '~/services/table'
+import { askForService, fetchTableInfo, fetchTableSession, joinTable, payTableSession, sendRound } from '~/services/table'
+import { getStripe } from '~/services/stripe'
 import { ApiError } from '~/utils/api-error'
 import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
@@ -288,6 +290,79 @@ async function ask(kind: 'WAITER' | 'BILL') {
   }
 }
 
+// ---- paying the tab -----------------------------------------------------------------------------
+
+const paying = ref(false)
+const payError = ref('')
+const paymentElementContainer = ref<HTMLElement | null>(null)
+const stripeElements = shallowRef<StripeElements | null>(null)
+const awaitingCardEntry = ref(false)
+const confirmingPayment = ref(false)
+
+async function payNow() {
+  if (!pass.value || paying.value) return
+  paying.value = true
+  payError.value = ''
+  try {
+    const result = await payTableSession(pass.value.token)
+    if (result.closed || !result.client_secret) {
+      ui.success('Paid — thank you!')
+      endSession()
+      return
+    }
+    const accountId = session.value?.stripe_account_id
+    if (!accountId) {
+      payError.value = "This restaurant's payments aren't set up correctly. Please ask a member of staff."
+      return
+    }
+    const stripe = await getStripe(accountId)
+    if (!stripe || !paymentElementContainer.value) {
+      payError.value = 'Could not load the payment form. Please try again.'
+      return
+    }
+    awaitingCardEntry.value = true
+    await nextTick()
+    const elements = stripe.elements({ clientSecret: result.client_secret })
+    elements.create('payment').mount(paymentElementContainer.value)
+    stripeElements.value = elements
+  }
+  catch (err) {
+    if (err instanceof ApiError && err.status === 401) return endSession()
+    payError.value = err instanceof Error ? err.message : 'Could not start payment. Please try again.'
+  }
+  finally {
+    paying.value = false
+  }
+}
+
+async function confirmCardPayment() {
+  if (!stripeElements.value || !session.value?.stripe_account_id) return
+  const stripe = await getStripe(session.value.stripe_account_id)
+  if (!stripe) return
+  confirmingPayment.value = true
+  payError.value = ''
+  try {
+    const { error: confirmError } = await stripe.confirmPayment({
+      elements: stripeElements.value,
+      redirect: 'if_required',
+      confirmParams: { return_url: window.location.href },
+    })
+    if (confirmError) {
+      payError.value = confirmError.message || 'Payment failed. Please try a different card.'
+      return
+    }
+    // Confirmed with Stripe — the tab closes once the webhook lands, generally within a second or two;
+    // this page already follows session.closed live and will move to the "ended" state on its own.
+    ui.success('Payment sent — thank you!')
+  }
+  catch (err) {
+    payError.value = err instanceof Error ? err.message : 'Payment failed'
+  }
+  finally {
+    confirmingPayment.value = false
+  }
+}
+
 const statusText: Record<string, string> = {
   PENDING: 'Sending…', CONFIRMED: 'Received', PREPARING: 'Being prepared', READY: 'Ready', COMPLETED: 'Served', DELIVERED: 'Served', CANCELLED: 'Cancelled',
 }
@@ -388,15 +463,35 @@ const statusText: Record<string, string> = {
         <div v-if="session?.rounds.length" class="flex items-center justify-between rounded-xl bg-brand-50 p-4 font-semibold">
           <span>Table total (with tax)</span><span>{{ formatCurrency(Number(session.total)) }}</span>
         </div>
-        <div class="grid grid-cols-2 gap-3 pt-2">
-          <button class="rounded-xl border border-brand-200 bg-white px-3 py-3 text-sm font-semibold text-brand-900 disabled:opacity-60" :disabled="asking === 'WAITER' || waiting('WAITER')" @click="ask('WAITER')">
-            {{ waiting('WAITER') ? 'Waiter is on the way ✓' : 'Call a waiter' }}
-          </button>
-          <button class="rounded-xl bg-brand-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-60" :disabled="!session?.rounds.length || asking === 'BILL' || waiting('BILL')" @click="ask('BILL')">
-            {{ waiting('BILL') ? 'Bill requested ✓' : 'Ask for the bill' }}
-          </button>
+
+        <div v-if="awaitingCardEntry" class="rounded-xl border border-brand-200 bg-white p-4">
+          <p class="text-sm font-semibold text-ink">Enter your card details</p>
+          <div ref="paymentElementContainer" class="mt-3" />
+          <p v-if="payError" class="mt-3 text-sm text-red-600" role="alert">{{ payError }}</p>
+          <AppButton class="mt-4 w-full py-3 text-base" :disabled="confirmingPayment" @click="confirmCardPayment">
+            {{ confirmingPayment ? 'Confirming…' : `Pay ${formatCurrency(Number(session?.total ?? 0))}` }}
+          </AppButton>
         </div>
-        <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">You pay at the table when you are ready.</p>
+        <template v-else>
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <button class="rounded-xl border border-brand-200 bg-white px-3 py-3 text-sm font-semibold text-brand-900 disabled:opacity-60" :disabled="asking === 'WAITER' || waiting('WAITER')" @click="ask('WAITER')">
+              {{ waiting('WAITER') ? 'Waiter is on the way ✓' : 'Call a waiter' }}
+            </button>
+            <button class="rounded-xl bg-brand-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-60" :disabled="!session?.rounds.length || asking === 'BILL' || waiting('BILL')" @click="ask('BILL')">
+              {{ waiting('BILL') ? 'Bill requested ✓' : 'Ask for the bill' }}
+            </button>
+          </div>
+          <button
+            v-if="session?.rounds.length"
+            class="w-full rounded-xl bg-brand-900 px-3 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            :disabled="paying"
+            @click="payNow"
+          >
+            {{ paying ? 'Starting payment…' : `Pay now · ${formatCurrency(Number(session.total))}` }}
+          </button>
+          <p v-if="payError" class="text-center text-sm text-red-600" role="alert">{{ payError }}</p>
+          <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">Pay now from your phone, or ask a member of staff.</p>
+        </template>
       </div>
 
       <!-- cart bar -->
