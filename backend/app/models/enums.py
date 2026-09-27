@@ -69,6 +69,7 @@ class LoyaltyReason(str, enum.Enum):
 
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
+    REQUIRES_ACTION = "REQUIRES_ACTION"  # 3D Secure or similar step still in progress
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     REFUNDED = "REFUNDED"
@@ -76,3 +77,4 @@ class PaymentStatus(str, enum.Enum):
 
 class PaymentMethod(str, enum.Enum):
     MOCK = "MOCK"
+    CARD = "CARD"

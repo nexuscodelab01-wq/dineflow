@@ -7,6 +7,7 @@ from decimal import Decimal
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError
 from app.models.address import Address
 from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
@@ -33,10 +34,25 @@ from app.services.coupon_service import CouponService
 from app.services.feature_service import FeatureService
 from app.services.scheduling_service import SchedulingService
 from app.services.notifications import notify_order_placed
-from app.services.payment_service import PaymentService
+from app.services.payments import get_payment_provider
 from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger(__name__)
+
+
+def _email_lines_from_order(order: Order) -> list[dict]:
+    """Rebuilds the confirmation email's line items from what's already on the order — used instead of
+    the `lines` dicts built while placing it, because confirmation (and so the email) can happen later,
+    from a webhook, with none of that request-time state in scope. See `_add_lines`'s docstring."""
+    return [
+        {
+            "quantity": item.quantity,
+            "name": item.item_name,
+            "options": [mod.option_name for mod in item.modifiers],
+            "instructions": item.special_instructions,
+        }
+        for item in order.items
+    ]
 
 
 class OrderService:
@@ -45,7 +61,7 @@ class OrderService:
         self.orders = OrderRepository(db)
         self.restaurants = RestaurantRepository(db)
         self.menu = MenuRepository(db)
-        self.payments = PaymentService()
+        self.payment_provider = get_payment_provider()
         self.reservations = ReservationService(db)
         self.features = FeatureService(db)
         self.coupons = CouponService(db)
@@ -140,7 +156,7 @@ class OrderService:
 
         self.orders.add(order)
 
-        subtotal, email_lines = self._add_lines(order, data.items, items_by_id)
+        subtotal = self._add_lines(order, data.items, items_by_id)
 
         # A coupon sets the discount from the server's own subtotal; the request only named a code.
         coupon = None
@@ -162,26 +178,6 @@ class OrderService:
         if coupon is not None:
             self.coupons.record_redemption(coupon, order, user, order.discount)
 
-        # A coupon can cover the whole bill. There is nothing to charge then, so the gateway is not
-        # called at all (it rightly refuses a zero amount) — but the order still gets a payment row
-        # of 0.00 so "every confirmed order has a payment" stays true for the rest of the system.
-        if total > Decimal("0.00"):
-            payment_result = self.payments.process(total)
-            if not payment_result.success:
-                raise AppError(payment_result.message or "Payment failed")
-            payment_status, provider_reference = payment_result.status, payment_result.provider_reference
-        else:
-            payment_status, provider_reference = PaymentStatus.COMPLETED, None
-
-        self.db.add(
-            Payment(
-                order_id=order.id,
-                amount=total,
-                status=payment_status,
-                payment_method=PaymentMethod.MOCK,
-                provider_reference=provider_reference,
-            )
-        )
         self.db.add(
             OrderStatusHistory(
                 order_id=order.id,
@@ -190,37 +186,103 @@ class OrderService:
                 changed_by_user_id=user.id,
             )
         )
-        order.status = OrderStatus.CONFIRMED
-        self.db.add(
-            OrderStatusHistory(
-                order_id=order.id,
-                previous_status=OrderStatus.PENDING,
-                new_status=OrderStatus.CONFIRMED,
-                changed_by_user_id=user.id,
-                notes="Payment confirmed (mock)",
-            )
-        )
 
         if reservation is not None:
             self.reservations.attach_to_order(reservation.id, order.id, user.id, restaurant.id)
 
-        # Queued in this same transaction: the email exists only if the order does.
-        notify_order_placed(self.db, restaurant, order, email_lines)
-        # Delivered to kitchen screens only if this transaction commits.
-        publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order.id, "order_number": order.order_number})
+        # Which provider is live for the whole app right now — never mixed per-request, so this is
+        # enough to pick the right PaymentMethod/provider label without the interface needing to know
+        # about our enums (see app/services/payments/base.py).
+        provider_name = settings.PAYMENT_PROVIDER.strip().upper()
+        payment_method = PaymentMethod.CARD if provider_name == "STRIPE" else PaymentMethod.MOCK
+        client_secret: str | None = None
+
+        # A coupon can cover the whole bill. There is nothing to charge then, so the gateway is not
+        # called at all (it rightly refuses a zero amount) — but the order still gets a payment row
+        # of 0.00 so "every confirmed order has a payment" stays true for the rest of the system.
+        if total > Decimal("0.00"):
+            intent = self.payment_provider.create_intent(
+                total,
+                currency=restaurant.currency,
+                connected_account_id=restaurant.stripe_account_id,
+                metadata={"order_id": str(order.id), "restaurant_id": str(restaurant.id)},
+            )
+            if intent.status == PaymentStatus.FAILED:
+                raise AppError(intent.failure_message or "Payment failed")
+            payment = Payment(
+                order_id=order.id,
+                restaurant_id=restaurant.id,
+                amount=total,
+                currency=restaurant.currency,
+                status=intent.status,
+                payment_method=payment_method,
+                provider=provider_name,
+                provider_reference=intent.provider_intent_id,
+                provider_intent_id=intent.provider_intent_id,
+            )
+            self.db.add(payment)
+            client_secret = intent.client_secret
+            if intent.status == PaymentStatus.COMPLETED:
+                # The mock provider settles synchronously — confirm right away, same as before.
+                self.confirm_payment(order, payment, user_id=user.id, notes="Payment confirmed (mock)")
+            # Otherwise (REQUIRES_ACTION): the order stays PENDING. The frontend confirms the payment
+            # with `client_secret`, and Stripe's `payment_intent.succeeded` webhook confirms the order —
+            # see app/api/routes/webhooks.py. It never gets confirmed synchronously here for a real
+            # provider, because a card can still fail 3D Secure after this request has already returned.
+        else:
+            payment = Payment(
+                order_id=order.id,
+                restaurant_id=restaurant.id,
+                amount=total,
+                currency=restaurant.currency,
+                status=PaymentStatus.COMPLETED,
+                payment_method=PaymentMethod.MOCK,
+                provider="MOCK",
+            )
+            self.db.add(payment)
+            self.confirm_payment(order, payment, user_id=user.id, notes="No payment required (covered by discount)")
+
         self.db.commit()
         logger.info("Order created: order_number=%s user_id=%s", order.order_number, user.id)
 
         refreshed = self.orders.get_by_id(order.id)
         if refreshed is None:
             raise AppError("Order could not be loaded after creation")
-        return OrderRead.model_validate(refreshed)
+        result = OrderRead.model_validate(refreshed)
+        result.client_secret = client_secret
+        return result
 
-    def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem]) -> tuple[Decimal, list[dict]]:
-        """Add the ordered lines to `order` (checking availability and modifiers). Returns the subtotal and
-        the lines as the confirmation email lists them."""
+    def confirm_payment(self, order: Order, payment: Payment, *, user_id: int | None, notes: str) -> None:
+        """Flip a PENDING order (and its payment) to CONFIRMED/COMPLETED and run the one-time side
+        effects of a payment landing — the order-placed email and the kitchen publish. Called
+        synchronously here for the mock provider and zero-total orders; called again from the Stripe
+        webhook once `payment_intent.succeeded` arrives for a real payment. The caller must not call
+        this twice for the same order — the webhook route checks the order is still PENDING first."""
+        payment.status = PaymentStatus.COMPLETED
+        order.status = OrderStatus.CONFIRMED
+        self.db.add(
+            OrderStatusHistory(
+                order_id=order.id,
+                previous_status=OrderStatus.PENDING,
+                new_status=OrderStatus.CONFIRMED,
+                changed_by_user_id=user_id,
+                notes=notes,
+            )
+        )
+        restaurant = self.restaurants.get_by_id(order.restaurant_id)
+        # Queued in this same transaction: the email exists only if the order (and its confirmation) does.
+        notify_order_placed(self.db, restaurant, order, _email_lines_from_order(order))
+        # Delivered to kitchen screens only if this transaction commits.
+        publish(self.db, kitchen_topic(order.restaurant_id), "order.created", {"order_id": order.id, "order_number": order.order_number})
+
+    def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem]) -> Decimal:
+        """Add the ordered lines to `order` (checking availability and modifiers). Returns the subtotal.
+
+        The confirmation email's line items are read back from what this writes (`order.items`), via
+        `_email_lines_from_order` — reconstructed rather than also built here, because the email itself
+        is only sent once a payment is confirmed (`confirm_payment`), which for a real provider happens
+        later, from the Stripe webhook, with no `lines` variable in scope at all."""
         subtotal = Decimal("0.00")
-        email_lines: list[dict] = []  # what the confirmation email will list
         for line in lines:
             menu_item = items_by_id[line.menu_item_id]
             if not menu_item.is_available:
@@ -229,12 +291,6 @@ class OrderService:
             unit_price, selected_modifiers = self._validate_modifiers(menu_item, line.modifier_option_ids)
             line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
             subtotal += line_total
-            email_lines.append({
-                "quantity": line.quantity,
-                "name": menu_item.name,
-                "options": [mod.name for mod in selected_modifiers],
-                "instructions": line.special_instructions,
-            })
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -260,7 +316,7 @@ class OrderService:
                         price_adjustment=mod.price_adjustment,
                     )
                 )
-        return subtotal, email_lines
+        return subtotal
 
     def get_order(self, order_id: int, user: User) -> OrderRead:
         order = self.orders.get_by_id_for_user(order_id, user.id)

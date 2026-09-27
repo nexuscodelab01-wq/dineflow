@@ -102,6 +102,16 @@ class Restaurant(TimestampMixin, Base):
         Integer, default=30, server_default="30", nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # ISO 4217 code, lowercase (as Stripe expects it), e.g. "usd", "gbp". One currency per restaurant —
+    # multi-currency within a single restaurant is out of scope (see ROADMAP's i18n note).
+    currency: Mapped[str] = mapped_column(String(3), default="usd", server_default="usd", nullable=False)
+    # Stripe Connect (Express account). Null until the owner completes onboarding from Settings.
+    # charges_enabled is kept in sync by the account.updated webhook, not read live from Stripe on every
+    # request — see app/api/routes/webhooks.py.
+    stripe_account_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_charges_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     staff: Mapped[list["RestaurantUser"]] = relationship(
         "RestaurantUser", back_populates="restaurant", cascade="all, delete-orphan"

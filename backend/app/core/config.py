@@ -99,6 +99,15 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
+    # Payments. "mock" always succeeds instantly (development, and every automated test); "stripe" uses
+    # Stripe Connect — a *direct* charge on the restaurant's own connected account (they are the
+    # merchant of record; see ROADMAP D7), confirmed asynchronously by a webhook rather than in the
+    # request. See app/services/payments/ for the provider interface.
+    PAYMENT_PROVIDER: str = "mock"
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""  # verifies a webhook request really came from Stripe
+
     @property
     def runtime_database_url(self) -> str:
         return self.APP_DATABASE_URL or self.DATABASE_URL
@@ -143,6 +152,11 @@ class Settings(BaseSettings):
                 "STORAGE_BACKEND=local in production — uploaded logos and menu photos live on this "
                 "server's disk and are lost on redeploy or when running more than one server "
                 "(docker-compose.prod.yml mounts no volume for them). Set STORAGE_BACKEND=s3."
+            )
+        if self.PAYMENT_PROVIDER.strip().lower() == "mock":
+            problems.append(
+                "PAYMENT_PROVIDER=mock in production — every order would be charged nothing and marked "
+                "paid regardless. Set PAYMENT_PROVIDER=stripe and the STRIPE_* keys."
             )
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))

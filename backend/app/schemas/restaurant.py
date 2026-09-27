@@ -51,6 +51,13 @@ class RestaurantRead(BaseModel):
     custom_domain: str | None = None
     domain_verified_at: datetime | None = None
     is_active: bool
+    currency: str = "usd"
+    # Whether this restaurant can actually take a real payment yet — not the internal Stripe account id,
+    # just enough for the site to know "show a payment form" vs "online ordering isn't set up yet".
+    stripe_charges_enabled: bool = False
+    # Not secret (it's an account identifier, not a key), and needed by the frontend to initialise
+    # Stripe.js in the connected account's context: `loadStripe(pk, { stripeAccount: ... })`.
+    stripe_account_id: str | None = None
 
 
 class TenantRead(RestaurantRead):

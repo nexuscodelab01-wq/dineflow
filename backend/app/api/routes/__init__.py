@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, coupons, health, loyalty, menu, orders, platform, realtime, reservations, restaurants, reviews, table_ordering, tenant
+from app.api.routes import admin, auth, coupons, health, loyalty, menu, orders, platform, realtime, reservations, restaurants, reviews, table_ordering, tenant, webhooks
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(webhooks.router, tags=["webhooks"])
 api_router.include_router(auth.router, tags=["auth"])
 api_router.include_router(admin.router, tags=["admin"])
 api_router.include_router(realtime.router, tags=["realtime"])

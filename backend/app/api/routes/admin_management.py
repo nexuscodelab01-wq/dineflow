@@ -69,7 +69,9 @@ from app.schemas.staff import StaffInvite, StaffInviteRead, StaffRead, StaffUpda
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
+from app.schemas.payments import StripeOnboardLink, StripeStatus
 from app.services.admin_service import AdminService
+from app.services.stripe_connect_service import StripeConnectService
 from app.services.analytics_service import AnalyticsService
 from app.services.reservation_service import ReservationService
 from app.services.coupon_service import CouponService
@@ -109,6 +111,10 @@ def get_coupon_service(db: Annotated[Session, Depends(get_db)]) -> CouponService
 
 def get_staff_service(db: Annotated[Session, Depends(get_db)]) -> StaffService:
     return StaffService(db)
+
+
+def get_stripe_connect_service(db: Annotated[Session, Depends(get_db)]) -> StripeConnectService:
+    return StripeConnectService(db)
 
 
 def get_loyalty_service(db: Annotated[Session, Depends(get_db)]) -> LoyaltyService:
@@ -1074,6 +1080,33 @@ def update_settings(
 ) -> RestaurantRead:
     try:
         return service.update_settings(restaurant_id, data)
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/settings/stripe/onboard", response_model=StripeOnboardLink)
+def stripe_onboard(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StripeConnectService, Depends(get_stripe_connect_service)],
+) -> StripeOnboardLink:
+    """A Stripe-hosted onboarding link for this restaurant (creates its connected account on first use).
+    The frontend redirects the browser to the returned URL; `stripe_charges_enabled` follows later, from
+    the account.updated webhook, once onboarding is actually complete."""
+    try:
+        return StripeOnboardLink(url=service.onboarding_link(restaurant_id))
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/settings/stripe/status", response_model=StripeStatus)
+def stripe_status(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[StripeConnectService, Depends(get_stripe_connect_service)],
+) -> StripeStatus:
+    try:
+        return StripeStatus(**service.status(restaurant_id))
     except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc
 

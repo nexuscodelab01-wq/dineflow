@@ -180,7 +180,7 @@ class TableSessionService:
                 client_token=client_token, notes=data.notes,
             )
             orders.orders.add(order)
-            subtotal, _ = orders._add_lines(order, data.items, items_by_id)
+            subtotal = orders._add_lines(order, data.items, items_by_id)
             tax = (subtotal * restaurant.tax_rate).quantize(Decimal("0.01"))
             total = (subtotal + tax).quantize(Decimal("0.01"))
             if total > Decimal(str(settings.QR_MAX_ORDER_TOTAL)):

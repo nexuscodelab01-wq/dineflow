@@ -111,6 +111,10 @@ class OrderRead(BaseModel):
     items: list[OrderItemRead] = Field(default_factory=list)
     status_history: list[OrderStatusHistoryRead] = Field(default_factory=list)
     payments: list[PaymentRead] = Field(default_factory=list)
+    # Only set on the response to *creating* an order whose payment still needs confirming (a real
+    # provider, amount > 0): the frontend passes this to Stripe.js. Never persisted — it's single-use
+    # and irrelevant once the payment is confirmed, so there is nowhere to read it back from later.
+    client_secret: str | None = None
 
 
 class OrderListResponse(BaseModel):

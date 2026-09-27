@@ -12,3 +12,4 @@ email-validator==2.2.0
 sentry-sdk==2.19.2
 Pillow==11.0.0
 boto3==1.35.90
+stripe==11.4.1
