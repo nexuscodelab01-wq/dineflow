@@ -31,6 +31,7 @@ from app.models.order import Order
 from app.models.payment import Payment
 from app.models.restaurant import Restaurant
 from app.services.order_service import OrderService
+from app.services.table_session_service import TableSessionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,6 +97,13 @@ def _handle_payment_succeeded(db: Session, intent: dict) -> None:
     payment = db.scalar(select(Payment).where(Payment.provider_intent_id == intent["id"]))
     if payment is None:
         logger.warning("payment_intent.succeeded for an unknown intent: %s", intent["id"])
+        return
+    if payment.table_session_id is not None:
+        # A table-session payment — no single order to confirm, since every round on the tab is already
+        # CONFIRMED the moment it was sent. Confirming here means settling the payment and closing the tab.
+        TableSessionService(db).confirm_session_payment(payment)
+        db.commit()
+        logger.info("Table session %s paid by webhook (intent %s)", payment.table_session_id, intent["id"])
         return
     order = db.get(Order, payment.order_id)
     if order is None or order.status != OrderStatus.PENDING:

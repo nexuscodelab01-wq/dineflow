@@ -12,10 +12,11 @@ from app.core.config import settings
 from app.core.exceptions import AppError, ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.realtime import kitchen_topic, publish, publish_order_change, session_topic
 from app.core.security import create_guest_token
-from app.models.enums import OrderStatus, OrderType, TableStatus
+from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus, TableStatus
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
+from app.models.payment import Payment
 from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
 from app.models.service_request import BILL, DONE, KINDS, ServiceRequest
@@ -31,11 +32,13 @@ from app.schemas.table_session import (
     SessionRead,
     SessionRoundRead,
     TableInfo,
+    TablePaymentRead,
     WaiterSessionRead,
     WaiterTableRead,
 )
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
+from app.services.payments import get_payment_provider
 
 FEATURE = "qr_table_ordering"
 CLOSED_STATUSES = {OrderStatus.CANCELLED}
@@ -138,7 +141,8 @@ class TableSessionService:
         return SessionRead(
             session_id=session.id, restaurant_id=session.restaurant_id, restaurant_name=restaurant.name,
             table_number=table.table_number, guests=[n for n in names.values() if n], rounds=rounds, total=total,
-            requests=requests,
+            requests=requests, stripe_account_id=restaurant.stripe_account_id,
+            stripe_charges_enabled=restaurant.stripe_charges_enabled,
         )
 
     # ------------------------------------------------------------------ ordering
@@ -261,6 +265,78 @@ class TableSessionService:
         publish(self.db, kitchen_topic(restaurant_id), "session.closed", {"table_id": table.id})
         publish(self.db, session_topic(session.id), "session.closed", {"table_id": table.id})
         self.db.commit()
+
+    # ------------------------------------------------------------------ paying the tab
+
+    def pay(self, session: TableSession) -> TablePaymentRead:
+        """A guest pays the table's whole tab from their phone — the online-card path. `mark_paid_cash`
+        is the staff-at-the-counter equivalent, with no Stripe involvement at all."""
+        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        FeatureService(self.db).require(restaurant.id, FEATURE)
+        if session.state != OPEN:
+            raise AppError("This table has already been closed")
+        total = self.view(session).total
+        if total <= Decimal("0.00"):
+            raise AppError("There is nothing on your table's tab yet")
+        in_flight = self.db.scalar(
+            select(Payment.id).where(
+                Payment.table_session_id == session.id,
+                Payment.status.in_((PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION)),
+            )
+        )
+        if in_flight is not None:
+            raise AppError("A payment is already in progress for this table. Please wait a moment.")
+
+        provider_name = settings.PAYMENT_PROVIDER.strip().upper()
+        payment_method = PaymentMethod.CARD if provider_name == "STRIPE" else PaymentMethod.MOCK
+        intent = get_payment_provider().create_intent(
+            total, currency=restaurant.currency, connected_account_id=restaurant.stripe_account_id,
+            metadata={"table_session_id": str(session.id), "restaurant_id": str(restaurant.id)},
+        )
+        if intent.status == PaymentStatus.FAILED:
+            raise AppError(intent.failure_message or "Payment failed")
+
+        payment = Payment(
+            table_session_id=session.id, order_id=None, restaurant_id=restaurant.id, amount=total,
+            currency=restaurant.currency, status=intent.status, payment_method=payment_method,
+            provider=provider_name, provider_reference=intent.provider_intent_id,
+            provider_intent_id=intent.provider_intent_id,
+        )
+        self.db.add(payment)
+        self.db.flush()
+
+        if intent.status == PaymentStatus.COMPLETED:
+            # The mock provider settles synchronously — same reasoning as OrderService.create_order.
+            payment.status = PaymentStatus.COMPLETED
+            self.close_session(session.id, session.restaurant_id, staff_user_id=None)  # commits
+            return TablePaymentRead(closed=True)
+
+        self.db.commit()
+        return TablePaymentRead(client_secret=intent.client_secret)
+
+    def confirm_session_payment(self, payment: Payment) -> None:
+        """Called from the payment_intent.succeeded webhook once a real (Stripe) session payment lands —
+        the session-payment equivalent of OrderService.confirm_payment."""
+        session = self.db.get(TableSession, payment.table_session_id)
+        if session is None or session.state != OPEN:
+            return  # already settled by an earlier delivery of this same event — nothing to do
+        payment.status = PaymentStatus.COMPLETED
+        self.close_session(session.id, session.restaurant_id, staff_user_id=None)
+
+    def mark_paid_cash(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+        """Staff records the tab as paid at the counter (cash, or a card on their own terminal) — no
+        Stripe involvement. Closes the session the same way an online payment does."""
+        session = self.staff_session(session_id, restaurant_id)  # 404s / refuses an already-closed one
+        total = self.view(session).total
+        if total <= Decimal("0.00"):
+            raise AppError("There is nothing on this table's tab yet")
+        restaurant = self.db.get(Restaurant, restaurant_id)
+        self.db.add(Payment(
+            table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
+            currency=restaurant.currency, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH,
+            provider="MANUAL",
+        ))
+        self.close_session(session_id, restaurant_id, staff_user_id)
 
     # ------------------------------------------------------------------ calling the waiter / asking for the bill
 

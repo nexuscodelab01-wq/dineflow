@@ -63,6 +63,23 @@ class SessionRead(BaseModel):
     rounds: list[SessionRoundRead]
     total: Decimal  # everything ordered so far, excluding cancelled rounds
     requests: list[str] = Field(default_factory=list)  # kinds the table has asked for and staff haven't answered yet
+    # So the guest page can decide whether/how to offer "Pay now" — same information checkout.vue
+    # already gets from the restaurant object.
+    stripe_account_id: str | None = None
+    stripe_charges_enabled: bool = False
+
+
+class TablePaymentRead(BaseModel):
+    """Response to paying a table's tab. `client_secret` is set when a real payment still needs
+    confirming (Stripe); `closed` is true once the session has actually been settled and closed —
+    either immediately (mock, or a card that needed no further action) or later, by the webhook."""
+
+    client_secret: str | None = None
+    closed: bool = False
+
+
+class MarkPaidRequest(BaseModel):
+    method: Literal["CASH"] = "CASH"
 
 
 # ---- staff -------------------------------------------------------------------------------------

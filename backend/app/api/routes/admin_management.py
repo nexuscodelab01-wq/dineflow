@@ -17,6 +17,7 @@ from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
 from app.schemas.table_session import (
+    MarkPaidRequest,
     OpenSessionRead,
     QrTableRead,
     RoundCreate,
@@ -635,6 +636,19 @@ def close_table_session(session_id: int, user: StaffUser, restaurant_id: Restaur
     """End a table's tab: guest passes stop working, the table goes to cleaning and its QR code is replaced."""
     try:
         service.close_session(session_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/mark-paid", status_code=status.HTTP_204_NO_CONTENT, dependencies=QR_GATE)
+def mark_table_session_paid(
+    session_id: int, data: MarkPaidRequest, user: StaffUser, restaurant_id: RestaurantId,
+    service: Annotated[TableSessionService, Depends(get_table_session_service)],
+) -> None:
+    """Record the tab as paid at the counter (cash today; `data.method` leaves room for another way
+    later) and close the session, same as an online payment does."""
+    try:
+        service.mark_paid_cash(session_id, restaurant_id, user.id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

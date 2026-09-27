@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -37,6 +37,28 @@ class AnalyticsRepository:
             filters.append(Order.status != OrderStatus.CANCELLED)
         return tuple(filters)
 
+    def _revenue(self, restaurant_id: int, start: datetime, end: datetime) -> Decimal:
+        """Completed payments in range, for this restaurant — filtered on `Payment`'s own
+        `restaurant_id`/`created_at` rather than joined through `Order`, because a table-session payment
+        (pay at table) has no `order_id` to join through at all. Also arguably more correct even for
+        online orders: revenue counted when actually collected, not when the order was first placed.
+
+        A cancelled order still never happened, though (this class's whole reason for existing), so an
+        order-payment is still excluded when its order was cancelled — the outer join keeps a
+        table-session payment (no matching order) in either way."""
+        return self.db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .select_from(Payment)
+            .outerjoin(Order, Payment.order_id == Order.id)
+            .where(
+                Payment.restaurant_id == restaurant_id,
+                Payment.created_at >= start,
+                Payment.created_at <= end,
+                Payment.status == PaymentStatus.COMPLETED,
+                or_(Payment.order_id.is_(None), Order.status != OrderStatus.CANCELLED),
+            )
+        ) or Decimal("0.00")
+
     def summary(self, restaurant_id: int, start: datetime, end: datetime) -> dict:
         filters = self._order_filter(restaurant_id, start, end)
 
@@ -44,14 +66,7 @@ class AnalyticsRepository:
             select(func.count(Order.id)).where(*filters)
         ) or 0
 
-        revenue = self.db.scalar(
-            select(func.coalesce(func.sum(Payment.amount), 0))
-            .join(Order, Payment.order_id == Order.id)
-            .where(
-                *filters,
-                Payment.status == PaymentStatus.COMPLETED,
-            )
-        ) or Decimal("0.00")
+        revenue = self._revenue(restaurant_id, start, end)
 
         pending = self.db.scalar(
             select(func.count(Order.id)).where(
@@ -100,11 +115,7 @@ class AnalyticsRepository:
 
             orders = self.db.scalar(select(func.count(Order.id)).where(*day_filters)) or 0
 
-            revenue = self.db.scalar(
-                select(func.coalesce(func.sum(Payment.amount), 0))
-                .join(Order, Payment.order_id == Order.id)
-                .where(*day_filters, Payment.status == PaymentStatus.COMPLETED)
-            ) or Decimal("0.00")
+            revenue = self._revenue(restaurant_id, day_start, day_end)
 
             points.append({
                 "date": day_start.date().isoformat(),

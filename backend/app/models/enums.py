@@ -78,3 +78,4 @@ class PaymentStatus(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     MOCK = "MOCK"
     CARD = "CARD"
+    CASH = "CASH"

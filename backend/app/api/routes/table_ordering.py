@@ -12,7 +12,16 @@ from app.core.realtime import session_topic
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.dependencies.guest import CurrentGuest
-from app.schemas.table_session import JoinRequest, JoinResponse, RequestCreate, RoundCreate, SessionRead, SessionRoundRead, TableInfo
+from app.schemas.table_session import (
+    JoinRequest,
+    JoinResponse,
+    RequestCreate,
+    RoundCreate,
+    SessionRead,
+    SessionRoundRead,
+    TableInfo,
+    TablePaymentRead,
+)
 from app.services.table_session_service import TableSessionService
 
 router = APIRouter()
@@ -76,5 +85,15 @@ def ask_for_service(data: RequestCreate, guest: CurrentGuest, service: Service) 
     """Call the waiter or ask for the bill. Returns what this table is currently waiting for."""
     try:
         return service.ask(guest.guest, guest.session, data.kind)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-session/pay", response_model=TablePaymentRead, dependencies=[rate_limit("qr-pay", 10, 600)])
+def pay_table_session(guest: CurrentGuest, service: Service) -> TablePaymentRead:
+    """Pay the table's whole tab. `closed: true` means it's already settled and the session has ended;
+    otherwise confirm `client_secret` with Stripe.js the same way checkout does."""
+    try:
+        return service.pay(guest.session)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
