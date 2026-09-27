@@ -167,9 +167,10 @@ Besides the kitchen screen, a signed-in customer's order page (`GET /api/v1/orde
 
 ## QR table ordering
 Switch it on per restaurant: `python -m app.cli features <slug> qr_table_ordering on`. Then, in the admin area, open **Table ordering** *from the restaurant's own address* (the printed codes use the address you are on): **Print table tents** prints one card per table with the restaurant's logo and a QR code. Put the cards on the tables.
-- **How a table works:** a guest scans the code → by default ordering is open only while staff have marked the table **Occupied** (Tables page) → the guest starts a shared tab (name optional), picks dishes and taps *Send to kitchen*. Each send is a round that shows on the kitchen screen as a table order. Everyone at the table sees the same tab and total. Payment is settled with staff at the end (pay-at-table comes later).
+- **How a table works:** a guest scans the code → by default ordering is open only while staff have marked the table **Occupied** (Tables page) → the guest starts a shared tab (name optional), picks dishes and taps *Send to kitchen*. Each send is a round that shows on the kitchen screen as a table order. Everyone at the table sees the same tab and total.
 - **Waiter and bill:** on the *Our table* tab a guest can tap **Call a waiter** or **Ask for the bill** (the bill needs at least one round). Staff see these at the top of the **Table ordering** page under *Waiting for you*, with a count badge on that menu item on every admin page, and tap **Done** when handled; the guest's button resets by itself. Tapping twice is one request. Closing a tab clears its requests.
-- **Closing:** when the party leaves, click **Close tab & clean table** (Table ordering page). Guest phones stop working, the table goes to *Cleaning*, and its QR code is replaced, so a photo of the old code is useless. **Replace code** does the same for one table without closing anything (lost tent, suspected abuse); reprint afterwards.
+- **Paying the tab**: a guest can tap **Pay now** at any time once the total is above zero — no need to ask for the bill first. Under `PAYMENT_PROVIDER=stripe`, this is a real charge on the restaurant's own connected account, same Payment Element and webhook-confirmation flow as online checkout (see *Payments* below) — the tab closes once the webhook lands, not when the browser thinks it's done. Staff can also mark a tab **paid (cash)** from the waiter view for a counter payment; no Stripe involvement, closes immediately. Either way, one real payment is one `Payment` row (`table_session_id` set, `order_id` empty) — not split across the rounds it covers.
+- **Closing:** when the party leaves without a recorded payment (walked out, comped), click **Close tab & clean table** (Table ordering page) — this alone doesn't touch payment status. Guest phones stop working, the table goes to *Cleaning*, and its QR code is replaced, so a photo of the old code is useless. **Replace code** does the same for one table without closing anything (lost tent, suspected abuse); reprint afterwards.
 - **Policy:** `restaurants.qr_access_policy` is `SEATED` (default) or `OPEN` (anyone with the code can order at any time). There is no settings screen for it yet; change it in the database.
 - **Limits:** one round can't exceed `QR_MAX_ORDER_TOTAL` (default 500); guests are rate-limited per IP.
 
@@ -305,8 +306,11 @@ Element handles the challenge itself).
 - A **failed** payment leaves the order `PENDING` rather than cancelling it, so the customer can retry;
   there is currently no UI to retry the *same* order from a reload, only to place a new one (a known gap,
   not yet a problem while the failure rate is Stripe's test-mode declined-card scenarios only).
-- **Refunds don't exist yet** (Sprint 4 Phase 2) — cancelling an order in the admin panel does not touch
-  its payment.
+- **Refunds don't exist yet** (Sprint 4 Phase 2) — cancelling an order (or a table payment) does not
+  touch its payment.
+- **Dine-in revenue is no longer invisible** (Sprint 4 Phase 3) — `today_revenue` and the revenue trend
+  now count table-session payments too, filtered on `Payment`'s own `restaurant_id`/`created_at` rather
+  than joined through `Order` (a table-session payment has no `order_id` to join through at all).
 - `STRIPE_SECRET_KEY` here is a full secret key (`sk_test_...`/`sk_live_...`) for simplicity while
   building. Before real money moves, switch to a [restricted key](https://docs.stripe.com/keys.md#manage-your-api-keys)
   (`rk_live_...`) scoped to only the resources this app actually calls (PaymentIntents, and the v2
