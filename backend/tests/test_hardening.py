@@ -215,6 +215,7 @@ GOOD = dict(
     APP_DATABASE_URL="postgresql+psycopg://app_restricted:s3cret-prod-2@db:5432/app",   # not the environment's
     EMAIL_BACKEND="smtp",
     STORAGE_BACKEND="s3",
+    PAYMENT_PROVIDER="stripe",
 )
 
 
@@ -242,6 +243,13 @@ def test_production_refuses_email_that_only_logs_and_storage_that_disappears() -
     # Case shouldn't matter — an operator typing "Console" or "LOCAL" is still unsafe.
     with pytest.raises(RuntimeError, match="EMAIL_BACKEND=console"):
         Settings(**{**GOOD, "EMAIL_BACKEND": "Console"}).assert_production_ready()
+
+
+def test_production_refuses_a_payment_provider_that_always_pretends_to_succeed() -> None:
+    with pytest.raises(RuntimeError, match="PAYMENT_PROVIDER=mock"):
+        Settings(**{**GOOD, "PAYMENT_PROVIDER": "mock"}).assert_production_ready()
+    with pytest.raises(RuntimeError, match="PAYMENT_PROVIDER=mock"):
+        Settings(**{**GOOD, "PAYMENT_PROVIDER": "Mock"}).assert_production_ready()
 
 
 def test_row_level_security_is_reported_as_enforced_only_with_a_different_restricted_role() -> None:

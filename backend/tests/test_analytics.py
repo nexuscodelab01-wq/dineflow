@@ -85,6 +85,7 @@ def test_analytics_endpoint(client: TestClient, db: Session) -> None:
     db.add(
         Payment(
             order_id=order.id,
+            restaurant_id=restaurant.id,
             amount=Decimal("16.50"),
             status=PaymentStatus.COMPLETED,
             payment_method=PaymentMethod.MOCK,
@@ -215,7 +216,7 @@ def _paid_order(w, *, number, status, total=Decimal("22.00")):
     )
     w.db.add(order)
     w.db.flush()
-    w.db.add(Payment(order_id=order.id, amount=total, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.MOCK))
+    w.db.add(Payment(order_id=order.id, restaurant_id=w.rid, amount=total, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.MOCK))
     w.db.commit()
     return order
 

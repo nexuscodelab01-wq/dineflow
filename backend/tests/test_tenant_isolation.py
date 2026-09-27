@@ -49,6 +49,10 @@ PUBLIC = {
     ("GET", "/restaurants/{identifier}/pickup-slots"),
     ("GET", "/tenant"),
     ("GET", "/reservations/actions/{token}"), ("POST", "/reservations/actions/{token}/confirm"), ("POST", "/reservations/actions/{token}/cancel"),
+    # Server-to-server: trusted by Stripe's signature, not a tenant claim — it names its own restaurant
+    # (via the payment/account the event is about) and only ever touches the one row that matches.
+    # See test_webhooks.py for cross-tenant safety and signature-rejection coverage.
+    ("POST", "/webhooks/stripe"),
 }
 # Identity routes: tenant comes from the credentials / an explicit restaurant, see test_tenancy_auth.py.
 AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout"), ("GET", "/auth/me"), ("GET", "/auth/my-restaurants"),
