@@ -234,6 +234,54 @@ Two behaviours worth knowing:
 
 A pause stops pre-orders too — "stop taking orders" means that. The automatic busy cap does not, since a slot next Tuesday isn't in tonight's queue.
 
+## Payments (Stripe Connect)
+
+**Setting up a test-mode Stripe account** (see ROADMAP for why Connect, and the "direct charge" design):
+1. Create a free account at stripe.com — no business verification needed for test mode. Keep **Test mode**
+   switched on (orange badge, top right).
+2. **Connect → Get started** (or **Connect → Settings**), choose "Platform or marketplace" — this switches
+   Connect on for your platform account. You don't need to finish your own onboarding.
+3. **Developers → API keys**: copy the test **Publishable key** (`pk_test_...`) and **Secret key**
+   (`sk_test_...`).
+4. Set in `.env`: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY=sk_test_...`,
+   `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...` (same value as `STRIPE_PUBLISHABLE_KEY`, just also
+   read by the frontend), then restart the backend and frontend containers.
+5. **Webhook secret**: `STRIPE_WEBHOOK_SECRET` verifies a request claiming to be Stripe actually is.
+   For local development, install the Stripe CLI and run
+   `stripe listen --forward-to localhost:8000/api/v1/webhooks/stripe` — it prints a `whsec_...` secret;
+   put that in `.env` as `STRIPE_WEBHOOK_SECRET` and restart the backend. In production, register the
+   webhook URL in the Stripe dashboard (**Developers → Webhooks**) for `payment_intent.succeeded`,
+   `payment_intent.payment_failed` and `account.updated` (with "Listen to events on Connected accounts"
+   switched on, since a restaurant's own charges are events on *its* connected account, not the
+   platform's), and use the signing secret it gives you.
+
+**Connecting a restaurant**: Settings → Payments → *Connect with Stripe*. This redirects to a
+Stripe-hosted onboarding form (an Express account is created on first use) and back. Nothing is
+enabled until Stripe's own `account.updated` webhook confirms it — `stripe_charges_enabled` on the
+restaurant, shown as "Connected" on that same page. If onboarding is abandoned partway, the button
+becomes "Finish connecting with Stripe" and reuses the same account.
+
+**Checkout**: `POST /orders` returns a `client_secret` whenever a real payment still needs confirming
+(a positive total, `PAYMENT_PROVIDER=stripe`) — the order already exists as `PENDING`. The checkout page
+mounts a Stripe Payment Element for it and confirms the charge directly with Stripe; the order itself is
+flipped to `CONFIRMED` by the `payment_intent.succeeded` webhook, not by the browser, so a customer
+closing the tab mid-payment can't leave an inconsistent state — the webhook is the only thing that ever
+confirms an order once a real provider is in use. Test cards: `4242 4242 4242 4242` (succeeds, any future
+expiry/any CVC), `4000000000000002` (declined), `4000002500003155` (requires 3D Secure — the Payment
+Element handles the challenge itself).
+
+**Worth knowing:**
+- `PAYMENT_PROVIDER` defaults to `mock` (always succeeds instantly, no Stripe involved at all) —
+  every automated test runs against this, never against Stripe. `assert_production_ready()` refuses to
+  boot a production deployment with `PAYMENT_PROVIDER=mock`.
+- A **failed** payment leaves the order `PENDING` rather than cancelling it, so the customer can retry;
+  there is currently no UI to retry the *same* order from a reload, only to place a new one (a known gap,
+  not yet a problem while the failure rate is Stripe's test-mode declined-card scenarios only).
+- **Refunds don't exist yet** (Sprint 4 Phase 2) — cancelling an order in the admin panel does not touch
+  its payment.
+- **Pay-at-table doesn't exist yet** (Sprint 4 Phase 3) — `table_session_service.py` has no payment
+  concept, so dine-in orders placed from a QR table session still report zero revenue.
+
 ## Staff management
 **Staff** (admin sidebar, admin only) invites someone by email, first/last name and role (Admin or
 Staff). It reuses the same invite-link mechanism as an owner's own account: a hashed, single-use, 7-day
