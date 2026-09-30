@@ -34,7 +34,7 @@ from app.services.coupon_service import CouponService
 from app.services.feature_service import FeatureService
 from app.services.scheduling_service import SchedulingService
 from app.services.notifications import notify_order_placed
-from app.services.payments import get_payment_provider
+from app.services.payments import get_payment_provider, reverse_payment
 from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger(__name__)
@@ -274,6 +274,22 @@ class OrderService:
         notify_order_placed(self.db, restaurant, order, _email_lines_from_order(order))
         # Delivered to kitchen screens only if this transaction commits.
         publish(self.db, kitchen_topic(order.restaurant_id), "order.created", {"order_id": order.id, "order_number": order.order_number})
+
+    def refund_payment(self, order: Order, payment: Payment, *, user_id: int | None) -> None:
+        """Called when staff cancel an order that already has a payment — reverses it (refunds a
+        completed charge, or cancels one still awaiting confirmation so a stray later completion can't
+        charge a dead order). Best-effort: a provider failure is recorded on the payment
+        (`failure_message`) but never blocks the cancel itself — cancelling is a staff action that
+        should always succeed at the app level, even if the payment side needs a human to reconcile
+        (a narrow, known edge case: the card finishes confirming in the moment between staff clicking
+        cancel and this running). The caller commits."""
+        restaurant = self.restaurants.get_by_id(payment.restaurant_id)
+        result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
+        if not result.success:
+            logger.warning(
+                "Payment reversal failed for order %s (payment %s, cancelled by user %s): %s",
+                order.order_number, payment.id, user_id, result.message,
+            )
 
     def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem]) -> Decimal:
         """Add the ordered lines to `order` (checking availability and modifiers). Returns the subtotal.

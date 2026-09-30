@@ -12,11 +12,12 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.realtime import kitchen_topic, publish, publish_order_change
 from app.core.storage import delete_owned_url
 from app.models.category import Category
-from app.models.enums import OrderStatus, TableStatus
+from app.models.enums import OrderStatus, PaymentStatus, TableStatus
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
 from app.models.order_item import OrderItem
+from app.models.payment import Payment
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
@@ -55,6 +56,7 @@ from app.schemas.restaurant import RestaurantRead
 from app.services.feature_service import FeatureService
 from app.services.loyalty_service import LoyaltyService
 from app.services.menu_service import MenuService
+from app.services.order_service import OrderService
 from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger(__name__)
@@ -288,6 +290,17 @@ class AdminService:
         publish_order_change(self.db, order, "order.status", {"status": data.status.value})
         if data.status == OrderStatus.COMPLETED and self.features.is_enabled(restaurant_id, "loyalty"):
             self.loyalty.earn_for_completed_order(order, order.restaurant)
+        if data.status == OrderStatus.CANCELLED:
+            # Reverses whatever payment exists: refunds a completed one, cancels one still awaiting
+            # confirmation. Best-effort — see OrderService.refund_payment's docstring for why this
+            # never blocks the cancel itself.
+            payment = self.db.scalar(
+                select(Payment).where(Payment.order_id == order.id, Payment.status.notin_(
+                    (PaymentStatus.FAILED, PaymentStatus.REFUNDED)
+                ))
+            )
+            if payment is not None:
+                OrderService(self.db).refund_payment(order, payment, user_id=user.id)
         self.db.commit()
         logger.info("Order status updated: %s -> %s by user %s", previous.value, data.status.value, user.id)
         return self.get_order(order_id, restaurant_id)

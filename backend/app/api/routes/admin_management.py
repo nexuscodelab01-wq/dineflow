@@ -653,6 +653,19 @@ def mark_table_session_paid(
         raise raise_http_for_app_error(exc) from exc
 
 
+@router.post("/table-sessions/{session_id}/refund", status_code=status.HTTP_204_NO_CONTENT, dependencies=QR_GATE)
+def refund_table_session(
+    session_id: int, user: StaffUser, restaurant_id: RestaurantId,
+    service: Annotated[TableSessionService, Depends(get_table_session_service)],
+) -> None:
+    """Refund a closed tab's payment in full. Reachable by session id only for now — there's no admin
+    page listing past sessions yet, so nothing in the UI calls this route today."""
+    try:
+        service.refund_tab(session_id, restaurant_id, user.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
 @router.get("/waiter/floor", response_model=list[WaiterTableRead], dependencies=QR_GATE)
 def waiter_floor(_: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[WaiterTableRead]:
     """Every table with its live tab, waiting requests and finished-but-not-served rounds."""

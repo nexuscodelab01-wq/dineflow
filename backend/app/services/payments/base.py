@@ -47,7 +47,15 @@ class PaymentProvider(ABC):
         for another provider); a provider that has no such concept ignores it.
         """
 
-    def refund(self, *, provider_intent_id: str, amount: Decimal) -> RefundResult:
-        """Refund all or part of a completed payment. Implemented in Sprint 4 Phase 2 — every provider
-        raises until then, so a caller can't silently ship a refund button that does nothing."""
-        raise NotImplementedError("Refunds land in Sprint 4 Phase 2")
+    @abstractmethod
+    def refund(
+        self, *, provider_intent_id: str, amount: Decimal, currency: str, connected_account_id: str | None
+    ) -> RefundResult:
+        """Refund a *completed* payment (in full — partial refunds aren't built yet)."""
+
+    @abstractmethod
+    def cancel_intent(self, *, provider_intent_id: str, connected_account_id: str | None) -> RefundResult:
+        """Cancel a payment that hasn't completed yet (still PENDING/REQUIRES_ACTION) — nothing to refund
+        since nothing was charged, but without this a stray later confirmation (e.g. a customer finishing
+        a 3D Secure challenge after staff already cancelled the order) would still charge the card for an
+        order that no longer exists."""

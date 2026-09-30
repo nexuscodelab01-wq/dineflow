@@ -38,7 +38,7 @@ from app.schemas.table_session import (
 )
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
-from app.services.payments import get_payment_provider
+from app.services.payments import get_payment_provider, reverse_payment
 
 FEATURE = "qr_table_ordering"
 CLOSED_STATUSES = {OrderStatus.CANCELLED}
@@ -337,6 +337,29 @@ class TableSessionService:
             provider="MANUAL",
         ))
         self.close_session(session_id, restaurant_id, staff_user_id)
+
+    def refund_tab(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+        """Refund a closed tab's payment in full (online card or cash — either way). API-level only for
+        now: there's no admin page listing past sessions to reach this from yet, so it's reachable by id
+        but not wired into any UI. Unlike OrderService.refund_payment (best-effort, never blocks a
+        cancel), this is its own explicit action, so a provider failure is raised, not swallowed."""
+        session = self.db.get(TableSession, session_id)
+        if session is None or session.restaurant_id != restaurant_id:
+            raise NotFoundError("Session not found")
+        if session.state != CLOSED:
+            raise AppError("Only a closed tab can be refunded")
+        payment = self.db.scalar(
+            select(Payment)
+            .where(Payment.table_session_id == session.id, Payment.status == PaymentStatus.COMPLETED)
+            .order_by(Payment.id.desc())
+        )
+        if payment is None:
+            raise AppError("There is no completed payment on this tab to refund")
+        restaurant = self.db.get(Restaurant, restaurant_id)
+        result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
+        if not result.success:
+            raise AppError(result.message or "Refund failed")
+        self.db.commit()
 
     # ------------------------------------------------------------------ calling the waiter / asking for the bill
 

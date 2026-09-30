@@ -17,7 +17,7 @@ import stripe
 
 from app.core.config import settings
 from app.models.enums import PaymentStatus
-from app.services.payments.base import IntentResult, PaymentProvider
+from app.services.payments.base import IntentResult, PaymentProvider, RefundResult
 
 
 def _minor_units(amount: Decimal, currency: str) -> int:
@@ -65,3 +65,26 @@ class StripePaymentProvider(PaymentProvider):
             provider_intent_id=intent.id,
             client_secret=intent.client_secret,
         )
+
+    def refund(
+        self, *, provider_intent_id: str, amount: Decimal, currency: str, connected_account_id: str | None
+    ) -> RefundResult:
+        try:
+            refund = self.client.v1.refunds.create(
+                {"payment_intent": provider_intent_id, "amount": _minor_units(amount, currency)},
+                # A refund on a direct charge must be created in the connected account's own context,
+                # same as the original charge — see create_intent above.
+                options={"stripe_account": connected_account_id},
+            )
+        except stripe.StripeError as exc:
+            return RefundResult(success=False, message=str(exc.user_message or exc))
+        return RefundResult(success=True, provider_reference=refund.id)
+
+    def cancel_intent(self, *, provider_intent_id: str, connected_account_id: str | None) -> RefundResult:
+        try:
+            self.client.v1.payment_intents.cancel(
+                provider_intent_id, options={"stripe_account": connected_account_id}
+            )
+        except stripe.StripeError as exc:
+            return RefundResult(success=False, message=str(exc.user_message or exc))
+        return RefundResult(success=True)

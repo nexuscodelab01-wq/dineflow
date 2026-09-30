@@ -10,7 +10,7 @@ import secrets
 from decimal import Decimal
 
 from app.models.enums import PaymentStatus
-from app.services.payments.base import IntentResult, PaymentProvider
+from app.services.payments.base import IntentResult, PaymentProvider, RefundResult
 
 
 class MockPaymentProvider(PaymentProvider):
@@ -29,4 +29,10 @@ class MockPaymentProvider(PaymentProvider):
             provider_intent_id=f"mock_{secrets.token_hex(8)}",
         )
 
-    # refund() is inherited from PaymentProvider (raises NotImplementedError) — lands in Phase 2.
+    def refund(
+        self, *, provider_intent_id: str, amount: Decimal, currency: str, connected_account_id: str | None
+    ) -> RefundResult:
+        return RefundResult(success=True, provider_reference=f"mock_refund_{secrets.token_hex(8)}")
+
+    def cancel_intent(self, *, provider_intent_id: str, connected_account_id: str | None) -> RefundResult:
+        return RefundResult(success=True)
