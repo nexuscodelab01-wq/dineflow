@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.core.tenancy import site_url
 from app.db.session import get_db
@@ -17,6 +18,7 @@ from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.schemas.features import AuditLogRead, FeatureRead, FeatureSet
 from app.schemas.restaurant import RestaurantRead, TenantCreateResponse
+from app.services.domain_verification import verify_dns
 from app.services.feature_service import FeatureService
 from app.services.tenant_provisioning import TEMPLATES, provision_tenant
 
@@ -73,21 +75,22 @@ def list_templates(_: PlatformAdmin) -> list[str]:
 
 @router.post("/restaurants/{restaurant_id}/verify-domain", response_model=RestaurantRead)
 def verify_domain(restaurant_id: int, admin: PlatformAdmin, db: Annotated[Session, Depends(get_db)]) -> RestaurantRead:
-    """Mark the restaurant's custom domain as verified.
+    """Verify the restaurant's custom domain actually points at this platform, and mark it verified.
 
-    A stand-in for real DNS/TLS automation (ROADMAP, Stage E): there is no actual DNS lookup here yet, so
-    this only records that a platform admin has checked it by hand. Replace with a real check before
-    depending on it for anything security-sensitive.
+    A real DNS check (see `app.services.domain_verification`), not just a platform admin's say-so: the
+    domain must currently resolve to the same place PLATFORM_DOMAIN does.
     """
     restaurant = db.get(Restaurant, restaurant_id)
     if restaurant is None:
         raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
     if not restaurant.custom_domain:
         raise raise_http_for_app_error(AppError("This restaurant has no custom domain set"))
+    if not verify_dns(restaurant.custom_domain, settings.PLATFORM_DOMAIN):
+        raise raise_http_for_app_error(AppError("This domain doesn't point at this platform yet — check its DNS and try again"))
     restaurant.domain_verified_at = datetime.now(UTC)
     db.add(AuditLog(
         restaurant_id=restaurant.id, actor_user_id=admin.id, actor_label=admin.email,
-        action="domain.verified", target=restaurant.custom_domain, details={"mock": True},
+        action="domain.verified", target=restaurant.custom_domain,
     ))
     db.commit()
     return RestaurantRead.model_validate(restaurant)

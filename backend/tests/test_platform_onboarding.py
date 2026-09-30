@@ -1,4 +1,6 @@
-"""Platform console: creating a restaurant over the API, and custom domains (mocked verification)."""
+"""Platform console: creating a restaurant over the API, and custom domains (DNS-verified)."""
+
+import socket
 
 import pytest
 
@@ -105,8 +107,19 @@ def test_two_restaurants_cannot_share_a_custom_domain(world):
     assert clash.status_code == 409
 
 
-def test_changing_the_domain_clears_verification_and_a_platform_admin_can_verify_it(world):
+def dns_points_home(monkeypatch, platform_domain="platform.test"):
+    """Make every hostname resolve to the same fake IP, so the real DNS check in `verify_domain` passes —
+    same idea as `_payment_provider_pinned_to_mock`: pin the real-world dependency, don't hit real DNS."""
+    from app.core.config import settings
+    from app.services import domain_verification
+
+    monkeypatch.setattr(settings, "PLATFORM_DOMAIN", platform_domain)
+    monkeypatch.setattr(domain_verification.socket, "getaddrinfo", lambda *a, **k: [(None, None, None, "", ("203.0.113.1", 0))])
+
+
+def test_changing_the_domain_clears_verification_and_a_platform_admin_can_verify_it(world, monkeypatch):
     w = world
+    dns_points_home(monkeypatch)
     w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"custom_domain": "order.alpha-kitchen.com"})
 
     verified = w.client.post(f"{API}/platform/restaurants/{w.a.rid}/verify-domain", headers=header(w.boss))
@@ -126,6 +139,49 @@ def test_only_a_platform_admin_can_verify_a_domain(world):
 def test_verifying_a_restaurant_with_no_domain_is_refused(world):
     r = world.client.post(f"{API}/platform/restaurants/{world.a.rid}/verify-domain", headers=header(world.boss))
     assert r.status_code == 400
+
+
+def test_verifying_a_domain_that_doesnt_point_here_yet_is_refused(world, monkeypatch):
+    w = world
+    dns_points_home(monkeypatch)
+    w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"custom_domain": "order.alpha-kitchen.com"})
+    # Override with a resolver that puts the custom domain somewhere else — it doesn't point at us.
+    from app.services import domain_verification
+    monkeypatch.setattr(domain_verification.socket, "getaddrinfo", lambda host, *a, **k: [
+        (None, None, None, "", ("203.0.113.1" if host == "platform.test" else "198.51.100.9", 0))
+    ])
+
+    r = w.client.post(f"{API}/platform/restaurants/{w.a.rid}/verify-domain", headers=header(w.boss))
+    assert r.status_code == 400
+    assert w.db.get(Restaurant, w.a.rid).domain_verified_at is None
+
+
+def test_a_domain_that_doesnt_resolve_at_all_fails_verification(world, monkeypatch):
+    w = world
+    dns_points_home(monkeypatch)
+    w.client.patch(f"{API}/admin/settings", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin), json={"custom_domain": "order.alpha-kitchen.com"})
+    from app.services import domain_verification
+
+    def blows_up(host, *a, **k):
+        raise socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr(domain_verification.socket, "getaddrinfo", blows_up)
+
+    r = w.client.post(f"{API}/platform/restaurants/{w.a.rid}/verify-domain", headers=header(w.boss))
+    assert r.status_code == 400
+
+
+# ------------------------------------------------------------------ verify_dns itself
+
+def test_verify_dns_matches_on_shared_ip(monkeypatch):
+    from app.services.domain_verification import verify_dns
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(None, None, None, "", ("203.0.113.1", 0))])
+    assert verify_dns("order.example.com", "platform.test") is True
+
+
+def test_verify_dns_fails_when_platform_domain_is_unset():
+    from app.services.domain_verification import verify_dns
+    assert verify_dns("order.example.com", "") is False
 
 
 # ------------------------------------------------------------------ branding colours (after creation)
