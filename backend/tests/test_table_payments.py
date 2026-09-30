@@ -162,6 +162,57 @@ def test_marking_an_empty_tab_paid_is_refused(world):
     assert r.status_code == 400
 
 
+# ------------------------------------------------------------------ refunding a tab (API-level only — no UI yet)
+
+def refund(w, t, sid):
+    return w.client.post(f"{API}/admin/table-sessions/{sid}/refund", params={"restaurant_id": t.rid}, headers=header(t.staff))
+
+
+def test_refunding_a_closed_paid_tab_marks_its_payment_refunded(world):
+    w = world
+    sam = join(w, w.a, "Sam")
+    send(w, w.a, sam, qty=1)
+    sid = session_id_for(w, w.a)
+    assert pay(w, sam).status_code == 200
+
+    r = refund(w, w.a, sid)
+    assert r.status_code == 204, r.text
+    payment = w.db.query(Payment).filter_by(table_session_id=sid).one()
+    assert payment.status == PaymentStatus.REFUNDED
+
+
+def test_refusing_to_refund_a_tab_thats_still_open(world):
+    w = world
+    join(w, w.a, "Sam")
+    sid = session_id_for(w, w.a)
+    r = refund(w, w.a, sid)
+    assert r.status_code == 400
+
+
+def test_refusing_to_refund_a_tab_with_no_completed_payment(world):
+    w = world
+    sam = join(w, w.a, "Sam")
+    send(w, w.a, sam, qty=1)
+    sid = session_id_for(w, w.a)
+    staff = header(w.a.staff)
+    # Closed without ever being paid (e.g. a comped table).
+    assert w.client.post(f"{API}/admin/table-sessions/{sid}/close", params={"restaurant_id": w.a.rid}, headers=staff).status_code == 204
+
+    r = refund(w, w.a, sid)
+    assert r.status_code == 400
+
+
+def test_only_the_restaurants_own_staff_can_refund_its_tabs(world):
+    w = world
+    sam = join(w, w.a, "Sam")
+    send(w, w.a, sam, qty=1)
+    sid = session_id_for(w, w.a)
+    assert pay(w, sam).status_code == 200
+
+    r = w.client.post(f"{API}/admin/table-sessions/{sid}/refund", params={"restaurant_id": w.b.rid}, headers=header(w.b.staff))
+    assert r.status_code == 404
+
+
 # ------------------------------------------------------------------ the actual dine-in-revenue fix
 
 def test_a_paid_table_session_counts_toward_todays_revenue(world):

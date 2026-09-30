@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -28,9 +27,14 @@ def test_the_mock_provider_settles_instantly_and_refuses_a_non_positive_amount()
     assert bad.status == PaymentStatus.FAILED and bad.failure_message
 
 
-def test_refunding_is_not_built_yet_and_says_so_rather_than_pretending():
-    with pytest.raises(NotImplementedError):
-        MockPaymentProvider().refund(provider_intent_id="mock_x", amount=Decimal("1.00"))
+def test_the_mock_provider_can_refund_and_cancel():
+    provider = MockPaymentProvider()
+
+    refunded = provider.refund(provider_intent_id="mock_x", amount=Decimal("12.50"), currency="usd", connected_account_id=None)
+    assert refunded.success and refunded.provider_reference
+
+    cancelled = provider.cancel_intent(provider_intent_id="mock_x", connected_account_id=None)
+    assert cancelled.success
 
 
 def test_the_provider_factory_follows_the_payment_provider_setting(monkeypatch):

@@ -11,8 +11,9 @@ from app.core.security import create_access_token, hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.category import Category
-from app.models.enums import ReservationStatus, RoleName, TableStatus
+from app.models.enums import PaymentStatus, ReservationStatus, RoleName, TableStatus
 from app.models.menu_item import MenuItem
+from app.models.payment import Payment
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_table import RestaurantTable
@@ -262,6 +263,43 @@ def test_cancelled_orders_cannot_be_reopened_and_other_restaurants_cannot_touch_
     assert w.client.get(url(w, f"/orders/{oid}", restaurant=w.b), headers=w.admin_b).status_code == 404
     assert w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "CANCELLED", "notes": "Out of stock"}).status_code == 200
     assert w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "PREPARING"}).status_code == 400
+
+
+def test_cancelling_a_confirmed_order_refunds_its_completed_payment(world):
+    w = world
+    oid = place_order(w).json()["id"]
+    r = w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "CANCELLED"})
+    assert r.status_code == 200
+    payment = w.db.query(Payment).filter(Payment.order_id == oid).one()
+    assert payment.status == PaymentStatus.REFUNDED
+
+
+def test_cancelling_an_order_whose_payment_never_completed_cancels_it_instead(world):
+    """A payment still REQUIRES_ACTION (e.g. awaiting 3D Secure) has nothing to refund — but the intent
+    still needs cancelling, so a stray later confirmation can't charge the card for a dead order."""
+    w = world
+    oid = place_order(w).json()["id"]
+    payment = w.db.query(Payment).filter(Payment.order_id == oid).one()
+    payment.status = PaymentStatus.REQUIRES_ACTION
+    payment.provider_intent_id = "pi_fake_pending"
+    w.db.commit()
+
+    r = w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "CANCELLED"})
+    assert r.status_code == 200
+    w.db.refresh(payment)
+    assert payment.status == PaymentStatus.FAILED
+    assert payment.failure_message == "Cancelled before payment completed"
+
+
+def test_cancelling_an_order_with_no_payment_left_to_reverse_is_harmless(world):
+    w = world
+    oid = place_order(w).json()["id"]
+    payment = w.db.query(Payment).filter(Payment.order_id == oid).one()
+    w.db.delete(payment)
+    w.db.commit()
+
+    r = w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json={"status": "CANCELLED"})
+    assert r.status_code == 200
 
 
 def test_kitchen_board_groups_active_orders(world):
