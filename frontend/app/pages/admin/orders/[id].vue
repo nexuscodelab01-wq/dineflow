@@ -7,11 +7,15 @@ definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
 const route = useRoute()
 const admin = useAdminStore()
+const ui = useUiStore()
 const order = ref<Order | null>(null)
 const loading = ref(true)
 const error = ref('')
+const cancelling = ref(false)
 
 const orderId = computed(() => Number(route.params.id))
+// Mirrors STAFF_ALLOWED_TRANSITIONS on the backend — everything but a terminal state can still be cancelled.
+const cancellable = computed(() => !!order.value && !['CANCELLED', 'COMPLETED', 'DELIVERED'].includes(order.value.status))
 
 async function load() {
   await admin.initialize()
@@ -33,6 +37,31 @@ onMounted(load)
 async function setStatus(status: OrderStatus) {
   if (!admin.restaurantId || !order.value) return
   order.value = await updateOrderStatus(admin.restaurantId, order.value.id, status)
+}
+
+async function cancelOrder() {
+  if (!admin.restaurantId || !order.value) return
+  const paid = order.value.payments.some((p: { status: string }) => p.status === 'COMPLETED')
+  const ok = await ui.confirm({
+    title: 'Cancel this order?',
+    message: paid
+      ? 'The customer already paid — this refunds their card in full and cannot be undone.'
+      : 'This cannot be undone.',
+    confirmLabel: 'Cancel order',
+    destructive: true,
+  })
+  if (!ok) return
+  cancelling.value = true
+  try {
+    order.value = await updateOrderStatus(admin.restaurantId, order.value.id, 'CANCELLED')
+    ui.success(paid ? 'Order cancelled and refunded' : 'Order cancelled')
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not cancel the order')
+  }
+  finally {
+    cancelling.value = false
+  }
 }
 </script>
 
@@ -56,6 +85,14 @@ async function setStatus(status: OrderStatus) {
           <AppButton v-if="order.status === 'CONFIRMED'" @click="setStatus('PREPARING')">Start preparing</AppButton>
           <AppButton v-if="order.status === 'PREPARING'" @click="setStatus('READY')">Mark ready</AppButton>
           <AppButton v-if="order.status === 'READY'" @click="setStatus('COMPLETED')">Complete</AppButton>
+          <button
+            v-if="cancellable"
+            class="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+            :disabled="cancelling"
+            @click="cancelOrder"
+          >
+            {{ cancelling ? 'Cancelling…' : 'Cancel order' }}
+          </button>
         </div>
       </section>
 
@@ -65,6 +102,7 @@ async function setStatus(status: OrderStatus) {
         <p v-if="order.notes" class="mt-4 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-950">
           <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
         </p>
+        <p v-if="order.payments.length" class="mt-4 text-sm text-ink-muted">Payment: {{ order.payments[0].status }}</p>
         <p class="mt-4 font-semibold">Total: {{ formatCurrency(Number(order.total)) }}</p>
       </section>
     </div>
