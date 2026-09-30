@@ -124,7 +124,7 @@ def cancel_by_dedupe_key(db: Session, dedupe_key: str) -> bool:
         text("UPDATE jobs SET status = 'cancelled', finished_at = now() WHERE dedupe_key = :key AND status = 'queued'"),
         {"key": dedupe_key},
     )
-    return bool(result.rowcount)
+    return bool(result.rowcount)  # type: ignore[attr-defined]  # a text() UPDATE always returns a CursorResult
 
 
 def requeue_stuck(db: Session, stuck_minutes: int) -> int:
@@ -142,4 +142,4 @@ def requeue_stuck(db: Session, stuck_minutes: int) -> int:
         ),
         {"minutes": stuck_minutes},
     )
-    return result.rowcount or 0
+    return result.rowcount or 0  # type: ignore[attr-defined]  # a text() UPDATE always returns a CursorResult

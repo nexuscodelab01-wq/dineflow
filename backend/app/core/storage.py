@@ -135,7 +135,7 @@ def tenant_prefix(restaurant_id: int, kind: str) -> str:
 
 
 def belongs_to_tenant(key: str, restaurant_id: int) -> bool:
-    return key.startswith(f"tenants/{restaurant_id}/") or key.startswith(f"menu/r{restaurant_id}-")  # legacy layout
+    return key.startswith((f"tenants/{restaurant_id}/", f"menu/r{restaurant_id}-"))  # second form is legacy
 
 
 def thumb_key(key: str) -> str | None:
@@ -155,5 +155,5 @@ def delete_owned_url(url: str | None, restaurant_id: int) -> None:
         storage.delete(key)
         if (sibling := thumb_key(key)) is not None:
             storage.delete(sibling)
-    except Exception:  # noqa: BLE001 — cleanup must never break the request that triggered it
+    except Exception:
         logger.warning("Could not delete stored file %s", url, exc_info=True)

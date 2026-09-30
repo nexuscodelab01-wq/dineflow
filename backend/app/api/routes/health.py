@@ -29,7 +29,7 @@ def readiness(db: Annotated[Session, Depends(get_db)]) -> dict[str, str]:
     """Readiness probe: is the app able to serve traffic (i.e. can it reach the database)?"""
     try:
         db.execute(text("SELECT 1"))
-    except Exception as exc:  # noqa: BLE001 — any failure means "not ready"
+    except Exception as exc:
         logger.error("Readiness check failed: %s", exc)
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
     return {"status": "ready", "database": "ok"}

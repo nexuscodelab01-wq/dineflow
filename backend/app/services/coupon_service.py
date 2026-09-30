@@ -63,7 +63,7 @@ class CouponService:
     def compute_discount(self, coupon: Coupon, subtotal: Decimal) -> Decimal:
         """Never more than the subtotal — a coupon reduces the bill, it never pays money out."""
         if coupon.discount_type == CouponDiscountType.PERCENT:
-            discount = (subtotal * coupon.discount_value / Decimal("100")).quantize(Decimal("0.01"))
+            discount = (subtotal * coupon.discount_value / Decimal(100)).quantize(Decimal("0.01"))
             if coupon.max_discount_amount is not None:
                 discount = min(discount, coupon.max_discount_amount)
         else:

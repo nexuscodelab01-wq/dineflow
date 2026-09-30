@@ -6,11 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.tenancy import ensure_customer_of, ensure_customer_of_identifier
-from app.services.feature_service import FeatureService
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
-from app.db.session import get_db
 from app.core.rate_limit import rate_limit
+from app.core.tenancy import ensure_customer_of, ensure_customer_of_identifier
+from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.reservation import (
@@ -18,7 +17,11 @@ from app.schemas.reservation import (
     ReservationCreate,
     ReservationRead,
 )
-from app.services.reservation_service import DEFAULT_DURATION_MINUTES, ReservationService
+from app.services.feature_service import FeatureService
+from app.services.reservation_service import (
+    DEFAULT_DURATION_MINUTES,
+    ReservationService,
+)
 
 router = APIRouter()
 

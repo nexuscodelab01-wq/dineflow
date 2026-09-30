@@ -9,10 +9,26 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
-from app.core.exceptions import AppError, ForbiddenError, NotFoundError, UnauthorizedError
-from app.core.realtime import kitchen_topic, publish, publish_order_change, session_topic
+from app.core.exceptions import (
+    AppError,
+    ForbiddenError,
+    NotFoundError,
+    UnauthorizedError,
+)
+from app.core.realtime import (
+    kitchen_topic,
+    publish,
+    publish_order_change,
+    session_topic,
+)
 from app.core.security import create_guest_token
-from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus, TableStatus
+from app.models.enums import (
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+    PaymentStatus,
+    TableStatus,
+)
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
@@ -62,6 +78,12 @@ class TableSessionService:
         FeatureService(self.db).require(restaurant.id, FEATURE)
         return table, restaurant
 
+    def _restaurant(self, restaurant_id: int) -> Restaurant:
+        restaurant = self.db.get(Restaurant, restaurant_id)
+        if restaurant is None:
+            raise NotFoundError("Restaurant not found")
+        return restaurant
+
     def _closed_reason(self, table: RestaurantTable, restaurant: Restaurant) -> str | None:
         if restaurant.qr_access_policy == "OPEN" or table.status == TableStatus.OCCUPIED:
             return None
@@ -102,7 +124,10 @@ class TableSessionService:
             publish(self.db, kitchen_topic(table.restaurant_id), "session.opened", {"table_id": table.id})
             return session
         except IntegrityError:  # someone else opened it between our read and our insert
-            return self.db.scalar(select(TableSession).where(TableSession.table_id == table.id, TableSession.state == OPEN))
+            won_the_race = self.db.scalar(select(TableSession).where(TableSession.table_id == table.id, TableSession.state == OPEN))
+            if won_the_race is None:
+                raise  # truly shouldn't happen: the insert conflicted with a row that then isn't there
+            return won_the_race
 
     # ------------------------------------------------------------------ the guest's view
 
@@ -117,7 +142,7 @@ class TableSessionService:
 
     def view(self, session: TableSession) -> SessionRead:
         table = session.table
-        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        restaurant = self._restaurant(session.restaurant_id)
         orders = list(self.db.scalars(
             select(Order).options(selectinload(Order.items).selectinload(OrderItem.modifiers))
             .where(Order.table_session_id == session.id).order_by(Order.round_no, Order.id)
@@ -152,7 +177,9 @@ class TableSessionService:
         *, staff_user=None,
     ) -> SessionRoundRead:
         """A round from a guest's phone, or (with `staff_user`) one a waiter sends on the table's behalf."""
-        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        if staff_user is None and guest is None:
+            raise AppError("A round needs either a guest or a member of staff sending it")
+        restaurant = self._restaurant(session.restaurant_id)
         FeatureService(self.db).require(restaurant.id, FEATURE)
 
         # Serialise rounds of one table so round numbers never repeat.
@@ -174,7 +201,11 @@ class TableSessionService:
             if len(items_by_id) != len(set(item_ids)):
                 raise AppError("One or more menu items are invalid for this restaurant")
 
-            guest_name = f"{staff_user.first_name} (staff)" if staff_user is not None else (guest.name or f"Table {session.table.table_number}")
+            if staff_user is not None:
+                guest_name = f"{staff_user.first_name} (staff)"
+            else:
+                assert guest is not None  # guaranteed by the guard above
+                guest_name = guest.name or f"Table {session.table.table_number}"
             order = Order(
                 user_id=None, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
                 order_type=OrderType.DINE_IN, status=OrderStatus.PENDING,
@@ -220,7 +251,10 @@ class TableSessionService:
             if not table.qr_token:  # tables made before QR ordering existed
                 table.qr_token = secrets.token_urlsafe(16)
         self.db.commit()
-        return [QrTableRead(table_id=t.id, table_number=t.table_number, zone=t.zone, qr_token=t.qr_token, has_open_session=t.id in open_ids) for t in tables]
+        return [
+            QrTableRead(table_id=t.id, table_number=t.table_number, zone=t.zone, qr_token=t.qr_token or "", has_open_session=t.id in open_ids)
+            for t in tables
+        ]
 
     def rotate_token(self, table_id: int, restaurant_id: int) -> QrTableRead:
         table = self._table(table_id, restaurant_id)
@@ -271,7 +305,7 @@ class TableSessionService:
     def pay(self, session: TableSession) -> TablePaymentRead:
         """A guest pays the table's whole tab from their phone — the online-card path. `mark_paid_cash`
         is the staff-at-the-counter equivalent, with no Stripe involvement at all."""
-        restaurant = self.db.get(Restaurant, session.restaurant_id)
+        restaurant = self._restaurant(session.restaurant_id)
         FeatureService(self.db).require(restaurant.id, FEATURE)
         if session.state != OPEN:
             raise AppError("This table has already been closed")
@@ -330,7 +364,7 @@ class TableSessionService:
         total = self.view(session).total
         if total <= Decimal("0.00"):
             raise AppError("There is nothing on this table's tab yet")
-        restaurant = self.db.get(Restaurant, restaurant_id)
+        restaurant = self._restaurant(restaurant_id)
         self.db.add(Payment(
             table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
             currency=restaurant.currency, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH,
@@ -429,16 +463,16 @@ class TableSessionService:
             .order_by(RestaurantTable.table_number)
         ).all())
         sessions = {s.table_id: s for s in self.open_sessions(restaurant_id)}
-        ready = dict(self.db.execute(
+        ready: dict[int, int] = dict(self.db.execute(
             select(Order.table_session_id, func.count()).where(
                 Order.restaurant_id == restaurant_id, Order.table_session_id.is_not(None), Order.status == OrderStatus.READY)
             .group_by(Order.table_session_id)
-        ).all())
-        waiting = dict(self.db.execute(
+        ).all())  # type: ignore[arg-type]  # table_session_id is never None here (filtered above); mypy can't see it
+        waiting: dict[int, datetime] = dict(self.db.execute(
             select(ServiceRequest.table_session_id, func.min(ServiceRequest.created_at)).where(
                 ServiceRequest.restaurant_id == restaurant_id, ServiceRequest.state == REQUEST_OPEN)
             .group_by(ServiceRequest.table_session_id)
-        ).all())
+        ).all())  # type: ignore[arg-type]  # SQLAlchemy's Row isn't a plain tuple as far as mypy's dict() overload is concerned
         out = []
         for t in tables:
             s = sessions.get(t.id)

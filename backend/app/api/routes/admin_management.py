@@ -1,12 +1,21 @@
 """Admin API routes."""
 
+import uuid
 from datetime import datetime
 from typing import Annotated
-import uuid
 
-from fastapi import APIRouter, Depends, File, Header, Query, Response, UploadFile, status
-from starlette.concurrency import run_in_threadpool
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
@@ -16,6 +25,47 @@ from app.db.session import get_db
 from app.dependencies.features import requires_feature
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
+from app.schemas.admin import (
+    CategoryCreate,
+    CategoryReorder,
+    CategoryUpdate,
+    CustomerDetail,
+    CustomerProfileUpdate,
+    CustomerSummary,
+    DashboardStats,
+    KitchenBoard,
+    MenuItemCreate,
+    MenuItemUpdate,
+    MenuModifierCreate,
+    MenuModifierUpdate,
+    ModifierOptionCreate,
+    ModifierOptionUpdate,
+    OrderStatusUpdate,
+    RestaurantSettingsUpdate,
+    SoldOutUpdate,
+    TableCreate,
+    TableLayoutUpdate,
+    TableRead,
+    TableStatusUpdate,
+    TableUpdate,
+)
+from app.schemas.analytics import AnalyticsResponse
+from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
+from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
+from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
+from app.schemas.order import OrderListResponse, OrderRead
+from app.schemas.payments import StripeOnboardLink, StripeStatus
+from app.schemas.reservation import (
+    AdminAvailabilityResponse,
+    AdminReservationCreate,
+    ReservationExtend,
+    ReservationRead,
+    ReservationStatusUpdate,
+    ReservationUpdate,
+)
+from app.schemas.restaurant import RestaurantRead
+from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
+from app.schemas.staff import StaffInvite, StaffInviteRead, StaffRead, StaffUpdate
 from app.schemas.table_session import (
     MarkPaidRequest,
     OpenSessionRead,
@@ -27,58 +77,17 @@ from app.schemas.table_session import (
     TransferRequest,
     WaiterTableRead,
 )
-from app.services.kitchen_service import KitchenService
-from app.services.table_session_service import TableSessionService
-from app.schemas.admin import (
-    CustomerDetail,
-    CustomerProfileUpdate,
-    CustomerSummary,
-    SoldOutUpdate,
-    CategoryCreate,
-    CategoryReorder,
-    CategoryUpdate,
-    DashboardStats,
-    KitchenBoard,
-    MenuItemCreate,
-    MenuItemUpdate,
-    MenuModifierCreate,
-    MenuModifierUpdate,
-    ModifierOptionCreate,
-    ModifierOptionUpdate,
-    OrderStatusUpdate,
-    RestaurantSettingsUpdate,
-    TableCreate,
-    TableLayoutUpdate,
-    TableRead,
-    TableStatusUpdate,
-    TableUpdate,
-)
-from app.schemas.analytics import AnalyticsResponse
-from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
-from app.schemas.order import OrderListResponse, OrderRead
-from app.schemas.reservation import (
-    AdminAvailabilityResponse,
-    AdminReservationCreate,
-    ReservationExtend,
-    ReservationRead,
-    ReservationStatusUpdate,
-    ReservationUpdate,
-)
-from app.schemas.restaurant import RestaurantRead
-from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
-from app.schemas.staff import StaffInvite, StaffInviteRead, StaffRead, StaffUpdate
-from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
-from app.schemas.review import AdminReviewRead, ReviewModerate, ReviewReply
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
-from app.schemas.payments import StripeOnboardLink, StripeStatus
 from app.services.admin_service import AdminService
-from app.services.stripe_connect_service import StripeConnectService
 from app.services.analytics_service import AnalyticsService
-from app.services.reservation_service import ReservationService
 from app.services.coupon_service import CouponService
-from app.services.staff_service import StaffService
+from app.services.kitchen_service import KitchenService
 from app.services.loyalty_service import LoyaltyService
+from app.services.reservation_service import ReservationService
 from app.services.review_service import ReviewService
+from app.services.staff_service import StaffService
+from app.services.stripe_connect_service import StripeConnectService
+from app.services.table_session_service import TableSessionService
 from app.services.waitlist_service import WaitlistService
 from app.utils.date_ranges import DateRangePreset
 

@@ -1,9 +1,8 @@
 """Order line item ORM model."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
-
-from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB

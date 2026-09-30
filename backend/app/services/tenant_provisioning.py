@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import AppError, ConflictError
+from app.core.hours import valid_timezone
 from app.core.images import InvalidImage, process_image
 from app.core.security import hash_password
-from app.core.hours import valid_timezone
 from app.core.stations import CATEGORY_STATIONS, DEFAULT_STATION
 from app.core.storage import get_storage, tenant_prefix
 from app.models.audit_log import AuditLog
@@ -186,6 +186,8 @@ def _owner(db: Session, email: str, full_name: str) -> tuple[User, bool]:
     if existing is not None:
         return existing, False
     role = db.scalar(select(Role).where(Role.name == RoleName.RESTAURANT_ADMIN.value))
+    if role is None:
+        raise AppError("The restaurant-admin role is missing from this deployment — seed data is incomplete")
     first, _, last = full_name.strip().partition(" ")
     # The owner never sees a password: this one is random and thrown away, and they set their own from the invite link.
     user = users.create(email=email, hashed_password=hash_password(secrets.token_urlsafe(32)), first_name=first or "Owner", last_name=last or "-", role_id=role.id)

@@ -35,6 +35,8 @@ def preview_coupon(
 
     Rate limited so the endpoint can't be used to guess codes at speed.
     """
+    if user.restaurant_id is None:  # coupons are a customer feature — staff/admin identities have no home restaurant
+        raise raise_http_for_app_error(AppError("Coupons are for customers only"))
     try:
         coupon, discount = service.preview(user.restaurant_id, data.code, data.subtotal, user)
     except AppError as exc:

@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import AppError, raise_http_for_app_error
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.dependencies.features import requires_feature_for_user
@@ -23,4 +24,6 @@ def my_loyalty_account(
     user: CurrentUser,
     service: Annotated[LoyaltyService, Depends(get_loyalty_service)],
 ) -> LoyaltyAccountRead:
+    if user.restaurant_id is None:  # loyalty is a customer feature — staff/admin identities have no home restaurant
+        raise raise_http_for_app_error(AppError("Loyalty accounts are for customers only"))
     return service.my_account(user.restaurant_id, user)

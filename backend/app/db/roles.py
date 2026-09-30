@@ -25,6 +25,8 @@ def ensure_app_role(owner_url: str, app_url: str) -> str:
     if role == make_url(owner_url).username:
         raise SystemExit("APP_DATABASE_URL must use a different role from DATABASE_URL, or nothing is restricted")
     database = make_url(owner_url).database
+    if not database:
+        raise SystemExit("DATABASE_URL needs a database name")
 
     # DDL cannot take bound parameters, so identifiers and the password are quoted by the driver's own escaping.
     dsn = make_url(owner_url).set(drivername="postgresql").render_as_string(hide_password=False)

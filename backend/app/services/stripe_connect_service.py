@@ -23,6 +23,7 @@ never read live from Stripe on a request, so a page load never depends on Stripe
 
 import stripe
 from sqlalchemy.orm import Session
+from stripe.params.v2.core import AccountCreateParams
 
 from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError
@@ -52,7 +53,7 @@ class StripeConnectService:
         client = self._client()
         restaurant = self._restaurant(restaurant_id)
         if not restaurant.stripe_account_id:
-            account_params: dict = {
+            account_params: AccountCreateParams = {
                 "display_name": restaurant.name,
                 "dashboard": "full",
                 # Stripe requires identity.country before it will accept the merchant configuration (it

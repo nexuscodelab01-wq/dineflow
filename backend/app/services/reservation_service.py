@@ -18,19 +18,16 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.hours import status_at
-from app.core.security import create_reservation_action_token, decode_reservation_action_token
+from app.core.security import (
+    create_reservation_action_token,
+    decode_reservation_action_token,
+)
 from app.core.tenancy import site_url
 from app.models.enums import ReservationStatus, TableStatus
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
 from app.repositories.restaurant import RestaurantRepository
-from app.services.notifications import (
-    cancel_reservation_reminder,
-    notify_reservation_cancelled,
-    notify_reservation_confirmed,
-    notify_reservation_reminder,
-)
 from app.schemas.reservation import (
     AdminAvailabilityResponse,
     AdminReservationCreate,
@@ -45,6 +42,12 @@ from app.schemas.reservation import (
     ReservationStatusUpdate,
     ReservationUpdate,
     TableReservationBrief,
+)
+from app.services.notifications import (
+    cancel_reservation_reminder,
+    notify_reservation_cancelled,
+    notify_reservation_confirmed,
+    notify_reservation_reminder,
 )
 
 DEFAULT_DURATION_MINUTES = 90
@@ -147,9 +150,7 @@ class ReservationService:
                 and reservation.hold_expires_at is not None
                 and reservation.hold_expires_at < now
             )
-            if reservation.status == ReservationStatus.SEATED:
-                reservation.status = ReservationStatus.COMPLETED
-            elif not lapsed_hold and reservation.order_id is not None:
+            if reservation.status == ReservationStatus.SEATED or not lapsed_hold and reservation.order_id is not None:
                 reservation.status = ReservationStatus.COMPLETED
             else:
                 reservation.status = ReservationStatus.EXPIRED
@@ -372,10 +373,13 @@ class ReservationService:
             raise AppError(f"Table {table.table_number} is already booked for that time")
         if self._floor_blocks_slot(locked, starts_at):
             raise AppError(f"Table {table.table_number} is currently unavailable")
-        locked_extras = [
+        locked_extras_raw = [
             self.db.scalar(select(RestaurantTable).where(RestaurantTable.id == t.id).with_for_update())
             for t in extra_tables
         ]
+        if any(extra is None for extra in locked_extras_raw):
+            raise AppError("Table not found")
+        locked_extras: list[RestaurantTable] = [extra for extra in locked_extras_raw if extra is not None]
         for extra in locked_extras:
             if seat_immediately:
                 self._ensure_table_has_no_seated_guests(extra)
@@ -606,10 +610,9 @@ class ReservationService:
             now = _utcnow()
             if target == ReservationStatus.SEATED:
                 self._seat(reservation, now)
-            elif target == ReservationStatus.COMPLETED:
-                # Guests left: free whatever is left of the booked window.
-                if reservation.ends_at > now:
-                    reservation.ends_at = max(now, reservation.starts_at + timedelta(minutes=1))
+            # Guests left: free whatever is left of the booked window.
+            elif target == ReservationStatus.COMPLETED and reservation.ends_at > now:
+                reservation.ends_at = max(now, reservation.starts_at + timedelta(minutes=1))
             reservation.status = target
             if target != ReservationStatus.HELD:
                 reservation.hold_expires_at = None
@@ -691,9 +694,8 @@ class ReservationService:
             buffer = self._buffer(restaurant_id)
             if self._has_overlap(table.id, starts_at, ends_at, exclude_id=reservation.id, buffer=buffer):
                 raise AppError(f"Table {table.table_number} is already booked for that time")
-            if (table_id != reservation.table_id or starts_at != reservation.starts_at) and locked is not None:
-                if self._floor_blocks_slot(locked, starts_at):
-                    raise AppError(f"Table {table.table_number} is currently unavailable")
+            if (table_id != reservation.table_id or starts_at != reservation.starts_at) and locked is not None and self._floor_blocks_slot(locked, starts_at):
+                raise AppError(f"Table {table.table_number} is currently unavailable")
             for extra in extra_tables:
                 locked_extra = self.db.scalar(select(RestaurantTable).where(RestaurantTable.id == extra.id).with_for_update())
                 if self._has_overlap(extra.id, starts_at, ends_at, exclude_id=reservation.id, buffer=buffer):
@@ -940,6 +942,8 @@ class ReservationService:
     def _seat(self, reservation: Reservation, now: datetime) -> None:
         """Mark arrival. Seating early pulls the start forward, provided the table is free."""
         table = reservation.table or self.db.get(RestaurantTable, reservation.table_id)
+        if table is None:
+            raise AppError("Table not found")
         self._ensure_table_has_no_seated_guests(table, exclude_id=reservation.id)
         if reservation.starts_at > now:
             if reservation.starts_at - now > timedelta(minutes=EARLY_SEAT_MINUTES):

@@ -243,7 +243,7 @@ def seed() -> None:
             db.flush()
             return user
 
-        super_admin = create_user("superadmin@dineflow.demo", "Sasha", "Platform", RoleName.SUPER_ADMIN)
+        create_user("superadmin@dineflow.demo", "Sasha", "Platform", RoleName.SUPER_ADMIN)
         admin = create_user("admin@bellavista.demo", "Marco", "Rossi", RoleName.RESTAURANT_ADMIN, "+14155550101")
         staff = create_user("staff@bellavista.demo", "Elena", "Chen", RoleName.RESTAURANT_STAFF, "+14155550102")
 

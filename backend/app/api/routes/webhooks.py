@@ -20,6 +20,7 @@ Stripe retries a webhook until it gets a 2xx, so every handler here is written t
 import logging
 from typing import Annotated
 
+import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -93,7 +94,7 @@ async def stripe_connect_webhook(
     return {"received": True}
 
 
-def _handle_payment_succeeded(db: Session, intent: dict) -> None:
+def _handle_payment_succeeded(db: Session, intent: stripe.StripeObject) -> None:
     payment = db.scalar(select(Payment).where(Payment.provider_intent_id == intent["id"]))
     if payment is None:
         logger.warning("payment_intent.succeeded for an unknown intent: %s", intent["id"])
@@ -113,7 +114,7 @@ def _handle_payment_succeeded(db: Session, intent: dict) -> None:
     logger.info("Order %s confirmed by webhook (intent %s)", order.order_number, intent["id"])
 
 
-def _handle_payment_failed(db: Session, intent: dict) -> None:
+def _handle_payment_failed(db: Session, intent: stripe.StripeObject) -> None:
     payment = db.scalar(select(Payment).where(Payment.provider_intent_id == intent["id"]))
     # A payment sits at REQUIRES_ACTION while Stripe.js is still working with the customer (3DS, a
     # retry after a decline, ...) — that's the state this event moves out of. Anything already

@@ -21,15 +21,19 @@ from app.models.payment import Payment
 from app.models.reservation import Reservation
 from app.models.restaurant_table import RestaurantTable
 from app.models.user import User
-from app.repositories.admin_order import AdminOrderRepository, CustomerRepository, TableRepository
+from app.repositories.admin_order import (
+    AdminOrderRepository,
+    CustomerRepository,
+    TableRepository,
+)
 from app.repositories.category import CategoryRepository
 from app.repositories.dashboard import DashboardRepository
 from app.repositories.menu_admin import MenuAdminRepository
 from app.repositories.restaurant import RestaurantRepository
 from app.schemas.admin import (
     CategoryCreate,
-    CategoryUpdate,
     CategoryReorder,
+    CategoryUpdate,
     CustomerDetail,
     CustomerProfileUpdate,
     CustomerReservationBrief,
@@ -88,7 +92,7 @@ class AdminService:
 
     def dashboard_stats(self, restaurant_id: int) -> DashboardStats:
         data = self.dashboard.stats(restaurant_id)
-        return DashboardStats(**data)
+        return DashboardStats.model_validate(data)
 
     # Categories
     def list_categories(self, restaurant_id: int) -> list[CategoryRead]:

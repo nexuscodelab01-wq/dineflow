@@ -71,7 +71,7 @@ def validate_opening_hours(hours: dict) -> None:
     unknown = set(hours) - set(DAYS)
     if unknown:
         raise InvalidHours(f"Unknown day(s): {', '.join(sorted(unknown))}. Use: {', '.join(DAYS)}")
-    for day, value in hours.items():
+    for value in hours.values():
         parse_day(value)  # raises on anything bad
 
 
@@ -143,7 +143,7 @@ def status_at(restaurant, at: datetime) -> OpenStatus:
 
 def _next_open(restaurant, local: datetime) -> datetime | None:
     hours = getattr(restaurant, "opening_hours", None) or {}
-    for offset in range(0, 14):  # look up to two weeks ahead rather than loop forever on all-closed data
+    for offset in range(14):  # look up to two weeks ahead rather than loop forever on all-closed data
         day = local.date() + timedelta(days=offset)
         if closure_label(restaurant, day):
             continue

@@ -1,6 +1,7 @@
 """Server-side enforcement of feature flags."""
 
-from typing import Annotated, Callable
+from collections.abc import Callable
+from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.orm import Session

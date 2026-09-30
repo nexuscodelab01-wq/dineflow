@@ -2,7 +2,23 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, coupons, health, loyalty, menu, orders, platform, realtime, reservations, restaurants, reviews, table_ordering, tenant, webhooks
+from app.api.routes import (
+    admin,
+    auth,
+    coupons,
+    health,
+    loyalty,
+    menu,
+    orders,
+    platform,
+    realtime,
+    reservations,
+    restaurants,
+    reviews,
+    table_ordering,
+    tenant,
+    webhooks,
+)
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])

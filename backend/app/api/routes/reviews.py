@@ -5,7 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AppError, ForbiddenError, NotFoundError, raise_http_for_app_error
+from app.core.exceptions import (
+    AppError,
+    ForbiddenError,
+    NotFoundError,
+    raise_http_for_app_error,
+)
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.dependencies.features import requires_feature_for_user

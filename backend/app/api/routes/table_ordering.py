@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.realtime import sse_response
 from app.core.exceptions import AppError, raise_http_for_app_error
-from app.core.realtime import session_topic
 from app.core.rate_limit import rate_limit
+from app.core.realtime import session_topic
 from app.db.session import get_db
 from app.dependencies.guest import CurrentGuest
 from app.schemas.table_session import (

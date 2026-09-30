@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
-from app.db.session import get_db
 from app.api.routes.realtime import sse_response
+from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.core.rate_limit import rate_limit
 from app.core.realtime import order_topic
+from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.order_service import OrderService

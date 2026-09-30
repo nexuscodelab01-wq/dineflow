@@ -81,7 +81,7 @@ class JobWorker(threading.Thread):
             try:
                 self._reap_if_due()
                 drain(worker)
-            except Exception:  # noqa: BLE001 — never let the loop die (e.g. database restart)
+            except Exception:
                 logger.exception("Job worker loop error; retrying shortly")
                 self._stop_event.wait(5)
                 continue

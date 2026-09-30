@@ -10,18 +10,18 @@ from app.core.rate_limit import client_ip, limiter, rate_limit
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
 from app.dependencies.restaurant import list_accessible_restaurants
-from app.schemas.restaurant import RestaurantRead
 from app.schemas.auth import (
     ChangePassword,
     ForgotPassword,
-    ResetPassword,
     MessageResponse,
+    ResetPassword,
     TokenRefresh,
     TokenResponse,
     UserLogin,
     UserRead,
     UserRegister,
 )
+from app.schemas.restaurant import RestaurantRead
 from app.services.auth_service import AuthService
 from app.services.password_service import PasswordService
 

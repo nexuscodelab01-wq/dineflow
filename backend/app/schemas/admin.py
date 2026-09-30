@@ -9,13 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.allergens import ALLERGENS
 from app.core.config import settings
-from app.core.hours import InvalidHours, validate_closures, validate_opening_hours, valid_timezone
+from app.core.hours import (
+    InvalidHours,
+    valid_timezone,
+    validate_closures,
+    validate_opening_hours,
+)
 from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
-from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderRead
 from app.schemas.reservation import TableReservationBrief
-from app.schemas.restaurant import RestaurantRead
 
 
 class DashboardStats(BaseModel):
@@ -188,7 +191,7 @@ def _media_url(value: str | None) -> str | None:
         return None
     if len(value) > 500 or any(ch.isspace() or ord(ch) < 32 for ch in value):
         raise ValueError("Image address is invalid")
-    if not (value.startswith("/uploads/") or value.startswith(("https://", "http://"))):
+    if not value.startswith(("/uploads/", "https://", "http://")):
         raise ValueError("Image must be an uploaded file or an http(s) link")
     return value
 

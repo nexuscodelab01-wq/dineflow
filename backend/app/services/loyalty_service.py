@@ -15,7 +15,11 @@ from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAccountRead, LoyaltyTransactionRead
+from app.schemas.loyalty import (
+    AdminLoyaltyAccountRead,
+    LoyaltyAccountRead,
+    LoyaltyTransactionRead,
+)
 
 
 class LoyaltyService:
@@ -34,6 +38,7 @@ class LoyaltyService:
 
     def _apply(self, restaurant_id: int, user_id: int, points: int, reason: LoyaltyReason, *, order_id: int | None = None, note: str | None = None, created_by: str | None = None) -> LoyaltyAccount:
         account = self._account(restaurant_id, user_id, create=True)
+        assert account is not None  # create=True always returns (or makes) one
         account.balance += points
         self.db.add(LoyaltyTransaction(
             restaurant_id=restaurant_id, user_id=user_id, order_id=order_id, points=points,
@@ -90,6 +95,7 @@ class LoyaltyService:
         if target is None:
             raise NotFoundError("Customer not found")
         account = self._account(restaurant_id, user_id, create=True)
+        assert account is not None  # create=True always returns (or makes) one
         if points < 0 and account.balance + points < 0:
             raise AppError("Can't deduct more points than the customer has")
         self._apply(

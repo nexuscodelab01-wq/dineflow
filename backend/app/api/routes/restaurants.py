@@ -1,16 +1,14 @@
 """Restaurant API routes."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from datetime import date
-
 from app.core.exceptions import ForbiddenError, NotFoundError, raise_http_for_app_error
 from app.core.hours import local_now
-from app.core.tenancy import resolve_tenant
 from app.db.session import get_db
 from app.dependencies.auth import require_roles
 from app.models.enums import RoleName

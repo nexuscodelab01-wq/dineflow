@@ -2,7 +2,14 @@
 
 import re
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 # A short list of the passwords attackers try first. Not a substitute for a breach-list check
 # (planned), but it stops the most obvious choices.

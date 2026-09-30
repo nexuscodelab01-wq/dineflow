@@ -2,6 +2,7 @@
 
 import logging
 from collections import defaultdict
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import update
@@ -9,10 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError
+from app.core.hours import status_at
+from app.core.realtime import kitchen_topic, publish
+from app.core.tenancy import ensure_customer_of
 from app.models.address import Address
 from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.menu_item import MenuItem
-from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -20,22 +23,17 @@ from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
 from app.models.restaurant import Restaurant
-from app.core.realtime import kitchen_topic, publish
 from app.models.user import User
 from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
-from datetime import UTC, datetime
-
-from app.core.hours import status_at
-from app.core.tenancy import ensure_customer_of
 from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
 from app.services.coupon_service import CouponService
 from app.services.feature_service import FeatureService
-from app.services.scheduling_service import SchedulingService
 from app.services.notifications import notify_order_placed
 from app.services.payments import get_payment_provider, reverse_payment
 from app.services.reservation_service import ReservationService
+from app.services.scheduling_service import SchedulingService
 
 logger = logging.getLogger(__name__)
 
@@ -365,10 +363,10 @@ class OrderService:
 
         selected: list[MenuModifierOption] = []
         for option_id in selected_option_ids:
-            option = options_by_id.get(option_id)
-            if option is None:
+            selected_option = options_by_id.get(option_id)
+            if selected_option is None:
                 raise AppError(f"Invalid modifier option for {menu_item.name}")
-            selected.append(option)
+            selected.append(selected_option)
 
         by_modifier: dict[int, list[MenuModifierOption]] = defaultdict(list)
         for option in selected:

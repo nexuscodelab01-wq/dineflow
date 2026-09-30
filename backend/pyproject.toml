@@ -1,0 +1,7 @@
+[tool.ruff.lint]
+# B008 (function call in a default argument) is FastAPI's own idiomatic dependency-injection pattern
+# (`Depends(...)` as a parameter default) — a well-known ruff/FastAPI false positive, not a bug.
+ignore = ["B008"]
+
+[tool.mypy]
+ignore_missing_imports = true

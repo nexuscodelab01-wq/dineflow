@@ -74,10 +74,9 @@ def resolve_tenant(db: Session, host: str | None) -> Restaurant | None:
             restaurant = db.scalar(
                 select(Restaurant).where(func.lower(Restaurant.custom_domain) == normalized)
             )
-    if restaurant is None and settings.DEFAULT_TENANT_SLUG:
-        # Only bare/unknown-but-not-claimed hosts fall back; a host that names a subdomain never does.
-        if not host or slug_from_host(host) is None:
-            restaurant = db.scalar(select(Restaurant).where(Restaurant.slug == settings.DEFAULT_TENANT_SLUG))
+    # Only bare/unknown-but-not-claimed hosts fall back; a host that names a subdomain never does.
+    if restaurant is None and settings.DEFAULT_TENANT_SLUG and (not host or slug_from_host(host) is None):
+        restaurant = db.scalar(select(Restaurant).where(Restaurant.slug == settings.DEFAULT_TENANT_SLUG))
     if restaurant is not None and not restaurant.is_active:
         return None
     return restaurant

@@ -109,6 +109,8 @@ class StaffService:
         if not is_admin_here:
             return
         role_row = self.db.scalar(select(Role).where(Role.name == RoleName.RESTAURANT_ADMIN.value))
+        if role_row is None:
+            raise AppError("The restaurant-admin role is missing from this deployment — seed data is incomplete")
         user.role_id = role_row.id
 
     # ------------------------------------------------------------------ inviting
@@ -130,6 +132,8 @@ class StaffService:
                 raise AppError("This email belongs to a platform admin account and can't be added as restaurant staff")
         else:
             role_row = self.db.scalar(select(Role).where(Role.name == data.role.value))
+            if role_row is None:
+                raise AppError(f"The {data.role.value} role is missing from this deployment — seed data is incomplete")
             # The account never sees this password: the invite link is the only way in, same as a
             # restaurant's owner at provisioning time (see tenant_provisioning._owner).
             user = self.users.create(
