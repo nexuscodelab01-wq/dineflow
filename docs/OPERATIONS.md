@@ -306,9 +306,15 @@ Element handles the challenge itself).
 - A **failed** payment leaves the order `PENDING` rather than cancelling it, so the customer can retry;
   there is currently no UI to retry the *same* order from a reload, only to place a new one (a known gap,
   not yet a problem while the failure rate is Stripe's test-mode declined-card scenarios only).
-- **Refunds don't exist yet** (Sprint 4 Phase 2) — cancelling an order (or a table payment) does not
-  touch its payment.
-- **Dine-in revenue is no longer invisible** (Sprint 4 Phase 3) — `today_revenue` and the revenue trend
+- **Cancelling an order now refunds it.** The admin order page's *Cancel order* button (previously
+  didn't exist at all — cancelling was only reachable by API) refunds a completed payment in full, or
+  cancels the PaymentIntent if it hadn't finished confirming yet, so a stray later confirmation can't
+  still charge the card. A refund on a *direct* charge is created in the connected account's own
+  context (`stripe_account` on the request), same as the original charge — easy to miss.
+- **Refunding a table's whole tab exists at the API level** (`POST
+  /admin/table-sessions/{id}/refund`) but isn't wired into any admin page yet — there's currently no
+  page listing *past* (closed) table sessions to reach it from. Revisit alongside a session-history page.
+- **Dine-in revenue is no longer invisible** — `today_revenue` and the revenue trend
   now count table-session payments too, filtered on `Payment`'s own `restaurant_id`/`created_at` rather
   than joined through `Order` (a table-session payment has no `order_id` to join through at all).
 - `STRIPE_SECRET_KEY` here is a full secret key (`sk_test_...`/`sk_live_...`) for simplicity while
