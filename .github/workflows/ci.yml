@@ -53,12 +53,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
+      - name: Lint (ruff)
+        working-directory: backend
+        run: ruff check app
+
+      - name: Type check (mypy)
+        working-directory: backend
+        run: mypy app --ignore-missing-imports
+
       - name: Run migrations
         working-directory: backend
         run: alembic upgrade head
 
-      - name: Run pytest
+      - name: Run pytest (as the database owner)
         working-directory: backend
+        run: pytest -q
+
+      - name: Create the restricted app role
+        working-directory: backend
+        env:
+          APP_DATABASE_URL: postgresql+psycopg://dineflow_app_ci:${{ github.run_id }}-ci@localhost:5432/dineflow_test
+        run: python -m app.db.roles
+
+      - name: Run pytest (as the restricted role, under RLS)
+        working-directory: backend
+        env:
+          APP_DATABASE_URL: postgresql+psycopg://dineflow_app_ci:${{ github.run_id }}-ci@localhost:5432/dineflow_test
         run: pytest -q
 
   frontend:
