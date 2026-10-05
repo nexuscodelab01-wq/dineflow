@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FeatureRead(BaseModel):
@@ -16,6 +16,28 @@ class FeatureRead(BaseModel):
 
 class FeatureSet(BaseModel):
     enabled: bool
+
+
+class FeatureCatalogRead(BaseModel):
+    """One flag in the global catalog — no restaurant in view, so no override/enabled here."""
+
+    key: str
+    description: str
+    default: bool
+
+
+class FeatureCreate(BaseModel):
+    key: str = Field(min_length=1, max_length=64)
+    description: str = Field(min_length=1, max_length=500)
+    default: bool = False
+
+    @field_validator("key")
+    @classmethod
+    def _key_format(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not value or not value[0].isalpha() or not all(c.isalnum() or c == "_" for c in value):
+            raise ValueError("Key must be lowercase letters, numbers and underscores, starting with a letter")
+        return value
 
 
 class AuditLogRead(BaseModel):

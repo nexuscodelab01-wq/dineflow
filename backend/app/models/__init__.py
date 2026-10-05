@@ -4,6 +4,7 @@ from app.models.address import Address
 from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.coupon import Coupon, CouponRedemption
+from app.models.feature import Feature
 from app.models.feature_override import FeatureOverride
 from app.models.job import Job
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
@@ -35,6 +36,7 @@ __all__ = [
     "Category",
     "Coupon",
     "CouponRedemption",
+    "Feature",
     "FeatureOverride",
     "Job",
     "LoyaltyAccount",

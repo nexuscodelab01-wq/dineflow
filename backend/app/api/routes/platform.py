@@ -16,7 +16,13 @@ from app.models.audit_log import AuditLog
 from app.models.enums import RoleName
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.schemas.features import AuditLogRead, FeatureRead, FeatureSet
+from app.schemas.features import (
+    AuditLogRead,
+    FeatureCatalogRead,
+    FeatureCreate,
+    FeatureRead,
+    FeatureSet,
+)
 from app.schemas.restaurant import RestaurantRead, TenantCreateResponse
 from app.services.domain_verification import verify_dns
 from app.services.feature_service import FeatureService
@@ -94,6 +100,32 @@ def verify_domain(restaurant_id: int, admin: PlatformAdmin, db: Annotated[Sessio
     ))
     db.commit()
     return RestaurantRead.model_validate(restaurant)
+
+
+@router.get("/features", response_model=list[FeatureCatalogRead])
+def list_feature_catalog(_: PlatformAdmin, service: Features) -> list[FeatureCatalogRead]:
+    return [FeatureCatalogRead(key=f.key, description=f.description, default=f.default_enabled) for f in service.catalog()]
+
+
+@router.post("/features", response_model=FeatureCatalogRead, status_code=201)
+def create_feature(data: FeatureCreate, admin: PlatformAdmin, service: Features) -> FeatureCatalogRead:
+    """Create a brand-new flag with no code behind it yet — nothing will check it until a developer adds
+    a `requires_feature(key)` (or equivalent) call somewhere. See feature_service.py's module docstring."""
+    try:
+        feature = service.create_flag(data.key, data.description, data.default, admin)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+    return FeatureCatalogRead(key=feature.key, description=feature.description, default=feature.default_enabled)
+
+
+@router.delete("/features/{key}", status_code=204)
+def delete_feature(key: str, admin: PlatformAdmin, service: Features) -> None:
+    """Deletes the flag and every restaurant's override of it. If something in code still checks this
+    key, that check will simply always read as off from now on — nothing warns about that here."""
+    try:
+        service.delete_flag(key, admin)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.get("/restaurants/{restaurant_id}/features", response_model=list[FeatureRead])

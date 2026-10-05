@@ -35,6 +35,7 @@ from app.models.restaurant_table import RestaurantTable
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.repositories.user import RoleRepository
+from app.services.feature_service import FeatureService
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,7 @@ def seed() -> None:
     try:
         roles = RoleRepository(db)
         roles.ensure_defaults()
+        FeatureService(db).ensure_defaults()
         db.commit()
 
         if db.scalar(select(Restaurant).limit(1)):
