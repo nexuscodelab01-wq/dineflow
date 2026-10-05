@@ -24,9 +24,13 @@ async function handleLogout() {
           <NuxtLink to="/platform" class="font-display text-xl font-semibold text-brand-900">DineFlow Platform</NuxtLink>
           <p class="text-xs text-ink-subtle">Signed in as {{ auth.user?.email }}</p>
         </div>
-        <button class="rounded-lg border border-brand-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50" :disabled="loggingOut" @click="handleLogout">
-          {{ loggingOut ? 'Signing out…' : 'Log out' }}
-        </button>
+        <nav class="flex items-center gap-4 text-sm font-medium text-ink-muted">
+          <NuxtLink to="/platform" class="hover:text-brand-900" active-class="text-brand-900">Restaurants</NuxtLink>
+          <NuxtLink to="/platform/features" class="hover:text-brand-900" active-class="text-brand-900">Feature flags</NuxtLink>
+          <button class="rounded-lg border border-brand-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50" :disabled="loggingOut" @click="handleLogout">
+            {{ loggingOut ? 'Signing out…' : 'Log out' }}
+          </button>
+        </nav>
       </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">

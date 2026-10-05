@@ -22,3 +22,25 @@ export type TenantCreateResponse = {
   site_url: string
   invite_link?: string | null
 }
+
+/** One flag in the global catalog — no restaurant in view, so no override/enabled here. */
+export type FeatureCatalogEntry = {
+  key: string
+  description: string
+  default: boolean
+}
+
+export type FeatureCreatePayload = {
+  key: string
+  description: string
+  default: boolean
+}
+
+/** One flag's effective value for a specific restaurant (GET .../restaurants/{id}/features). */
+export type RestaurantFeature = {
+  key: string
+  description: string
+  default: boolean
+  override: boolean | null
+  enabled: boolean
+}

@@ -1,5 +1,5 @@
 import type { Restaurant } from '~/types/menu'
-import type { TenantCreatePayload, TenantCreateResponse } from '~/types/platform'
+import type { FeatureCatalogEntry, FeatureCreatePayload, RestaurantFeature, TenantCreatePayload, TenantCreateResponse } from '~/types/platform'
 import { apiFetch } from '~/services/http'
 
 export function fetchAllRestaurants() {
@@ -29,4 +29,32 @@ export function createTenant(payload: TenantCreatePayload) {
 
 export function verifyRestaurantDomain(restaurantId: number) {
   return apiFetch<Restaurant>(`/api/v1/platform/restaurants/${restaurantId}/verify-domain`, { method: 'POST' })
+}
+
+// ---- feature flags ----------------------------------------------------------------------------------
+
+export function fetchFeatureCatalog() {
+  return apiFetch<FeatureCatalogEntry[]>('/api/v1/platform/features')
+}
+
+export function createFeature(payload: FeatureCreatePayload) {
+  return apiFetch<FeatureCatalogEntry>('/api/v1/platform/features', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function deleteFeature(key: string) {
+  return apiFetch<void>(`/api/v1/platform/features/${key}`, { method: 'DELETE' })
+}
+
+export function fetchRestaurantFeatures(restaurantId: number) {
+  return apiFetch<RestaurantFeature[]>(`/api/v1/platform/restaurants/${restaurantId}/features`)
+}
+
+export function setRestaurantFeature(restaurantId: number, key: string, enabled: boolean) {
+  return apiFetch<RestaurantFeature[]>(`/api/v1/platform/restaurants/${restaurantId}/features/${key}`, {
+    method: 'PUT', body: JSON.stringify({ enabled }),
+  })
+}
+
+export function resetRestaurantFeature(restaurantId: number, key: string) {
+  return apiFetch<RestaurantFeature[]>(`/api/v1/platform/restaurants/${restaurantId}/features/${key}`, { method: 'DELETE' })
 }

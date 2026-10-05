@@ -250,9 +250,6 @@ async function verify(restaurant: Restaurant) {
           </tr>
         </tbody>
       </table>
-      <p class="border-t border-brand-100 px-4 py-3 text-xs text-ink-subtle">
-        Domain verification is a placeholder for real DNS/TLS automation — it doesn't check DNS yet, it just records that you checked it by hand.
-      </p>
     </div>
   </div>
 </template>
