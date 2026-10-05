@@ -71,6 +71,7 @@ GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "
 # Platform-only.
 PLATFORM = {
     ("GET", "/restaurants"),
+    ("GET", "/platform/features"), ("POST", "/platform/features"), ("DELETE", "/platform/features/{key}"),
     ("GET", "/platform/restaurants/{restaurant_id}/features"),
     ("PUT", "/platform/restaurants/{restaurant_id}/features/{key}"),
     ("DELETE", "/platform/restaurants/{restaurant_id}/features/{key}"),

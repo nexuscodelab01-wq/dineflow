@@ -17,7 +17,7 @@ from app.db.session import enter_bypass_mode, enter_tenant_mode
 
 ROLE_PASSWORD = "rls_test_password"
 # Tables that are intentionally not tenant-scoped (global reference data, or auth internals only ever read by id/hash).
-UNSCOPED = {"alembic_version", "roles", "refresh_tokens"}
+UNSCOPED = {"alembic_version", "roles", "refresh_tokens", "features"}  # a global catalog, like roles — see migration 0032
 
 
 @pytest.fixture(scope="module")

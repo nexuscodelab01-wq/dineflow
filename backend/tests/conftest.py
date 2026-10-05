@@ -14,6 +14,7 @@ from app.models.enums import RoleName
 from app.models.role import Role
 from app.models.user import User
 from app.repositories.user import RoleRepository
+from app.services.feature_service import FeatureService
 
 
 def _refuse_to_touch_real_data() -> None:
@@ -45,6 +46,7 @@ def db() -> Session:
     session = Session(bind=connection, join_transaction_mode="create_savepoint", autoflush=False)
 
     RoleRepository(session).ensure_defaults()
+    FeatureService(session).ensure_defaults()
     session.flush()
 
     try:

@@ -1,4 +1,4 @@
-"""Feature flags: defaults, per-restaurant overrides, enforcement, audit trail, operator CLI."""
+"""Feature flags: the catalog, per-restaurant overrides, enforcement, audit trail, operator CLI."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -6,7 +6,6 @@ import pytest
 
 from app import cli
 from app.core.config import settings
-from app.core.features import FEATURES
 from app.db.session import get_db
 from app.main import app
 from app.models.audit_log import AuditLog
@@ -26,8 +25,16 @@ def world(client, db):
     app.dependency_overrides.clear()
 
 
+def catalog_keys(w):
+    return {f.key for f in FeatureService(w.db).catalog()}
+
+
 def flag_url(rid, key=""):
     return f"{API}/platform/restaurants/{rid}/features" + (f"/{key}" if key else "")
+
+
+def feature_url(key=""):
+    return f"{API}/platform/features" + (f"/{key}" if key else "")
 
 
 def book(w, tenant):
@@ -41,7 +48,7 @@ def book(w, tenant):
 def test_flags_follow_their_defaults_until_overridden(world):
     w = world
     svc = FeatureService(w.db)
-    assert svc.resolve(w.a.rid) == {k: f.default for k, f in FEATURES.items()}
+    assert svc.resolve(w.a.rid) == {f.key: f.default_enabled for f in svc.catalog()}
     svc.set(w.a.rid, "qr_table_ordering", True, w.boss)
     assert svc.resolve(w.a.rid)["qr_table_ordering"] is True
     assert svc.resolve(w.b.rid)["qr_table_ordering"] is False            # other restaurants unaffected
@@ -49,7 +56,7 @@ def test_flags_follow_their_defaults_until_overridden(world):
     assert svc.resolve(w.a.rid)["qr_table_ordering"] is False
 
 
-def test_overrides_for_flags_removed_from_the_code_are_ignored(world):
+def test_overrides_for_flags_deleted_from_the_catalog_are_ignored(world):
     from app.models.feature_override import FeatureOverride
     w = world
     w.db.add(FeatureOverride(restaurant_id=w.a.rid, key="long_gone", enabled=True))
@@ -57,9 +64,10 @@ def test_overrides_for_flags_removed_from_the_code_are_ignored(world):
     assert "long_gone" not in FeatureService(w.db).resolve(w.a.rid)
 
 
-def test_asking_about_an_undeclared_flag_is_a_programming_error(world):
-    with pytest.raises(KeyError):
-        FeatureService(world.db).is_enabled(world.a.rid, "typo")
+def test_an_unknown_flag_key_resolves_as_off_rather_than_crashing(world):
+    """The catalog is database-backed now, so there's no static list left to tell a code typo apart from
+    "nobody's created this flag" — see feature_service.py's module docstring. Fail closed, not loud."""
+    assert FeatureService(world.db).is_enabled(world.a.rid, "no-such-flag") is False
 
 
 # ------------------------------------------------------------------ platform API
@@ -79,7 +87,7 @@ def test_only_platform_admins_manage_flags(world):
 def test_platform_admin_lists_sets_resets_and_gets_clear_errors(world):
     w, c, h = world, world.client, header(world.boss)
     listing = c.get(flag_url(w.a.rid), headers=h).json()
-    assert {f["key"] for f in listing} == set(FEATURES) and all(f["override"] is None for f in listing)
+    assert {f["key"] for f in listing} == catalog_keys(w) and all(f["override"] is None for f in listing)
 
     after = c.put(flag_url(w.a.rid, "pay_at_table"), headers=h, json={"enabled": True}).json()
     row = next(f for f in after if f["key"] == "pay_at_table")
@@ -151,7 +159,7 @@ def test_the_site_learns_its_flags_from_the_tenant_endpoint(world, monkeypatch):
     a = w.client.get(f"{API}/tenant", params={"host": f"{w.a.slug}.dineflow.test"}).json()
     b = w.client.get(f"{API}/tenant", params={"host": f"{w.b.slug}.dineflow.test"}).json()
     assert a["features"]["custom_branding"] is True and b["features"]["custom_branding"] is False
-    assert set(a["features"]) == set(FEATURES)
+    assert set(a["features"]) == catalog_keys(w)
 
 
 # ------------------------------------------------------------------ operator CLI
@@ -173,3 +181,67 @@ class _Ctx:
     def __init__(self, db): self.db = db
     def __enter__(self): return self.db
     def __exit__(self, *a): return False
+
+
+# ------------------------------------------------------------------ the catalog itself: create/delete
+
+def test_a_platform_admin_can_create_and_delete_a_flag(world):
+    w, c, h = world, world.client, header(world.boss)
+    created = c.post(feature_url(), headers=h, json={"key": "table_qr_art", "description": "Fancy QR code art", "default": True})
+    assert created.status_code == 201, created.text
+    assert created.json() == {"key": "table_qr_art", "description": "Fancy QR code art", "default": True}
+
+    listing = c.get(feature_url(), headers=h).json()
+    assert any(f["key"] == "table_qr_art" for f in listing)
+    assert FeatureService(w.db).resolve(w.a.rid)["table_qr_art"] is True          # follows its own default already
+
+    deleted = c.delete(feature_url("table_qr_art"), headers=h)
+    assert deleted.status_code == 204
+    assert "table_qr_art" not in catalog_keys(w)
+
+
+def test_creating_a_flag_rejects_a_bad_key_or_a_duplicate(world):
+    w, c, h = world, world.client, header(world.boss)
+    for bad in ("Has-Caps", "1starts_with_digit", "has space", ""):
+        r = c.post(feature_url(), headers=h, json={"key": bad, "description": "x", "default": False})
+        assert r.status_code == 422, bad
+
+    dupe = c.post(feature_url(), headers=h, json={"key": "reservations", "description": "already exists", "default": False})
+    assert dupe.status_code == 409
+
+
+def test_deleting_a_flag_takes_its_overrides_with_it(world):
+    w, c, h = world, world.client, header(world.boss)
+    c.post(feature_url(), headers=h, json={"key": "throwaway", "description": "temp", "default": False})
+    c.put(flag_url(w.a.rid, "throwaway"), headers=h, json={"enabled": True})
+    assert FeatureService(w.db).resolve(w.a.rid)["throwaway"] is True
+
+    assert c.delete(feature_url("throwaway"), headers=h).status_code == 204
+    from app.models.feature_override import FeatureOverride
+    assert w.db.query(FeatureOverride).filter_by(key="throwaway").count() == 0
+    assert "throwaway" not in FeatureService(w.db).resolve(w.a.rid)
+
+
+def test_a_newly_created_flag_does_nothing_until_code_checks_it(world):
+    """The whole point of a DB-only flag: creating it from the UI alone never gates anything by itself."""
+    w, c, h = world, world.client, header(world.boss)
+    c.post(feature_url(), headers=h, json={"key": "unwired", "description": "nothing checks this", "default": False})
+    c.put(flag_url(w.a.rid, "unwired"), headers=h, json={"enabled": True})
+    # Turning it on changes nothing observable anywhere else — there's simply no route or page gated on it.
+    assert book(w, w.a.restaurant).status_code == 200
+
+
+def test_only_a_platform_admin_manages_the_catalog(world):
+    w, c = world, world.client
+    for who in (None, w.a.customer, w.a.staff, w.a.admin):
+        h = header(who) if who else {}
+        expected = 401 if who is None else 403
+        assert c.get(feature_url(), headers=h).status_code == expected
+        assert c.post(feature_url(), headers=h, json={"key": "nope", "description": "x", "default": False}).status_code == expected
+        assert c.delete(feature_url("kitchen_v2"), headers=h).status_code == expected
+    assert "kitchen_v2" in catalog_keys(w)  # the delete attempts above never actually went through
+
+
+def test_deleting_an_unknown_flag_is_a_404(world):
+    r = world.client.delete(feature_url("no-such-flag"), headers=header(world.boss))
+    assert r.status_code == 404
