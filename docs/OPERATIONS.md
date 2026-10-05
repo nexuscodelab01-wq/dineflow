@@ -377,13 +377,17 @@ Besides the checks in the code, PostgreSQL itself refuses to show or change anot
 - **Owners of new restaurants** get a set-password link from `create-tenant` (7 days). In development, with `EMAIL_BACKEND=console`, emailed links appear in the backend log: `docker compose logs backend | grep reset-password`. Emails need `PUBLIC_SITE_URL` (and `PLATFORM_DOMAIN`) set to your real addresses in production.
 
 ## Feature flags
-Flags are declared in `backend/app/core/features.py` (key, default, description). A restaurant can deviate from a default; changes are audited.
+The catalog (key, description, default) lives in the database (`Feature` model), not in code — a platform admin manages it from **`/platform/features`**: create a flag, delete one, and pick a restaurant to toggle its flags On/Off/Default. The 9 flags DineFlow originally shipped with (`reservations`, `qr_table_ordering`, `pay_at_table`, `kitchen_v2`, `custom_branding`, `reviews`, `loyalty`, `coupons`, `scheduled_orders`) are seeded idempotently by `FeatureService.ensure_defaults()` (same pattern as `RoleRepository.ensure_defaults()`), called from `db/seed.py` — not inserted by a migration, since these rows are meant to be edited/deleted afterward.
+
+**The tradeoff of a DB-backed catalog**: creating a flag from the screen alone does *nothing* — nothing in the app checks it until a developer adds a `requires_feature(key)` (or `FeatureService(db).require(...)`) call somewhere. And there's no code list left to validate a key against, so an unknown key now resolves as **off** rather than raising — fail closed, never a crash, but also nothing to point at why a check is silently always denying. **Always create the DB flag before shipping a new `requires_feature(key)` check, never after** — and be careful deleting a flag from the screen if you're not sure something in code still checks it.
+
+A restaurant can deviate from a flag's default; every change (create, delete, set, reset) is audited.
 ```sh
 docker compose exec backend python -m app.cli features bella-vista-kitchen                 # list the flags
 docker compose exec backend python -m app.cli features bella-vista-kitchen kitchen_v2 on   # on | off | default
 docker compose exec backend python -m app.cli audit bella-vista-kitchen                    # who changed what
 ```
-The same is available to platform admins over the API (`/api/v1/platform/restaurants/{id}/features`). Turning a flag off blocks the API for that restaurant only and hides the UI for it. When a feature is on for everyone, delete the flag and its checks.
+The same is available to platform admins over the API (`/api/v1/platform/features` for the catalog, `/api/v1/platform/restaurants/{id}/features` for one restaurant's overrides). Turning a flag off blocks the API for that restaurant only and hides the UI for it.
 
 ## Still to do (roadmap stage A1/A2)
 Off-site backup automation, a staging environment, Redis-backed rate limiting.
