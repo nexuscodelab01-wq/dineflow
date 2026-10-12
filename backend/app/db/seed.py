@@ -529,6 +529,7 @@ def seed() -> None:
             db.add(
                 Payment(
                     order_id=order.id,
+                    restaurant_id=restaurant.id,
                     amount=total,
                     status=PaymentStatus.COMPLETED if status != OrderStatus.CANCELLED else PaymentStatus.REFUNDED,
                     payment_method=PaymentMethod.MOCK,
