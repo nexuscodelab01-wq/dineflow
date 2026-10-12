@@ -64,6 +64,12 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      # The build ARG above only bakes NUXT_PUBLIC_API_URL into the client bundle — SSR running
+      # *inside* this container also needs it at runtime (Nuxt's own NUXT_<KEY> env-override
+      # convention), plus the Docker-internal address for its own server-to-server calls to the
+      # backend (never the public URL — that's what NUXT_PUBLIC_API_URL is for the browser).
+      NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:-http://localhost:8000}
+      NUXT_API_URL: ${NUXT_API_URL:-http://backend:8000}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
