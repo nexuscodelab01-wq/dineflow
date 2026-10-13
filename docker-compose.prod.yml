@@ -38,8 +38,10 @@ services:
       ENVIRONMENT: production
       RUN_SEED: ${RUN_SEED:-false}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    # No published port — caddy is the only public entry point; everything else talks to this
+    # container over the internal "dineflow" network by its service name.
+    expose:
+      - "8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,15 +72,39 @@ services:
       # backend (never the public URL — that's what NUXT_PUBLIC_API_URL is for the browser).
       NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:-http://localhost:8000}
       NUXT_API_URL: ${NUXT_API_URL:-http://backend:8000}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+    # No published port — see backend's own comment above.
+    expose:
+      - "3000"
     depends_on:
       - backend
     networks:
       - dineflow
 
+  caddy:
+    build:
+      context: ./caddy
+    container_name: dineflow-caddy-prod
+    restart: unless-stopped
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - dineflow
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   dineflow:

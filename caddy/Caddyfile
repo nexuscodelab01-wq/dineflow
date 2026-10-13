@@ -1,0 +1,19 @@
+# DineFlow's reverse proxy: the only public entry point into the stack. Backend and frontend no longer
+# publish their ports directly (see docker-compose.prod.yml) — everything comes through here first.
+#
+# The wildcard (*.dineflow.io, one subdomain per restaurant) needs a DNS-01 ACME challenge, which needs
+# a Cloudflare API token scoped to this zone's DNS (CLOUDFLARE_API_TOKEN, see .env) — see caddy/Dockerfile.
+
+dineflow.io, *.dineflow.io {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	reverse_proxy frontend:3000
+}
+
+api.dineflow.io {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	reverse_proxy backend:8000
+}
