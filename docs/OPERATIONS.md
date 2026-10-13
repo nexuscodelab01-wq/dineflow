@@ -94,11 +94,13 @@ Order confirmations and reservation confirmed/cancelled emails are queued as `se
 ```sh
 scripts/backup-db.sh                                   # -> backups/dineflow-<utc time>.sql.gz
 COMPOSE_FILE=docker-compose.prod.yml scripts/backup-db.sh
+scripts/backup-and-upload.sh                            # backup-db.sh, then upload to R2 under backups/, then prune anything past RETENTION_DAYS (default 14) — both locally and in R2
 scripts/backup-drill.sh                                # back up, restore into a throwaway DB, compare every table's row count
 ```
-- **Schedule it** (cron / CI) and **copy the files off the server** (S3-compatible storage). A backup on the same disk dies with the disk.
+- **Scheduled on production** — root's crontab on the Hetzner box runs `backup-and-upload.sh` nightly at 03:17 UTC, logging to `/var/log/dineflow-backup.log`. It reads `S3_*` straight from `.env` — the same R2 bucket/credentials already used for file storage, just a different prefix (`backups/` vs whatever uploads use).
+- **R2's IP-filtered token needs both addresses on its allow-list** if the token is IP-restricted: the server prefers IPv6 for outbound connections by default, so an IPv4-only allow-list causes a confusing `AccessDenied` on every upload. Check `curl -s https://ifconfig.me` on the box for its current outbound address if this ever recurs (e.g. after a server rebuild).
 - **Run the drill regularly** — an untested backup is a hope, not a backup. It only reads the live database.
-- Backup files contain personal data (emails, password hashes). `backups/` is git-ignored; encrypt them at rest off-site.
+- Backup files contain personal data (emails, password hashes). `backups/` is git-ignored; encrypt them at rest off-site (R2 encrypts at rest by default).
 
 ### Restoring
 ```sh
