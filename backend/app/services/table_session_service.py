@@ -348,6 +348,53 @@ class TableSessionService:
         self.db.commit()
         return TablePaymentRead(client_secret=intent.client_secret)
 
+    def pay_by_card_at_pos(self, session_id: int, restaurant_id: int, staff_user_id: int) -> TablePaymentRead:
+        """The Terminal (card-reader) equivalent of `mark_paid_cash` — staff-initiated from the POS, not
+        the guest's own phone. Unlike `mark_paid_cash` (which marks COMPLETED outright, no Stripe
+        involvement), this creates a real PaymentIntent and must branch on whether it settled
+        synchronously, exactly like `pay()` does — so it mirrors `pay()`'s body with `card_present=True`
+        rather than `mark_paid_cash`'s always-COMPLETED shape."""
+        session = self.staff_session(session_id, restaurant_id)  # 404s / refuses an already-closed one
+        restaurant = self._restaurant(restaurant_id)
+        total = self.view(session).total
+        if total <= Decimal("0.00"):
+            raise AppError("There is nothing on this table's tab yet")
+        in_flight = self.db.scalar(
+            select(Payment.id).where(
+                Payment.table_session_id == session.id,
+                Payment.status.in_((PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION)),
+            )
+        )
+        if in_flight is not None:
+            raise AppError("A payment is already in progress for this table. Please wait a moment.")
+
+        provider_name = settings.PAYMENT_PROVIDER.strip().upper()
+        intent = get_payment_provider().create_intent(
+            total, currency=restaurant.currency, connected_account_id=restaurant.stripe_account_id,
+            metadata={"table_session_id": str(session.id), "restaurant_id": str(restaurant_id)},
+            card_present=True,
+        )
+        if intent.status == PaymentStatus.FAILED:
+            raise AppError(intent.failure_message or "Payment failed")
+
+        payment = Payment(
+            table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
+            currency=restaurant.currency, status=intent.status, payment_method=PaymentMethod.CARD,
+            provider=provider_name, provider_reference=intent.provider_intent_id,
+            provider_intent_id=intent.provider_intent_id,
+        )
+        self.db.add(payment)
+        self.db.flush()
+
+        if intent.status == PaymentStatus.COMPLETED:
+            # The mock provider settles synchronously — same reasoning as pay()/OrderService.create_order.
+            payment.status = PaymentStatus.COMPLETED
+            self.close_session(session.id, restaurant_id, staff_user_id=staff_user_id)  # commits
+            return TablePaymentRead(closed=True)
+
+        self.db.commit()
+        return TablePaymentRead(client_secret=intent.client_secret)
+
     def confirm_session_payment(self, payment: Payment) -> None:
         """Called from the payment_intent.succeeded webhook once a real (Stripe) session payment lands —
         the session-payment equivalent of OrderService.confirm_payment."""

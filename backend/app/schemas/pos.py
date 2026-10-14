@@ -58,3 +58,14 @@ class PosOrderRead(BaseModel):
 
 class OpenTableSessionsResponse(BaseModel):
     sessions: list[OpenSessionRead]
+
+
+class PosConnectionTokenRead(BaseModel):
+    secret: str
+
+
+class PosCardIntentRead(BaseModel):
+    order_id: int
+    status: str  # "CONFIRMED" (mock, settled synchronously) or "PENDING" (Stripe, webhook still pending)
+    client_secret: str | None = None
+    provider_intent_id: str | None = None

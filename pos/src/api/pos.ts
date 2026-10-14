@@ -4,8 +4,11 @@ import type {
   MenuListResponse,
   OpenTableSessionsResponse,
   PinLoginResponse,
+  PosCardIntentRead,
+  PosConnectionTokenResponse,
   PosOrderItem,
   PosOrderRead,
+  TablePaymentRead,
 } from './types';
 
 export function pinLogin(deviceToken: string, pin: string) {
@@ -17,9 +20,10 @@ export function fetchCategories(restaurantId: number) {
 }
 
 export function fetchMenu(restaurantId: number) {
-  // page_size large enough that a single restaurant's whole menu fits on one page — fine for this
-  // milestone; proper pagination can come later if a menu ever genuinely needs it.
-  return apiFetch<MenuListResponse>('/menu', { params: { restaurant_id: restaurantId, page_size: 200 } });
+  // 100 is the backend's own hard cap (Query(..., le=100) in admin_management.py) — large enough
+  // that a single restaurant's whole menu fits on one page for this milestone; proper pagination can
+  // come later if a menu ever genuinely needs more than that.
+  return apiFetch<MenuListResponse>('/menu', { params: { restaurant_id: restaurantId, page_size: 100 } });
 }
 
 export function fetchOpenTableSessions(deviceToken: string) {
@@ -38,4 +42,16 @@ export function createTableOrder(posSessionToken: string, sessionId: number, ite
 
 export function payCash(posSessionToken: string, orderId: number) {
   return apiFetch<void>(`/pos/orders/${orderId}/pay-cash`, { method: 'POST', token: posSessionToken });
+}
+
+export function createCardIntent(posSessionToken: string, orderId: number) {
+  return apiFetch<PosCardIntentRead>(`/pos/orders/${orderId}/pay-card`, { method: 'POST', token: posSessionToken });
+}
+
+export function createTableCardIntent(posSessionToken: string, sessionId: number) {
+  return apiFetch<TablePaymentRead>(`/pos/table-sessions/${sessionId}/pay-card`, { method: 'POST', token: posSessionToken });
+}
+
+export function fetchTerminalConnectionToken(posSessionToken: string) {
+  return apiFetch<PosConnectionTokenResponse>('/pos/terminal/connection-token', { method: 'POST', token: posSessionToken });
 }

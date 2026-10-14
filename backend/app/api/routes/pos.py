@@ -5,9 +5,10 @@ Device-token/pos_session-token gated (app.dependencies.pos), not JWT — a POS d
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
 from app.dependencies.features import (
@@ -15,15 +16,19 @@ from app.dependencies.features import (
     requires_feature_for_pos_staff,
 )
 from app.dependencies.pos import CurrentDevice, CurrentPosStaff
+from app.models.restaurant import Restaurant
 from app.models.table_session import TableSession
 from app.schemas.pos import (
     OpenTableSessionsResponse,
     PinLoginRequest,
     PinLoginResponse,
+    PosCardIntentRead,
+    PosConnectionTokenRead,
     PosOrderCreate,
     PosOrderRead,
 )
-from app.schemas.table_session import RoundCreate, SessionRoundRead
+from app.schemas.table_session import RoundCreate, SessionRoundRead, TablePaymentRead
+from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
 from app.services.table_session_service import TableSessionService
 
@@ -83,3 +88,36 @@ def pay_cash(order_id: int, staff: CurrentPosStaff, service: Pos) -> None:
         service.mark_counter_order_paid_cash(staff.device.restaurant_id, order_id, staff.user)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/orders/{order_id}/pay-card", response_model=PosCardIntentRead, dependencies=POS_STAFF_GATE)
+def pay_card(order_id: int, staff: CurrentPosStaff, service: Pos) -> PosCardIntentRead:
+    try:
+        return service.create_counter_order_card_intent(staff.device.restaurant_id, order_id, staff.user)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/pay-card", response_model=TablePaymentRead, dependencies=POS_STAFF_GATE)
+def pos_table_pay_card(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> TablePaymentRead:
+    session = db.get(TableSession, session_id)
+    if session is None or session.restaurant_id != staff.device.restaurant_id:
+        raise raise_http_for_app_error(NotFoundError("Session not found"))
+    try:
+        return TableSessionService(db).pay_by_card_at_pos(session_id, staff.device.restaurant_id, staff.user.id)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/terminal/connection-token", response_model=PosConnectionTokenRead, dependencies=POS_STAFF_GATE)
+def terminal_connection_token(staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> PosConnectionTokenRead:
+    """What @stripe/stripe-terminal-react-native's tokenProvider calls. 503 under PAYMENT_PROVIDER=mock
+    — there's no Terminal SDK session to authenticate without real Stripe, same "not configured" guard
+    shape as POST /webhooks/stripe when STRIPE_WEBHOOK_SECRET is unset."""
+    if settings.PAYMENT_PROVIDER.strip().lower() != "stripe":
+        raise HTTPException(status_code=503, detail="Card payments are not configured")
+    restaurant = db.get(Restaurant, staff.device.restaurant_id)
+    if restaurant is None or not restaurant.stripe_account_id:
+        raise HTTPException(status_code=503, detail="This restaurant hasn't connected a Stripe account yet")
+    secret = create_terminal_connection_token(restaurant.stripe_account_id)
+    return PosConnectionTokenRead(secret=secret)

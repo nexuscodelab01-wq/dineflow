@@ -71,6 +71,22 @@ export type PosOrderRead = {
   status: string;
 };
 
+export type PosCardIntentRead = {
+  order_id: number;
+  status: string;
+  client_secret: string | null;
+  provider_intent_id?: string | null;
+};
+
+export type PosConnectionTokenResponse = {
+  secret: string;
+};
+
+export type TablePaymentRead = {
+  client_secret?: string | null;
+  closed?: boolean;
+};
+
 export type ApiErrorBody = {
   detail?: string;
 };

@@ -21,6 +21,7 @@ class MockPaymentProvider(PaymentProvider):
         currency: str,
         connected_account_id: str | None,
         metadata: dict[str, str],
+        card_present: bool = False,
     ) -> IntentResult:
         if amount <= 0:
             return IntentResult(status=PaymentStatus.FAILED, failure_message="Invalid payment amount")

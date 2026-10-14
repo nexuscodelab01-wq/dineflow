@@ -1,8 +1,9 @@
 """The provider-agnostic payment interface.
 
-Every payment gateway DineFlow might use — today's mock, Stripe, and later a kiosk/POS card terminal
-(see ROADMAP §7.7) — implements this. `order_service.py` and the webhook route only ever talk to a
-`PaymentProvider`, never to a specific SDK, so swapping or adding a provider never touches order logic.
+Every payment gateway DineFlow might use — today's mock, Stripe, and now a POS card terminal (see
+ROADMAP §7.7, `card_present` below) — implements this. `order_service.py` and the webhook route only
+ever talk to a `PaymentProvider`, never to a specific SDK, so swapping or adding a provider never
+touches order logic.
 """
 
 from abc import ABC, abstractmethod
@@ -40,11 +41,15 @@ class PaymentProvider(ABC):
         currency: str,
         connected_account_id: str | None,
         metadata: dict[str, str],
+        card_present: bool = False,
     ) -> IntentResult:
         """Start a charge attempt for `amount` (major units, e.g. 12.50 not 1250).
 
         `connected_account_id` is the restaurant's Stripe Connect account (or whatever the equivalent is
         for another provider); a provider that has no such concept ignores it.
+
+        `card_present=True` requests a charge confirmed by a card reader (Stripe Terminal) rather than a
+        browser — see `pos_service.py`'s card-tender methods. A provider with no such concept ignores it.
         """
 
     @abstractmethod

@@ -6,6 +6,7 @@ import PairingScreen from '../screens/PairingScreen';
 import PinEntryScreen from '../screens/PinEntryScreen';
 import OrderScreen from '../screens/OrderScreen';
 import CashTenderScreen from '../screens/CashTenderScreen';
+import CardTenderScreen from '../screens/CardTenderScreen';
 import { usePosStore } from '../state/store';
 
 export type RootStackParamList = {
@@ -13,6 +14,7 @@ export type RootStackParamList = {
   PinEntry: undefined;
   Order: undefined;
   CashTender: { orderId: number; orderNumber: string; total: string };
+  CardTender: { orderId: number; orderNumber: string; total: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -46,6 +48,7 @@ export default function RootNavigator() {
           <>
             <Stack.Screen name="Order" component={OrderScreen} />
             <Stack.Screen name="CashTender" component={CashTenderScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="CardTender" component={CardTenderScreen} options={{ presentation: 'modal' }} />
           </>
         )}
       </Stack.Navigator>

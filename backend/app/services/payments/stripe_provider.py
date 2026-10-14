@@ -38,6 +38,7 @@ class StripePaymentProvider(PaymentProvider):
         currency: str,
         connected_account_id: str | None,
         metadata: dict[str, str],
+        card_present: bool = False,
     ) -> IntentResult:
         if amount <= 0:
             return IntentResult(status=PaymentStatus.FAILED, failure_message="Invalid payment amount")
@@ -47,17 +48,33 @@ class StripePaymentProvider(PaymentProvider):
                 failure_message="This restaurant hasn't connected a Stripe account yet",
             )
         try:
-            intent = self.client.v1.payment_intents.create(
-                {
-                    "amount": _minor_units(amount, currency),
-                    "currency": currency,
-                    "metadata": metadata,
-                    "automatic_payment_methods": {"enabled": True},
-                },
-                # A direct charge: created *on* the restaurant's connected account (Stripe-Account
-                # header), not the platform's — see this module's docstring.
-                options={"stripe_account": connected_account_id},
-            )
+            # A card reader (Stripe Terminal) confirms a card_present intent, not a browser — see
+            # pos_service.py/table_session_service.py's card-tender methods. Two full literals (rather
+            # than merging a shared dict into each) because Stripe's generated TypedDict param doesn't
+            # support ** expansion.
+            if card_present:
+                intent = self.client.v1.payment_intents.create(
+                    {
+                        "amount": _minor_units(amount, currency),
+                        "currency": currency,
+                        "metadata": metadata,
+                        "payment_method_types": ["card_present"],
+                        "capture_method": "automatic",
+                    },
+                    options={"stripe_account": connected_account_id},
+                )
+            else:
+                intent = self.client.v1.payment_intents.create(
+                    {
+                        "amount": _minor_units(amount, currency),
+                        "currency": currency,
+                        "metadata": metadata,
+                        "automatic_payment_methods": {"enabled": True},
+                    },
+                    # A direct charge: created *on* the restaurant's connected account (Stripe-Account
+                    # header), not the platform's — see this module's docstring.
+                    options={"stripe_account": connected_account_id},
+                )
         except stripe.StripeError as exc:
             return IntentResult(status=PaymentStatus.FAILED, failure_message=str(exc.user_message or exc))
         return IntentResult(
@@ -65,6 +82,14 @@ class StripePaymentProvider(PaymentProvider):
             provider_intent_id=intent.id,
             client_secret=intent.client_secret,
         )
+
+    def create_terminal_connection_token(self, *, connected_account_id: str) -> str:
+        """What the Terminal SDK's `tokenProvider` needs to authenticate with Stripe/the reader — scoped
+        to the restaurant's own connected account, same as every other Terminal/charge call here."""
+        token = self.client.v1.terminal.connection_tokens.create(
+            {}, options={"stripe_account": connected_account_id}
+        )
+        return token.secret
 
     def refund(
         self, *, provider_intent_id: str, amount: Decimal, currency: str, connected_account_id: str | None

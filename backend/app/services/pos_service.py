@@ -18,6 +18,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.security import (
     POS_SESSION_MINUTES,
@@ -28,7 +29,7 @@ from app.core.security import (
 )
 from app.models.audit_log import AuditLog
 from app.models.device import Device
-from app.models.enums import OrderStatus, OrderType, PaymentMethod
+from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.order import Order
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
@@ -39,11 +40,13 @@ from app.schemas.pos import (
     DevicePairResponse,
     DeviceRead,
     PinLoginResponse,
+    PosCardIntentRead,
     PosOrderCreate,
     PosOrderRead,
 )
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
+from app.services.payments import get_payment_provider
 
 FEATURE = "pos"
 
@@ -169,3 +172,47 @@ class PosService:
         self.db.flush()
         OrderService(self.db).confirm_payment(order, payment, user_id=staff.id, notes="Cash tender at the POS")
         self.db.commit()
+
+    def create_counter_order_card_intent(self, restaurant_id: int, order_id: int, staff: User) -> PosCardIntentRead:
+        """Starts a card-present PaymentIntent for a counter order already created by
+        create_counter_order. Unlike cash, a real (Stripe) payment is left PENDING here — the
+        payment_intent.succeeded webhook's existing confirm_payment call is what actually confirms it,
+        once the reader finishes. The mock provider still settles synchronously, exactly like
+        OrderService.create_order already does, so this is fully testable without Stripe."""
+        FeatureService(self.db).require(restaurant_id, FEATURE)  # reachable independently of order creation
+        order = self.db.get(Order, order_id)
+        if order is None or order.restaurant_id != restaurant_id:
+            raise NotFoundError("Order not found")
+        if order.status != OrderStatus.PENDING:
+            raise AppError("This order has already been paid")
+        restaurant = self.db.get(Restaurant, restaurant_id)
+        if restaurant is None:
+            raise NotFoundError("Restaurant not found")
+
+        provider_name = settings.PAYMENT_PROVIDER.strip().upper()
+        intent = get_payment_provider().create_intent(
+            order.total, currency=restaurant.currency, connected_account_id=restaurant.stripe_account_id,
+            metadata={"order_id": str(order.id), "restaurant_id": str(restaurant_id)}, card_present=True,
+        )
+        if intent.status == PaymentStatus.FAILED:
+            raise AppError(intent.failure_message or "Payment failed")
+
+        payment = Payment(
+            order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
+            status=intent.status, payment_method=PaymentMethod.CARD, provider=provider_name,
+            provider_reference=intent.provider_intent_id, provider_intent_id=intent.provider_intent_id,
+        )
+        self.db.add(payment)
+        self.db.flush()
+
+        if intent.status == PaymentStatus.COMPLETED:
+            # Mock provider settles synchronously — same reasoning as OrderService.create_order.
+            OrderService(self.db).confirm_payment(order, payment, user_id=staff.id, notes="Card tender at the POS (mock)")
+            self.db.commit()
+            return PosCardIntentRead(order_id=order.id, status=OrderStatus.CONFIRMED.value)
+
+        self.db.commit()
+        return PosCardIntentRead(
+            order_id=order.id, status=OrderStatus.PENDING.value,
+            client_secret=intent.client_secret, provider_intent_id=intent.provider_intent_id,
+        )

@@ -57,4 +57,19 @@ def reverse_payment(payment: Payment, *, connected_account_id: str | None) -> Re
     return RefundResult(success=True)  # already FAILED/REFUNDED, or a PENDING payment with nothing to cancel
 
 
-__all__ = ["IntentResult", "PaymentProvider", "RefundResult", "get_payment_provider", "reverse_payment"]
+def create_terminal_connection_token(connected_account_id: str) -> str:
+    """Only meaningful under the Stripe provider — mock has no Terminal SDK to authenticate. Callers
+    (the POS route) must check `settings.PAYMENT_PROVIDER` themselves and refuse before calling this."""
+    from app.services.payments.stripe_provider import StripePaymentProvider
+
+    return StripePaymentProvider().create_terminal_connection_token(connected_account_id=connected_account_id)
+
+
+__all__ = [
+    "IntentResult",
+    "PaymentProvider",
+    "RefundResult",
+    "create_terminal_connection_token",
+    "get_payment_provider",
+    "reverse_payment",
+]

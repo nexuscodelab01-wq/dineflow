@@ -47,6 +47,13 @@ export default function CashTenderScreen({ route, navigation }: Props) {
           <TouchableOpacity style={[styles.button, busy && styles.buttonDisabled]} onPress={markPaid} disabled={busy}>
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Mark Paid (Cash)</Text>}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.replace('CardTender', { orderId, orderNumber, total })}
+            disabled={busy}
+          >
+            <Text style={styles.secondaryButtonText}>Pay by card</Text>
+          </TouchableOpacity>
         </>
       )}
     </View>
@@ -62,4 +69,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2c6f53', borderRadius: 10, paddingVertical: 18, paddingHorizontal: 40 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  secondaryButton: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 20 },
+  secondaryButtonText: { color: '#2c6f53', fontSize: 15, fontWeight: '600' },
 });

@@ -72,7 +72,8 @@ GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "
 POS = {
     ("POST", "/pos/auth/pin-login"), ("GET", "/pos/table-sessions/open"),
     ("POST", "/pos/table-sessions/{session_id}/orders"), ("POST", "/pos/orders"),
-    ("POST", "/pos/orders/{order_id}/pay-cash"),
+    ("POST", "/pos/orders/{order_id}/pay-cash"), ("POST", "/pos/orders/{order_id}/pay-card"),
+    ("POST", "/pos/table-sessions/{session_id}/pay-card"), ("POST", "/pos/terminal/connection-token"),
 }
 # Platform-only.
 PLATFORM = {
