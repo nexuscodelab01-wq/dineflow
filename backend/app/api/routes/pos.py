@@ -80,6 +80,6 @@ def create_counter_order(data: PosOrderCreate, staff: CurrentPosStaff, service: 
 @router.post("/orders/{order_id}/pay-cash", status_code=204, dependencies=POS_STAFF_GATE)
 def pay_cash(order_id: int, staff: CurrentPosStaff, service: Pos) -> None:
     try:
-        service.mark_counter_order_paid_cash(staff.device.restaurant_id, order_id)
+        service.mark_counter_order_paid_cash(staff.device.restaurant_id, order_id, staff.user)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc

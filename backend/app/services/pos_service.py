@@ -1,11 +1,14 @@
 """POS: device pairing, PIN quick-switch, counter orders, cash tender.
 
-Counter-order creation mirrors TableSessionService.place_round's shape (staff-initiated, no
-payment-intent round trip, CONFIRMED immediately, reuses OrderService._next_order_number/_add_lines
-directly) minus everything table-session-specific — there's no round, no client-token dedupe, no table.
-Cash tender mirrors TableSessionService.mark_paid_cash: insert a COMPLETED Payment directly, no
-provider round-trip, no second kitchen publish (the order already went CONFIRMED and published to the
-kitchen at creation time, same as a place_round round) — payment here is pure bookkeeping.
+Counter orders are paid *before* they reach the kitchen — the normal quick-service counter pattern
+(unlike a table's tab, which is correctly the opposite: open all meal, pay at the end via
+TableSessionService.place_round/mark_paid_cash). So create_counter_order leaves the order PENDING and
+never publishes to the kitchen; mark_counter_order_paid_cash is what actually confirms it, reusing
+OrderService.confirm_payment — the exact same PENDING -> CONFIRMED + kitchen-publish + (no-op, no
+customer_email) confirmation-email transition every online order already goes through. The order row
+has to exist before payment can reference it (an order_id), but nothing about it is visible to kitchen
+staff — or counted as revenue, since analytics/dashboard queries already only count CONFIRMED+ orders —
+until that happens.
 """
 
 import secrets
@@ -16,7 +19,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError
-from app.core.realtime import kitchen_topic, publish
 from app.core.security import (
     POS_SESSION_MINUTES,
     create_device_token,
@@ -26,7 +28,7 @@ from app.core.security import (
 )
 from app.models.audit_log import AuditLog
 from app.models.device import Device
-from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
+from app.models.enums import OrderStatus, OrderType, PaymentMethod
 from app.models.order import Order
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
@@ -143,29 +145,27 @@ class PosService:
             order.subtotal, order.tax, order.total = subtotal, tax, total
 
             self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=staff.id))
-            order.status = OrderStatus.CONFIRMED  # paid at the counter, so nothing to wait for
-            self.db.add(OrderStatusHistory(
-                order_id=order.id, previous_status=OrderStatus.PENDING, new_status=OrderStatus.CONFIRMED,
-                changed_by_user_id=staff.id, notes="Rung in at the POS",
-            ))
+            # Stays PENDING, nothing published — see module docstring. mark_counter_order_paid_cash
+            # is what actually confirms it, once it's actually paid.
 
         order_id, order_number, total = order.id, order.order_number, order.total
-        publish(self.db, kitchen_topic(restaurant.id), "order.created", {"order_id": order_id, "order_number": order_number})
         self.db.commit()
-        return PosOrderRead(order_id=order_id, order_number=order_number, total=total, status=OrderStatus.CONFIRMED.value)
+        return PosOrderRead(order_id=order_id, order_number=order_number, total=total, status=OrderStatus.PENDING.value)
 
-    def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int) -> None:
+    def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int, staff: User) -> None:
         order = self.db.get(Order, order_id)
         if order is None or order.restaurant_id != restaurant_id:
             raise NotFoundError("Order not found")
+        if order.status != OrderStatus.PENDING:
+            raise AppError("This order has already been paid")
         restaurant = self.db.get(Restaurant, restaurant_id)
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
-        existing = self.db.scalar(select(Payment).where(Payment.order_id == order.id, Payment.status == PaymentStatus.COMPLETED))
-        if existing is not None:
-            raise AppError("This order has already been paid")
-        self.db.add(Payment(
+        payment = Payment(
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
-            status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH, provider="MANUAL",
-        ))
+            payment_method=PaymentMethod.CASH, provider="MANUAL",
+        )
+        self.db.add(payment)
+        self.db.flush()
+        OrderService(self.db).confirm_payment(order, payment, user_id=staff.id, notes="Cash tender at the POS")
         self.db.commit()

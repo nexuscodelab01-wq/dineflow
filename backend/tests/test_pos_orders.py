@@ -1,4 +1,5 @@
-"""Counter orders from the POS: flag-gated, hits the kitchen, cash tender, staff attribution."""
+"""Counter orders from the POS: flag-gated, paid before it hits the kitchen (not after — the normal
+quick-service counter pattern, unlike a table's tab), staff attribution."""
 
 from decimal import Decimal
 
@@ -41,21 +42,37 @@ def pos_session(w, tenant, user, pin="1234"):
     return {"Authorization": f"Bearer {login.json()['pos_session_token']}"}
 
 
-def test_a_counter_order_is_created_confirmed_and_attributed(world):
+def test_a_counter_order_is_created_pending_and_attributed(world):
+    """PENDING, not CONFIRMED — it hasn't been paid yet, so it must not be visible to the kitchen or
+    counted as revenue until mark_counter_order_paid_cash actually confirms it."""
     w = world
     staff_headers = pos_session(w, w.a, w.a.staff)
 
     r = w.client.post(f"{API}/pos/orders", headers=staff_headers, json={"items": [{"menu_item_id": w.a.item.id, "quantity": 2, "modifier_option_ids": []}]})
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["status"] == "CONFIRMED"
+    assert body["status"] == "PENDING"
     assert body["total"] == str((Decimal("12.00") * 2 * Decimal("1.10")).quantize(Decimal("0.01")))
 
     order = w.db.get(Order, body["order_id"])
     assert order.order_type == OrderType.COUNTER
     assert order.user_id == w.a.staff.id
-    assert order.status == OrderStatus.CONFIRMED
+    assert order.status == OrderStatus.PENDING
     assert order.customer_name == "Alpha (staff)"
+
+
+def test_cash_tender_is_what_actually_confirms_the_order(world):
+    w = world
+    staff_headers = pos_session(w, w.a, w.a.staff)
+    created = w.client.post(f"{API}/pos/orders", headers=staff_headers, json={"items": [{"menu_item_id": w.a.item.id, "quantity": 1, "modifier_option_ids": []}]})
+    order_id = created.json()["order_id"]
+    assert w.db.get(Order, order_id).status == OrderStatus.PENDING
+
+    r = w.client.post(f"{API}/pos/orders/{order_id}/pay-cash", headers=staff_headers)
+    assert r.status_code == 204, r.text
+
+    order = w.db.get(Order, order_id)
+    assert order.status == OrderStatus.CONFIRMED
 
 
 def test_counter_orders_are_refused_when_the_pos_flag_is_off(world):
