@@ -68,6 +68,12 @@ CUSTOMER = {
 }
 # Guests at a table: a table pass (not an account) bound to one restaurant's open session; see test_table_ordering.py.
 GUEST = {("GET", "/table-session"), ("POST", "/table-session/orders"), ("GET", "/table-session/stream"), ("POST", "/table-session/requests"), ("POST", "/table-session/pay")}
+# POS devices: tenant comes from the device's own pairing, not a JWT — see test_pos_*.py.
+POS = {
+    ("POST", "/pos/auth/pin-login"), ("GET", "/pos/table-sessions/open"),
+    ("POST", "/pos/table-sessions/{session_id}/orders"), ("POST", "/pos/orders"),
+    ("POST", "/pos/orders/{order_id}/pay-cash"),
+}
 # Platform-only.
 PLATFORM = {
     ("GET", "/restaurants"),
@@ -90,7 +96,7 @@ def all_routes():
 
 
 def test_every_route_is_classified_for_isolation():
-    known = PUBLIC | AUTH | CUSTOMER | GUEST | PLATFORM
+    known = PUBLIC | AUTH | CUSTOMER | GUEST | PLATFORM | POS
     unclassified = [(m, p) for m, p in all_routes() if not p.startswith("/admin") and (m, p) not in known]
     assert not unclassified, (
         f"New API route(s) without an isolation decision: {unclassified}. Add each to PUBLIC, AUTH, CUSTOMER or "
