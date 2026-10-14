@@ -70,6 +70,51 @@ def decode_reservation_action_token(token: str) -> dict[str, Any]:
     return payload
 
 
+def create_device_token(device_id: int, restaurant_id: int) -> str:
+    """A paired POS device's own credential — stored once on the iPad, survives restarts. No real
+    expiry (jose needs *some* exp, so this uses a far-future one): revocation is Device.revoked_at,
+    re-checked on every request, not token expiry — see app/dependencies/pos.py."""
+    payload = {
+        "sub": str(device_id), "type": "device", "tenant": restaurant_id,
+        "exp": datetime.now(UTC) + timedelta(days=3650),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_device_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid device token") from exc
+    if payload.get("type") != "device":
+        raise ValueError("Invalid token type")
+    return payload
+
+
+POS_SESSION_MINUTES = 45
+
+
+def create_pos_session_token(device_id: int, staff_user_id: int, restaurant_id: int) -> str:
+    """Minted on a successful PIN entry — short-lived, layered on top of an already-valid device
+    token. Lets order-attribution and cash-tender resolve "who is this" from the Authorization header
+    alone, the same way every other identity in this codebase works."""
+    payload = {
+        "sub": str(staff_user_id), "type": "pos_session", "device": device_id, "tenant": restaurant_id,
+        "exp": datetime.now(UTC) + timedelta(minutes=POS_SESSION_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_pos_session_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid or expired session") from exc
+    if payload.get("type") != "pos_session":
+        raise ValueError("Invalid token type")
+    return payload
+
+
 def create_refresh_token_value() -> str:
     return secrets.token_urlsafe(48)
 

@@ -14,6 +14,7 @@ class OrderType(str, enum.Enum):
     DINE_IN = "DINE_IN"
     PICKUP = "PICKUP"
     DELIVERY = "DELIVERY"
+    COUNTER = "COUNTER"  # rung in by staff at a POS till, no table and nothing to deliver
 
 
 class OrderStatus(str, enum.Enum):

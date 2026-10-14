@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ForbiddenError
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
+from app.dependencies.pos import CurrentDevice, CurrentPosStaff
 from app.dependencies.restaurant import RestaurantId
 from app.services.feature_service import FeatureService
 
@@ -34,5 +35,27 @@ def requires_feature_for_user(key: str) -> Callable[..., None]:
         if user.restaurant_id is None:
             raise ForbiddenError("This feature is not available for this account")
         FeatureService(db).require(user.restaurant_id, key)
+
+    return dependency
+
+
+def requires_feature_for_device(key: str) -> Callable[..., None]:
+    """Route dependency for POS routes: 403 when the flag is off for the paired device's restaurant.
+
+    Same core check as the two variants above — only the identity source differs, since a POS device
+    has no CurrentUser (JWT) to resolve a restaurant from."""
+
+    def dependency(device: CurrentDevice, db: Annotated[Session, Depends(get_db)]) -> None:
+        FeatureService(db).require(device.device.restaurant_id, key)
+
+    return dependency
+
+
+def requires_feature_for_pos_staff(key: str) -> Callable[..., None]:
+    """Route dependency for POS routes gated on a PIN'd-in staff member (CurrentPosStaff), not just
+    the device itself — e.g. order-taking, which needs to know who's acting, not only which till."""
+
+    def dependency(staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+        FeatureService(db).require(staff.device.restaurant_id, key)
 
     return dependency

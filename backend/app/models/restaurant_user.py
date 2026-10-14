@@ -2,9 +2,11 @@
 
 `role` is deliberately separate from the global `User.role_id`: a person's *account* role (are they
 staff at all) and their role *at this restaurant* are different questions, and keeping them apart is
-what lets the same account be an admin at one restaurant and plain staff at another later, and is a
-prerequisite for shared-device PIN switching (kiosk/POS). Only RESTAURANT_ADMIN and RESTAURANT_STAFF
-are valid here — a membership row only ever exists for those two roles in the first place.
+what lets the same account be an admin at one restaurant and plain staff at another later, and is what
+`pin_hash` below builds on for shared-device PIN switching (kiosk/POS) — the same person can hold a
+different PIN (or none) at each restaurant they work at, scoped to the membership, not the account.
+Only RESTAURANT_ADMIN and RESTAURANT_STAFF are valid here — a membership row only ever exists for those
+two roles in the first place.
 
 Authorization still runs on the global role today (`app/dependencies/restaurant.py`), not on this
 column directly — a real per-membership authorization check is a later redesign, not this sprint's.
@@ -49,6 +51,10 @@ class RestaurantUser(TimestampMixin, Base):
     # migration if RoleName ever grows a finer-grained role (manager, host, kitchen…).
     role: Mapped[RoleName] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    # A POS quick-switch PIN for this membership — null until an admin sets one. Hashed with the same
+    # bcrypt helper as account passwords (app/services/password_service.py); uniqueness is enforced
+    # per-restaurant in the service layer (PosService), not a DB constraint — see pos_service.py.
+    pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="staff")
     user: Mapped["User"] = relationship("User", back_populates="restaurant_memberships")
