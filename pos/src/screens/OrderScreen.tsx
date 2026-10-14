@@ -19,6 +19,8 @@ export default function OrderScreen({ navigation }: Props) {
   const logoutPin = usePosStore((s) => s.logoutPin);
   const cart = usePosStore((s) => s.cart);
   const addToCart = usePosStore((s) => s.addToCart);
+  const removeFromCart = usePosStore((s) => s.removeFromCart);
+  const decrementCartLine = usePosStore((s) => s.decrementCartLine);
   const clearCart = usePosStore((s) => s.clearCart);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -130,14 +132,38 @@ export default function OrderScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.cartColumn}>
-          <Text style={styles.cartTitle}>Cart</Text>
+          <View style={styles.cartHeader}>
+            <Text style={styles.cartTitle}>Cart</Text>
+            {cart.length > 0 && (
+              <TouchableOpacity onPress={clearCart}>
+                <Text style={styles.clearCart}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <FlatList
             data={cart}
             keyExtractor={(l) => String(l.menuItemId)}
             renderItem={({ item }) => (
               <View style={styles.cartLine}>
-                <Text style={styles.cartLineText}>{item.quantity}× {item.name}</Text>
-                <Text style={styles.cartLineText}>${(item.price * item.quantity).toFixed(2)}</Text>
+                <View style={styles.cartLineInfo}>
+                  <Text style={styles.cartLineText}>{item.name}</Text>
+                  <Text style={styles.cartLineText}>${(item.price * item.quantity).toFixed(2)}</Text>
+                </View>
+                <View style={styles.cartLineControls}>
+                  <TouchableOpacity style={styles.qtyButton} onPress={() => decrementCartLine(item.menuItemId)}>
+                    <Text style={styles.qtyButtonText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.qtyText}>{item.quantity}</Text>
+                  <TouchableOpacity
+                    style={styles.qtyButton}
+                    onPress={() => addToCart({ menuItemId: item.menuItemId, name: item.name, price: item.price })}
+                  >
+                    <Text style={styles.qtyButtonText}>+</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.removeButton} onPress={() => removeFromCart(item.menuItemId)}>
+                    <Text style={styles.removeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
             ListEmptyComponent={<Text style={styles.empty}>Tap items to add them</Text>}
@@ -187,9 +213,21 @@ const styles = StyleSheet.create({
   menuItemName: { fontSize: 16 },
   menuItemPrice: { fontSize: 16, color: '#555' },
   cartColumn: { flex: 1, padding: 12, borderLeftWidth: 1, borderLeftColor: '#eee' },
-  cartTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  cartLine: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  cartTitle: { fontSize: 16, fontWeight: '700' },
+  clearCart: { color: '#c0392b', fontSize: 13, fontWeight: '600' },
+  cartLine: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  cartLineInfo: { flexDirection: 'row', justifyContent: 'space-between' },
   cartLineText: { fontSize: 14 },
+  cartLineControls: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 },
+  qtyButton: {
+    width: 26, height: 26, borderRadius: 13, backgroundColor: '#f0f0f0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  qtyButtonText: { fontSize: 16, fontWeight: '700', color: '#333' },
+  qtyText: { fontSize: 14, fontWeight: '600', minWidth: 20, textAlign: 'center' },
+  removeButton: { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 4 },
+  removeButtonText: { color: '#c0392b', fontSize: 14, fontWeight: '700' },
   empty: { color: '#999', fontSize: 13, padding: 8 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#eee' },
   totalLabel: { fontSize: 16, fontWeight: '700' },

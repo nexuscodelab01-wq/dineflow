@@ -26,6 +26,7 @@ type PosState = {
   logoutPin: () => void;
   addToCart: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
   removeFromCart: (menuItemId: number) => void;
+  decrementCartLine: (menuItemId: number) => void;
   clearCart: () => void;
 };
 
@@ -72,6 +73,13 @@ export const usePosStore = create<PosState>((set) => ({
 
   removeFromCart: (menuItemId) =>
     set((state) => ({ cart: state.cart.filter((l) => l.menuItemId !== menuItemId) })),
+
+  decrementCartLine: (menuItemId) =>
+    set((state) => ({
+      cart: state.cart
+        .map((l) => (l.menuItemId === menuItemId ? { ...l, quantity: l.quantity - 1 } : l))
+        .filter((l) => l.quantity > 0),
+    })),
 
   clearCart: () => set({ cart: [] }),
 }));
