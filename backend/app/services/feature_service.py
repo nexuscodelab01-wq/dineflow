@@ -37,6 +37,7 @@ _DEFAULTS: dict[str, tuple[str, bool]] = {
     "loyalty": ("Customers earn points on completed orders and can view their balance", False),
     "coupons": ("Discount codes customers can apply at checkout", False),
     "scheduled_orders": ("Customers can order ahead for a later collection slot", False),
+    "pos": ("Take orders from a staff-facing POS device", False),
 }
 
 
