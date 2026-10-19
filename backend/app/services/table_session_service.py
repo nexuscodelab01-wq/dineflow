@@ -55,6 +55,7 @@ from app.schemas.table_session import (
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider, reverse_payment
+from app.services.shift_service import ShiftService
 
 FEATURE = "qr_table_ordering"
 CLOSED_STATUSES = {OrderStatus.CANCELLED}
@@ -348,7 +349,7 @@ class TableSessionService:
         self.db.commit()
         return TablePaymentRead(client_secret=intent.client_secret)
 
-    def pay_by_card_at_pos(self, session_id: int, restaurant_id: int, staff_user_id: int) -> TablePaymentRead:
+    def pay_by_card_at_pos(self, session_id: int, restaurant_id: int, staff_user_id: int, device_id: int | None = None) -> TablePaymentRead:
         """The Terminal (card-reader) equivalent of `mark_paid_cash` — staff-initiated from the POS, not
         the guest's own phone. Unlike `mark_paid_cash` (which marks COMPLETED outright, no Stripe
         involvement), this creates a real PaymentIntent and must branch on whether it settled
@@ -382,6 +383,7 @@ class TableSessionService:
             currency=restaurant.currency, status=intent.status, payment_method=PaymentMethod.CARD,
             provider=provider_name, provider_reference=intent.provider_intent_id,
             provider_intent_id=intent.provider_intent_id,
+            shift_id=ShiftService(self.db).current_shift_id(device_id),
         )
         self.db.add(payment)
         self.db.flush()
@@ -404,9 +406,10 @@ class TableSessionService:
         payment.status = PaymentStatus.COMPLETED
         self.close_session(session.id, session.restaurant_id, staff_user_id=None)
 
-    def mark_paid_cash(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+    def mark_paid_cash(self, session_id: int, restaurant_id: int, staff_user_id: int | None, device_id: int | None = None) -> None:
         """Staff records the tab as paid at the counter (cash, or a card on their own terminal) — no
-        Stripe involvement. Closes the session the same way an online payment does."""
+        Stripe involvement. Closes the session the same way an online payment does. `device_id` is None
+        for the non-POS (waiter/admin) caller — only a POS-initiated tender has a till shift to stamp."""
         session = self.staff_session(session_id, restaurant_id)  # 404s / refuses an already-closed one
         total = self.view(session).total
         if total <= Decimal("0.00"):
@@ -415,7 +418,7 @@ class TableSessionService:
         self.db.add(Payment(
             table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
             currency=restaurant.currency, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH,
-            provider="MANUAL",
+            provider="MANUAL", shift_id=ShiftService(self.db).current_shift_id(device_id),
         ))
         self.close_session(session_id, restaurant_id, staff_user_id)
 

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import { fetchCurrentShift } from '../api/pos';
+import type { ShiftRead } from '../api/types';
 
 const DEVICE_TOKEN_KEY = 'dineflow_pos_device_token';
 
@@ -18,24 +20,33 @@ type PosState = {
   posSessionToken: string | null;
   staffName: string | null;
   cart: CartLine[];
+  // A shift is scoped to this device, not the current PIN session — it survives a staff switch, so it's
+  // always re-fetched fresh from the backend rather than inferred client-side (avoids staleness if the
+  // app was killed mid-shift).
+  shift: ShiftRead | null;
+  shiftChecked: boolean;
 
   loadDevice: () => Promise<void>;
   pair: (token: string) => Promise<void>;
   unpair: () => Promise<void>;
   loginWithPin: (token: string, staffName: string) => void;
   logoutPin: () => void;
+  loadShift: () => Promise<void>;
+  setShift: (shift: ShiftRead | null) => void;
   addToCart: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
   removeFromCart: (menuItemId: number) => void;
   decrementCartLine: (menuItemId: number) => void;
   clearCart: () => void;
 };
 
-export const usePosStore = create<PosState>((set) => ({
+export const usePosStore = create<PosState>((set, get) => ({
   deviceToken: null,
   deviceReady: false,
   posSessionToken: null,
   staffName: null,
   cart: [],
+  shift: null,
+  shiftChecked: false,
 
   loadDevice: async () => {
     const token = await SecureStore.getItemAsync(DEVICE_TOKEN_KEY);
@@ -49,14 +60,28 @@ export const usePosStore = create<PosState>((set) => ({
 
   unpair: async () => {
     await SecureStore.deleteItemAsync(DEVICE_TOKEN_KEY);
-    set({ deviceToken: null, posSessionToken: null, staffName: null, cart: [] });
+    set({ deviceToken: null, posSessionToken: null, staffName: null, cart: [], shift: null, shiftChecked: false });
   },
 
   loginWithPin: (token: string, staffName: string) => set({ posSessionToken: token, staffName }),
 
   // Switching staff: just drop the old session token client-side. It's short-lived and stateless
   // server-side, so there's nothing to "log out" on the backend — see pos_service.py's design notes.
+  // The shift is device-scoped, not session-scoped, so it's deliberately NOT cleared here.
   logoutPin: () => set({ posSessionToken: null, staffName: null, cart: [] }),
+
+  loadShift: async () => {
+    const token = get().deviceToken;
+    if (!token) return;
+    try {
+      const shift = await fetchCurrentShift(token);
+      set({ shift, shiftChecked: true });
+    } catch {
+      set({ shift: null, shiftChecked: true });
+    }
+  },
+
+  setShift: (shift) => set({ shift }),
 
   addToCart: (line, quantity = 1) =>
     set((state) => {

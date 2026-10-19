@@ -2,6 +2,7 @@
 
 from app.models.address import Address
 from app.models.audit_log import AuditLog
+from app.models.cash_movement import CashMovement
 from app.models.category import Category
 from app.models.coupon import Coupon, CouponRedemption
 from app.models.device import Device
@@ -27,6 +28,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.review import Review
 from app.models.role import Role
 from app.models.service_request import ServiceRequest
+from app.models.shift import Shift
 from app.models.table_session import SessionGuest, TableSession
 from app.models.user import User
 from app.models.waitlist_entry import WaitlistEntry
@@ -34,6 +36,7 @@ from app.models.waitlist_entry import WaitlistEntry
 __all__ = [
     "Address",
     "AuditLog",
+    "CashMovement",
     "Category",
     "Coupon",
     "CouponRedemption",
@@ -62,6 +65,7 @@ __all__ = [
     "Role",
     "ServiceRequest",
     "SessionGuest",
+    "Shift",
     "TableSession",
     "User",
     "WaitlistEntry",

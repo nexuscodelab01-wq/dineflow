@@ -74,6 +74,8 @@ POS = {
     ("POST", "/pos/table-sessions/{session_id}/orders"), ("POST", "/pos/orders"),
     ("POST", "/pos/orders/{order_id}/pay-cash"), ("POST", "/pos/orders/{order_id}/pay-card"),
     ("POST", "/pos/table-sessions/{session_id}/pay-card"), ("POST", "/pos/terminal/connection-token"),
+    ("GET", "/pos/shifts/current"), ("POST", "/pos/shifts/open"),
+    ("POST", "/pos/shifts/{shift_id}/close"), ("POST", "/pos/shifts/{shift_id}/cash-movement"),
 }
 # Platform-only.
 PLATFORM = {

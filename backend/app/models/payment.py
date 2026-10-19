@@ -12,6 +12,7 @@ from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.order import Order
+    from app.models.shift import Shift
     from app.models.table_session import TableSession
 
 
@@ -29,6 +30,13 @@ class Payment(TimestampMixin, Base):
     )
     table_session_id: Mapped[int | None] = mapped_column(
         ForeignKey("table_sessions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    # Which till's shift this payment counts against, if it was taken from the POS while one was open —
+    # an orthogonal attribution column, not part of the order_id/table_session_id invariant above. NULL
+    # for online/guest-paid orders, or any POS tender taken with no shift open (shift-open is enforced
+    # client-side only — see app/services/shift_service.py's module docstring).
+    shift_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # Denormalized from the order: lets a restaurant's payouts be queried without joining through
     # orders, which RLS-scoped reporting needs anyway (every tenant table is filtered by this column).
@@ -57,3 +65,4 @@ class Payment(TimestampMixin, Base):
 
     order: Mapped["Order | None"] = relationship("Order", back_populates="payments")
     table_session: Mapped["TableSession | None"] = relationship("TableSession")
+    shift: Mapped["Shift | None"] = relationship("Shift")

@@ -87,6 +87,29 @@ export type TablePaymentRead = {
   closed?: boolean;
 };
 
+export type ShiftRead = {
+  shift_id: number;
+  state: string;
+  opened_at: string;
+  opened_by: string | null;
+  starting_float: string;
+};
+
+export type ShiftReportRead = {
+  shift_id: number;
+  opened_at: string;
+  closed_at: string | null;
+  starting_float: string;
+  cash_total: string;
+  card_total: string;
+  order_count: number;
+  expected_cash: string;
+  counted_cash: string | null;
+  variance: string | null;
+};
+
+export type CashMovementKind = 'PAID_IN' | 'PAID_OUT';
+
 export type ApiErrorBody = {
   detail?: string;
 };

@@ -7,7 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sukhvirsingh.dineflowpos",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +36,11 @@
           "bluetoothAlwaysUsagePermission": "DineFlow POS uses Bluetooth to connect to the card reader."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9208a652-4ab0-4776-9f06-7644313ad42d"
+      }
+    }
   }
 }

@@ -80,7 +80,15 @@ export default function OrderScreen({ navigation }: Props) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.staffName}>{staffName}</Text>
-        <TouchableOpacity onPress={logoutPin}><Text style={styles.switchUser}>Switch user</Text></TouchableOpacity>
+        <View style={styles.headerLinks}>
+          <TouchableOpacity onPress={() => navigation.navigate('CashMovement')}>
+            <Text style={styles.headerLink}>Cash in/out</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('CloseShift')}>
+            <Text style={styles.headerLink}>End shift</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={logoutPin}><Text style={styles.switchUser}>Switch user</Text></TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.modeToggle}>
@@ -194,6 +202,8 @@ const styles = StyleSheet.create({
   },
   staffName: { fontSize: 18, fontWeight: '700' },
   switchUser: { color: '#2c6f53', fontSize: 14, fontWeight: '600' },
+  headerLinks: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerLink: { color: '#555', fontSize: 13, fontWeight: '600' },
   modeToggle: { flexDirection: 'row', padding: 12, gap: 8 },
   modeButton: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#f0f0f0' },
   modeButtonActive: { backgroundColor: '#2c6f53' },

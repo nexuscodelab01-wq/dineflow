@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     admin,
     admin_devices,
+    admin_shifts,
     auth,
     coupons,
     health,
@@ -39,4 +40,5 @@ api_router.include_router(reviews.router, tags=["reviews"])
 api_router.include_router(loyalty.router, tags=["loyalty"])
 api_router.include_router(coupons.router, tags=["coupons"])
 api_router.include_router(admin_devices.router, tags=["admin"])
+api_router.include_router(admin_shifts.router, tags=["admin"])
 api_router.include_router(pos.router, tags=["pos"])

@@ -1,13 +1,14 @@
-# DineFlow POS (milestone 2)
+# DineFlow POS (milestone 3)
 
 A separate Expo/React Native app — not part of the Nuxt `frontend/` — for the staff-facing till that
-runs on a restaurant's own iPad. See `/backend`'s `pos.py`/`admin_devices.py`/`pos_service.py`/
-`table_session_service.py` for the API this talks to.
+runs on a restaurant's own iPad. See `/backend`'s `pos.py`/`admin_devices.py`/`admin_shifts.py`/
+`pos_service.py`/`shift_service.py`/`table_session_service.py` for the API this talks to.
 
-**Milestone 1** (cash-only counter + dine-in orders) is done. **Milestone 2** adds Stripe Terminal card
-payments via a simulated reader — no physical hardware needed to test, but real card hardware is still a
-future step (needs a Stripe Terminal `Location` on the connected account once a physical reader shows up).
-Still not built: shifts/cash-reconciliation/Z-report, offline queue, receipt printing.
+**Milestone 1** (cash-only counter + dine-in orders) and **Milestone 2** (Stripe Terminal card payments,
+simulated reader) are done. **Milestone 3** adds shifts/cash reconciliation (Z-report): opening a shift
+with a starting float is now **mandatory** before taking orders, closing one shows expected cash vs.
+counted cash and the variance, and cash-in/out can be recorded mid-shift (a float top-up, a cash tip paid
+out, etc). Still not built: offline queue, receipt printing, a real (non-simulated) card reader.
 
 ## Running it
 
@@ -47,10 +48,13 @@ only be manually verified under `PAYMENT_PROVIDER=stripe`.
    `device_token` from the response.
 3. Open the app, paste that token into the Pairing screen.
 4. Set a staff member's PIN: `POST /api/v1/admin/devices/staff/{membership_id}/pin`.
-5. PIN in on the app, take an order, send it, watch it land on `/admin/kitchen` in the web app.
+5. PIN in on the app — you'll land on "Open the till" first. Enter a starting float, then take an
+   order, send it, watch it land on `/admin/kitchen` in the web app.
 6. For card payments: the test restaurant needs `stripe_account_id` set (complete Stripe Connect
    onboarding first if not), and the backend needs `PAYMENT_PROVIDER=stripe`. "Pay by card" from the
    cash-tender screen connects to Stripe's simulated reader automatically — no physical hardware needed.
+7. "End shift" (in the Order screen's header) counts the drawer and shows the variance. Admins can see
+   every past shift's Z-report at `GET /admin/shifts`.
 
 ## What's here
 
@@ -65,18 +69,23 @@ src/
     pos.ts                  # the actual endpoint calls
     types.ts                 # response shapes, hand-kept in sync with backend/app/schemas/pos.py
   state/store.ts            # zustand: device token (SecureStore-persisted), PIN session (memory-only,
-                              #   by design — re-entering a PIN after a restart is the point), cart
+                              #   by design — re-entering a PIN after a restart is the point), cart,
+                              #   shift (device-scoped, always re-fetched fresh, never persisted)
   screens/
     PairingScreen.tsx         # text-entry pairing code (no QR scan yet — trivial polish for later)
     PinEntryScreen.tsx          # numeric pad -> pos_session token
-    OrderScreen.tsx               # counter vs. table toggle, menu, cart, "Send to Kitchen"
-    CashTenderScreen.tsx           # total due, "Mark Paid (Cash)" / "Pay by card"
-    CardTenderScreen.tsx            # connects to the Terminal simulated reader and processes the card
-  navigation/RootNavigator.tsx      # Pairing -> PinEntry -> Order -> CashTender/CardTender, gated on token presence
+    OpenShiftScreen.tsx           # starting-float entry -> mandatory before reaching Order
+    OrderScreen.tsx                 # counter vs. table toggle, menu, cart, "Send to Kitchen"
+    CashTenderScreen.tsx             # total due, "Mark Paid (Cash)" / "Pay by card"
+    CardTenderScreen.tsx              # connects to the Terminal simulated reader and processes the card
+    CloseShiftScreen.tsx               # counted-cash entry -> expected/counted/variance recap
+    CashMovementScreen.tsx              # mid-shift cash in/out with a reason
+  navigation/RootNavigator.tsx      # Pairing -> PinEntry -> OpenShift -> Order -> CashTender/CardTender/CloseShift/CashMovement
 App.tsx                               # mounts StripeTerminalProvider at the root (tokenProvider hits
                                       #   /pos/terminal/connection-token)
 eas.json                               # EAS "development" build profile
 ```
 
-No offline queue, no receipt printing, no shift concept, no real (non-simulated) card reader yet —
+No offline queue, no receipt printing, no real (non-simulated) card reader yet, and refunds aren't
+reflected in a shift's variance math (known limitation — see shift_service.py's module docstring) —
 correctly out of scope for this milestone.

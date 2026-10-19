@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
 import type {
+  CashMovementKind,
   Category,
   MenuListResponse,
   OpenTableSessionsResponse,
@@ -8,6 +9,8 @@ import type {
   PosConnectionTokenResponse,
   PosOrderItem,
   PosOrderRead,
+  ShiftReportRead,
+  ShiftRead,
   TablePaymentRead,
 } from './types';
 
@@ -54,4 +57,20 @@ export function createTableCardIntent(posSessionToken: string, sessionId: number
 
 export function fetchTerminalConnectionToken(posSessionToken: string) {
   return apiFetch<PosConnectionTokenResponse>('/pos/terminal/connection-token', { method: 'POST', token: posSessionToken });
+}
+
+export function fetchCurrentShift(deviceToken: string) {
+  return apiFetch<ShiftRead | null>('/pos/shifts/current', { token: deviceToken });
+}
+
+export function openShift(posSessionToken: string, startingFloat: string) {
+  return apiFetch<ShiftRead>('/pos/shifts/open', { method: 'POST', token: posSessionToken, body: { starting_float: startingFloat } });
+}
+
+export function closeShift(posSessionToken: string, shiftId: number, countedCash: string) {
+  return apiFetch<ShiftReportRead>(`/pos/shifts/${shiftId}/close`, { method: 'POST', token: posSessionToken, body: { counted_cash: countedCash } });
+}
+
+export function recordCashMovement(posSessionToken: string, shiftId: number, kind: CashMovementKind, amount: string, reason: string) {
+  return apiFetch<void>(`/pos/shifts/${shiftId}/cash-movement`, { method: 'POST', token: posSessionToken, body: { kind, amount, reason } });
 }

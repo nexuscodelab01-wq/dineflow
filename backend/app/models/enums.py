@@ -80,3 +80,8 @@ class PaymentMethod(str, enum.Enum):
     MOCK = "MOCK"
     CARD = "CARD"
     CASH = "CASH"
+
+
+class CashMovementKind(str, enum.Enum):
+    PAID_IN = "PAID_IN"    # e.g. topping up the float
+    PAID_OUT = "PAID_OUT"  # e.g. a cash tip paid to a delivery driver

@@ -47,6 +47,7 @@ from app.schemas.pos import (
 from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider
+from app.services.shift_service import ShiftService
 
 FEATURE = "pos"
 
@@ -155,7 +156,7 @@ class PosService:
         self.db.commit()
         return PosOrderRead(order_id=order_id, order_number=order_number, total=total, status=OrderStatus.PENDING.value)
 
-    def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int, staff: User) -> None:
+    def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None) -> None:
         order = self.db.get(Order, order_id)
         if order is None or order.restaurant_id != restaurant_id:
             raise NotFoundError("Order not found")
@@ -167,13 +168,14 @@ class PosService:
         payment = Payment(
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
             payment_method=PaymentMethod.CASH, provider="MANUAL",
+            shift_id=ShiftService(self.db).current_shift_id(device_id),
         )
         self.db.add(payment)
         self.db.flush()
         OrderService(self.db).confirm_payment(order, payment, user_id=staff.id, notes="Cash tender at the POS")
         self.db.commit()
 
-    def create_counter_order_card_intent(self, restaurant_id: int, order_id: int, staff: User) -> PosCardIntentRead:
+    def create_counter_order_card_intent(self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None) -> PosCardIntentRead:
         """Starts a card-present PaymentIntent for a counter order already created by
         create_counter_order. Unlike cash, a real (Stripe) payment is left PENDING here — the
         payment_intent.succeeded webhook's existing confirm_payment call is what actually confirms it,
@@ -201,6 +203,7 @@ class PosService:
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
             status=intent.status, payment_method=PaymentMethod.CARD, provider=provider_name,
             provider_reference=intent.provider_intent_id, provider_intent_id=intent.provider_intent_id,
+            shift_id=ShiftService(self.db).current_shift_id(device_id),
         )
         self.db.add(payment)
         self.db.flush()

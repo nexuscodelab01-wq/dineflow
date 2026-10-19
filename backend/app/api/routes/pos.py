@@ -27,9 +27,17 @@ from app.schemas.pos import (
     PosOrderCreate,
     PosOrderRead,
 )
+from app.schemas.shift import (
+    CashMovementCreate,
+    ShiftCloseRequest,
+    ShiftOpenRequest,
+    ShiftRead,
+    ShiftReportRead,
+)
 from app.schemas.table_session import RoundCreate, SessionRoundRead, TablePaymentRead
 from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
+from app.services.shift_service import ShiftService
 from app.services.table_session_service import TableSessionService
 
 router = APIRouter(prefix="/pos")
@@ -43,6 +51,13 @@ def get_pos_service(db: Annotated[Session, Depends(get_db)]) -> PosService:
 
 
 Pos = Annotated[PosService, Depends(get_pos_service)]
+
+
+def get_shift_service(db: Annotated[Session, Depends(get_db)]) -> ShiftService:
+    return ShiftService(db)
+
+
+Shifts = Annotated[ShiftService, Depends(get_shift_service)]
 
 
 @router.post("/auth/pin-login", response_model=PinLoginResponse)
@@ -85,7 +100,7 @@ def create_counter_order(data: PosOrderCreate, staff: CurrentPosStaff, service: 
 @router.post("/orders/{order_id}/pay-cash", status_code=204, dependencies=POS_STAFF_GATE)
 def pay_cash(order_id: int, staff: CurrentPosStaff, service: Pos) -> None:
     try:
-        service.mark_counter_order_paid_cash(staff.device.restaurant_id, order_id, staff.user)
+        service.mark_counter_order_paid_cash(staff.device.restaurant_id, order_id, staff.user, staff.device.id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -93,7 +108,7 @@ def pay_cash(order_id: int, staff: CurrentPosStaff, service: Pos) -> None:
 @router.post("/orders/{order_id}/pay-card", response_model=PosCardIntentRead, dependencies=POS_STAFF_GATE)
 def pay_card(order_id: int, staff: CurrentPosStaff, service: Pos) -> PosCardIntentRead:
     try:
-        return service.create_counter_order_card_intent(staff.device.restaurant_id, order_id, staff.user)
+        return service.create_counter_order_card_intent(staff.device.restaurant_id, order_id, staff.user, staff.device.id)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -104,7 +119,7 @@ def pos_table_pay_card(session_id: int, staff: CurrentPosStaff, db: Annotated[Se
     if session is None or session.restaurant_id != staff.device.restaurant_id:
         raise raise_http_for_app_error(NotFoundError("Session not found"))
     try:
-        return TableSessionService(db).pay_by_card_at_pos(session_id, staff.device.restaurant_id, staff.user.id)
+        return TableSessionService(db).pay_by_card_at_pos(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -121,3 +136,32 @@ def terminal_connection_token(staff: CurrentPosStaff, db: Annotated[Session, Dep
         raise HTTPException(status_code=503, detail="This restaurant hasn't connected a Stripe account yet")
     secret = create_terminal_connection_token(restaurant.stripe_account_id)
     return PosConnectionTokenRead(secret=secret)
+
+
+@router.get("/shifts/current", response_model=ShiftRead | None, dependencies=POS_GATE)
+def current_shift(device: CurrentDevice, service: Shifts) -> ShiftRead | None:
+    return service.current_shift(device.device)
+
+
+@router.post("/shifts/open", response_model=ShiftRead, status_code=201, dependencies=POS_STAFF_GATE)
+def open_shift(data: ShiftOpenRequest, staff: CurrentPosStaff, service: Shifts) -> ShiftRead:
+    try:
+        return service.open_shift(staff.device, staff.user, data.starting_float)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/shifts/{shift_id}/close", response_model=ShiftReportRead, dependencies=POS_STAFF_GATE)
+def close_shift(shift_id: int, data: ShiftCloseRequest, staff: CurrentPosStaff, service: Shifts) -> ShiftReportRead:
+    try:
+        return service.close_shift(staff.device, staff.user, shift_id, data.counted_cash)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/shifts/{shift_id}/cash-movement", status_code=204, dependencies=POS_STAFF_GATE)
+def cash_movement(shift_id: int, data: CashMovementCreate, staff: CurrentPosStaff, service: Shifts) -> None:
+    try:
+        service.record_cash_movement(staff.device, staff.user, data.kind, data.amount, data.reason)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
