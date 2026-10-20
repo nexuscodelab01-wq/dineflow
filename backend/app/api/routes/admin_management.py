@@ -77,6 +77,7 @@ from app.schemas.table_session import (
     TransferRequest,
     WaiterTableRead,
 )
+from app.schemas.time_entry import EmployeeReportRow
 from app.schemas.waitlist import WaitlistCreate, WaitlistRead, WaitlistSeat
 from app.services.admin_service import AdminService
 from app.services.analytics_service import AnalyticsService
@@ -166,6 +167,21 @@ def analytics(
             start_date=start_date,
             end_date=end_date,
         )
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/analytics/employees", response_model=list[EmployeeReportRow])
+def employee_report(
+    _: AdminUser,  # individual earnings/hours are more sensitive than the aggregate StaffUser-gated reports above
+    restaurant_id: RestaurantId,
+    service: Annotated[AnalyticsService, Depends(get_analytics_service)],
+    preset: DateRangePreset = Query(default=DateRangePreset.LAST_7_DAYS, alias="range"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+) -> list[EmployeeReportRow]:
+    try:
+        return service.employee_report(restaurant_id, preset, start_date=start_date, end_date=end_date)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 

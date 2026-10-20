@@ -12,6 +12,7 @@ import type {
   ShiftReportRead,
   ShiftRead,
   TablePaymentRead,
+  TimeEntryRead,
 } from './types';
 
 export function pinLogin(deviceToken: string, pin: string) {
@@ -55,6 +56,10 @@ export function createTableCardIntent(posSessionToken: string, sessionId: number
   return apiFetch<TablePaymentRead>(`/pos/table-sessions/${sessionId}/pay-card`, { method: 'POST', token: posSessionToken });
 }
 
+export function payCashForTable(posSessionToken: string, sessionId: number) {
+  return apiFetch<void>(`/pos/table-sessions/${sessionId}/pay-cash`, { method: 'POST', token: posSessionToken });
+}
+
 export function fetchTerminalConnectionToken(posSessionToken: string) {
   return apiFetch<PosConnectionTokenResponse>('/pos/terminal/connection-token', { method: 'POST', token: posSessionToken });
 }
@@ -73,4 +78,16 @@ export function closeShift(posSessionToken: string, shiftId: number, countedCash
 
 export function recordCashMovement(posSessionToken: string, shiftId: number, kind: CashMovementKind, amount: string, reason: string) {
   return apiFetch<void>(`/pos/shifts/${shiftId}/cash-movement`, { method: 'POST', token: posSessionToken, body: { kind, amount, reason } });
+}
+
+export function fetchCurrentTimeEntry(posSessionToken: string) {
+  return apiFetch<TimeEntryRead | null>('/pos/time-entries/current', { token: posSessionToken });
+}
+
+export function clockIn(posSessionToken: string) {
+  return apiFetch<TimeEntryRead>('/pos/time-entries/clock-in', { method: 'POST', token: posSessionToken });
+}
+
+export function clockOut(posSessionToken: string) {
+  return apiFetch<TimeEntryRead>('/pos/time-entries/clock-out', { method: 'POST', token: posSessionToken });
 }

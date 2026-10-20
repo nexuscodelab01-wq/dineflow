@@ -7,12 +7,18 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
-from app.models.enums import OrderStatus, PaymentStatus, ReservationStatus
+from app.models.enums import (
+    OrderStatus,
+    PaymentMethod,
+    PaymentStatus,
+    ReservationStatus,
+)
 from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.reservation import Reservation
+from app.models.user import User
 
 
 class AnalyticsRepository:
@@ -227,6 +233,44 @@ class AnalyticsRepository:
         ) or 0
         rate = round((no_shows / total) * 100, 1) if total else 0.0
         return {"total_reservations": total, "no_shows": no_shows, "rate": rate}
+
+    def employee_totals(self, restaurant_id: int, start: datetime, end: datetime) -> list[dict]:
+        """Cash/card taken and order count per staff member who took a payment in range — keyed on
+        Payment.staff_user_id, which is only ever set for a POS-initiated tender (never a guest's own
+        online payment), so this never shows an employee for money they didn't personally take. Same
+        COMPLETED-only, Payment-queried-directly filter shape as _revenue, scoped by staff instead of
+        the whole restaurant."""
+        stmt = (
+            select(
+                Payment.staff_user_id,
+                User.first_name,
+                Payment.payment_method,
+                func.coalesce(func.sum(Payment.amount), 0).label("total"),
+                func.count(Payment.id).label("order_count"),
+            )
+            .join(User, User.id == Payment.staff_user_id)
+            .where(
+                Payment.restaurant_id == restaurant_id,
+                Payment.staff_user_id.is_not(None),
+                Payment.created_at >= start,
+                Payment.created_at <= end,
+                Payment.status == PaymentStatus.COMPLETED,
+            )
+            .group_by(Payment.staff_user_id, User.first_name, Payment.payment_method)
+        )
+        rows = self.db.execute(stmt).all()
+        by_user: dict[int, dict] = {}
+        for row in rows:
+            entry = by_user.setdefault(row.staff_user_id, {
+                "user_id": row.staff_user_id, "name": row.first_name,
+                "cash_total": Decimal("0.00"), "card_total": Decimal("0.00"), "order_count": 0,
+            })
+            if row.payment_method == PaymentMethod.CASH:
+                entry["cash_total"] += Decimal(row.total)
+            elif row.payment_method == PaymentMethod.CARD:
+                entry["card_total"] += Decimal(row.total)
+            entry["order_count"] += row.order_count
+        return list(by_user.values())
 
     def orders_for_export(self, restaurant_id: int, start: datetime, end: datetime, limit: int = 10000) -> list[Order]:
         """Every order in range, cancelled included — this is a raw record for bookkeeping, and it

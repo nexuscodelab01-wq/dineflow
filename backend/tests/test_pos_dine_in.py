@@ -53,6 +53,7 @@ def test_a_pos_dine_in_round_lands_on_the_table_and_attributes_the_staff_member(
     assert r.status_code == 200, r.text
     order = w.db.query(Order).filter_by(table_session_id=session_id).one()
     assert order.customer_name == "Alpha (staff)"
+    assert order.user_id == w.a.staff.id
 
 
 def test_open_table_sessions_are_listed_for_the_pos(world):

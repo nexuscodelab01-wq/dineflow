@@ -96,6 +96,7 @@ def test_cash_tender_marks_the_order_paid(world):
     payment = w.db.query(Payment).filter_by(order_id=order_id).one()
     assert payment.status == PaymentStatus.COMPLETED
     assert payment.payment_method.value == "CASH" and payment.provider == "MANUAL"
+    assert payment.staff_user_id == w.a.staff.id
 
 
 def test_cannot_pay_cash_twice(world):

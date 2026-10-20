@@ -98,7 +98,9 @@ export type ShiftRead = {
 export type ShiftReportRead = {
   shift_id: number;
   opened_at: string;
+  opened_by: string | null;
   closed_at: string | null;
+  closed_by: string | null;
   starting_float: string;
   cash_total: string;
   card_total: string;
@@ -109,6 +111,12 @@ export type ShiftReportRead = {
 };
 
 export type CashMovementKind = 'PAID_IN' | 'PAID_OUT';
+
+export type TimeEntryRead = {
+  id: number;
+  clock_in_at: string;
+  clock_out_at: string | null;
+};
 
 export type ApiErrorBody = {
   detail?: string;

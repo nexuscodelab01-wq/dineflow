@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import { fetchCurrentShift } from '../api/pos';
-import type { ShiftRead } from '../api/types';
+import { fetchCurrentShift, fetchCurrentTimeEntry } from '../api/pos';
+import type { ShiftRead, TimeEntryRead } from '../api/types';
 
 const DEVICE_TOKEN_KEY = 'dineflow_pos_device_token';
 
@@ -25,6 +25,11 @@ type PosState = {
   // app was killed mid-shift).
   shift: ShiftRead | null;
   shiftChecked: boolean;
+  // Unlike `shift` (device-scoped, survives a PIN switch), a clock-in is about the specific person
+  // logged in right now — it must be re-checked fresh every time posSessionToken changes, and cleared
+  // on logoutPin so the next staff member doesn't inherit whoever was clocked in before them.
+  timeEntry: TimeEntryRead | null;
+  timeEntryChecked: boolean;
 
   loadDevice: () => Promise<void>;
   pair: (token: string) => Promise<void>;
@@ -33,6 +38,8 @@ type PosState = {
   logoutPin: () => void;
   loadShift: () => Promise<void>;
   setShift: (shift: ShiftRead | null) => void;
+  loadTimeEntry: () => Promise<void>;
+  setTimeEntry: (entry: TimeEntryRead | null) => void;
   addToCart: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
   removeFromCart: (menuItemId: number) => void;
   decrementCartLine: (menuItemId: number) => void;
@@ -47,6 +54,8 @@ export const usePosStore = create<PosState>((set, get) => ({
   cart: [],
   shift: null,
   shiftChecked: false,
+  timeEntry: null,
+  timeEntryChecked: false,
 
   loadDevice: async () => {
     const token = await SecureStore.getItemAsync(DEVICE_TOKEN_KEY);
@@ -60,7 +69,10 @@ export const usePosStore = create<PosState>((set, get) => ({
 
   unpair: async () => {
     await SecureStore.deleteItemAsync(DEVICE_TOKEN_KEY);
-    set({ deviceToken: null, posSessionToken: null, staffName: null, cart: [], shift: null, shiftChecked: false });
+    set({
+      deviceToken: null, posSessionToken: null, staffName: null, cart: [],
+      shift: null, shiftChecked: false, timeEntry: null, timeEntryChecked: false,
+    });
   },
 
   loginWithPin: (token: string, staffName: string) => set({ posSessionToken: token, staffName }),
@@ -68,7 +80,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   // Switching staff: just drop the old session token client-side. It's short-lived and stateless
   // server-side, so there's nothing to "log out" on the backend — see pos_service.py's design notes.
   // The shift is device-scoped, not session-scoped, so it's deliberately NOT cleared here.
-  logoutPin: () => set({ posSessionToken: null, staffName: null, cart: [] }),
+  logoutPin: () => set({ posSessionToken: null, staffName: null, cart: [], timeEntry: null, timeEntryChecked: false }),
 
   loadShift: async () => {
     const token = get().deviceToken;
@@ -82,6 +94,19 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   setShift: (shift) => set({ shift }),
+
+  loadTimeEntry: async () => {
+    const token = get().posSessionToken;
+    if (!token) return;
+    try {
+      const entry = await fetchCurrentTimeEntry(token);
+      set({ timeEntry: entry, timeEntryChecked: true });
+    } catch {
+      set({ timeEntry: null, timeEntryChecked: true });
+    }
+  },
+
+  setTimeEntry: (entry) => set({ timeEntry: entry }),
 
   addToCart: (line, quantity = 1) =>
     set((state) => {

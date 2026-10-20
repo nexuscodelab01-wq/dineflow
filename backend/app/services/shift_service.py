@@ -112,7 +112,8 @@ class ShiftService:
         ))
         self.db.commit()
         return ShiftReportRead(
-            shift_id=shift.id, opened_at=shift.opened_at, closed_at=shift.closed_at,
+            shift_id=shift.id, opened_at=shift.opened_at, opened_by=shift.opened_by.first_name if shift.opened_by else None,
+            closed_at=shift.closed_at, closed_by=shift.closed_by.first_name if shift.closed_by else None,
             starting_float=shift.starting_float, cash_total=cash_total, card_total=card_total,
             order_count=order_count, expected_cash=expected_cash, counted_cash=counted_cash, variance=variance,
         )
@@ -127,7 +128,8 @@ class ShiftService:
             expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id)
             variance = (shift.counted_cash - expected_cash) if shift.counted_cash is not None else None
             out.append(ShiftReportRead(
-                shift_id=shift.id, opened_at=shift.opened_at, closed_at=shift.closed_at,
+                shift_id=shift.id, opened_at=shift.opened_at, opened_by=shift.opened_by.first_name if shift.opened_by else None,
+                closed_at=shift.closed_at, closed_by=shift.closed_by.first_name if shift.closed_by else None,
                 starting_float=shift.starting_float, cash_total=cash_total, card_total=card_total,
                 order_count=order_count, expected_cash=expected_cash, counted_cash=shift.counted_cash, variance=variance,
             ))

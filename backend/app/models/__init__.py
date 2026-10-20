@@ -30,6 +30,7 @@ from app.models.role import Role
 from app.models.service_request import ServiceRequest
 from app.models.shift import Shift
 from app.models.table_session import SessionGuest, TableSession
+from app.models.time_entry import TimeEntry
 from app.models.user import User
 from app.models.waitlist_entry import WaitlistEntry
 
@@ -67,6 +68,7 @@ __all__ = [
     "SessionGuest",
     "Shift",
     "TableSession",
+    "TimeEntry",
     "User",
     "WaitlistEntry",
 ]

@@ -168,7 +168,7 @@ class PosService:
         payment = Payment(
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
             payment_method=PaymentMethod.CASH, provider="MANUAL",
-            shift_id=ShiftService(self.db).current_shift_id(device_id),
+            shift_id=ShiftService(self.db).current_shift_id(device_id), staff_user_id=staff.id,
         )
         self.db.add(payment)
         self.db.flush()
@@ -203,7 +203,7 @@ class PosService:
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
             status=intent.status, payment_method=PaymentMethod.CARD, provider=provider_name,
             provider_reference=intent.provider_intent_id, provider_intent_id=intent.provider_intent_id,
-            shift_id=ShiftService(self.db).current_shift_id(device_id),
+            shift_id=ShiftService(self.db).current_shift_id(device_id), staff_user_id=staff.id,
         )
         self.db.add(payment)
         self.db.flush()

@@ -208,7 +208,7 @@ class TableSessionService:
                 assert guest is not None  # guaranteed by the guard above
                 guest_name = guest.name or f"Table {session.table.table_number}"
             order = Order(
-                user_id=None, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
+                user_id=staff_user.id if staff_user else None, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
                 order_type=OrderType.DINE_IN, status=OrderStatus.PENDING,
                 subtotal=Decimal("0.00"), tax=Decimal("0.00"), delivery_fee=Decimal("0.00"), discount=Decimal("0.00"), total=Decimal("0.00"),
                 customer_name=guest_name, customer_email=None, table_id=session.table_id,
@@ -384,6 +384,7 @@ class TableSessionService:
             provider=provider_name, provider_reference=intent.provider_intent_id,
             provider_intent_id=intent.provider_intent_id,
             shift_id=ShiftService(self.db).current_shift_id(device_id),
+            staff_user_id=staff_user_id,
         )
         self.db.add(payment)
         self.db.flush()
@@ -419,6 +420,7 @@ class TableSessionService:
             table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
             currency=restaurant.currency, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH,
             provider="MANUAL", shift_id=ShiftService(self.db).current_shift_id(device_id),
+            staff_user_id=staff_user_id,
         ))
         self.close_session(session_id, restaurant_id, staff_user_id)
 

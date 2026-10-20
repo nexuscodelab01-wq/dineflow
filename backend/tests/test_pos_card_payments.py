@@ -72,6 +72,7 @@ def test_card_tender_confirms_the_order_under_mock(world):
     assert payment.payment_method.value == "CARD"
     assert payment.provider == "MOCK"
     assert payment.provider_intent_id.startswith("mock_")
+    assert payment.staff_user_id == w.a.staff.id
 
 
 def test_card_tender_refuses_an_already_paid_order(world):
@@ -123,3 +124,31 @@ def test_table_session_card_tender_closes_the_tab_under_mock(world):
     payment = w.db.query(Payment).filter_by(table_session_id=session_id).one()
     assert payment.status == PaymentStatus.COMPLETED
     assert payment.payment_method.value == "CARD"
+    assert payment.staff_user_id == w.a.staff.id
+
+
+def test_table_session_cash_tender_closes_the_tab_and_stamps_shift_and_staff(world):
+    """The pay-cash route for table tabs was entirely missing until this milestone — cash could only be
+    settled via the web admin, which bypassed device_id/shift_id stamping. This pins down the fix."""
+    w = world
+    session_id = open_session(w, w.a)
+    staff_headers = pos_session(w, w.a, w.a.staff)
+    order = w.client.post(
+        f"{API}/pos/table-sessions/{session_id}/orders", headers=staff_headers,
+        json={"items": [{"menu_item_id": w.a.item.id, "quantity": 1, "modifier_option_ids": []}]},
+    )
+    assert order.status_code == 200, order.text
+    shift = w.client.post(f"{API}/pos/shifts/open", headers=staff_headers, json={"starting_float": "50.00"})
+    assert shift.status_code == 201, shift.text
+
+    r = w.client.post(f"{API}/pos/table-sessions/{session_id}/pay-cash", headers=staff_headers)
+    assert r.status_code == 204, r.text
+
+    session = w.db.get(TableSession, session_id)
+    assert session.state != OPEN
+    payment = w.db.query(Payment).filter_by(table_session_id=session_id).one()
+    assert payment.status == PaymentStatus.COMPLETED
+    assert payment.payment_method.value == "CASH"
+    assert payment.provider == "MANUAL"
+    assert payment.staff_user_id == w.a.staff.id
+    assert payment.shift_id == shift.json()["shift_id"]

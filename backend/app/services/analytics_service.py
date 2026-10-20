@@ -3,6 +3,7 @@
 import csv
 import io
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,8 @@ from app.schemas.analytics import (
     StatusBreakdown,
     TimeSeriesPoint,
 )
+from app.schemas.time_entry import EmployeeReportRow
+from app.services.time_entry_service import TimeEntryService
 from app.utils.date_ranges import DateRangePreset, resolve_date_range
 
 
@@ -25,6 +28,7 @@ class AnalyticsService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.analytics = AnalyticsRepository(db)
+        self.time_entries = TimeEntryService(db)
 
     def get_analytics(
         self,
@@ -64,6 +68,34 @@ class AnalyticsService:
             sales_by_hour=[HourlyBreakdown(**row) for row in self.analytics.sales_by_hour(restaurant_id, start, end)],
             no_show=NoShowStats(**self.analytics.no_show_stats(restaurant_id, start, end)),
         )
+
+    def employee_report(
+        self,
+        restaurant_id: int,
+        preset: DateRangePreset,
+        *,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[EmployeeReportRow]:
+        try:
+            start, end = resolve_date_range(preset, start_date=start_date, end_date=end_date)
+        except ValueError as exc:
+            raise AppError(str(exc)) from exc
+
+        totals = self.analytics.employee_totals(restaurant_id, start, end)
+        hours = self.time_entries.hours_worked(restaurant_id, start, end)
+
+        rows = []
+        for row in totals:
+            hours_worked = hours.get(row["user_id"], Decimal("0.00"))
+            takings = row["cash_total"] + row["card_total"]
+            sales_per_labour_hour = (takings / hours_worked).quantize(Decimal("0.01")) if hours_worked > 0 else None
+            rows.append(EmployeeReportRow(
+                user_id=row["user_id"], name=row["name"], cash_total=row["cash_total"],
+                card_total=row["card_total"], order_count=row["order_count"],
+                hours_worked=hours_worked, sales_per_labour_hour=sales_per_labour_hour,
+            ))
+        return rows
 
     def export_orders_csv(
         self,

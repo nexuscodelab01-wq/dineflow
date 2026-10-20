@@ -27,7 +27,9 @@ class ShiftCloseRequest(BaseModel):
 class ShiftReportRead(BaseModel):
     shift_id: int
     opened_at: datetime
+    opened_by: str | None
     closed_at: datetime | None
+    closed_by: str | None
     starting_float: Decimal
     cash_total: Decimal
     card_total: Decimal

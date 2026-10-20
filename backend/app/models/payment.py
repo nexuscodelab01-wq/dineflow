@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.order import Order
     from app.models.shift import Shift
     from app.models.table_session import TableSession
+    from app.models.user import User
 
 
 class Payment(TimestampMixin, Base):
@@ -37,6 +38,12 @@ class Payment(TimestampMixin, Base):
     # client-side only — see app/services/shift_service.py's module docstring).
     shift_id: Mapped[int | None] = mapped_column(
         ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Which staff member took this payment, if any — set for every POS-initiated tender (counter cash/
+    # card, table-tab cash/card), NULL for a guest's own online payment. This is the column that makes
+    # a per-employee takings report possible (see analytics.py's _employee_totals).
+    staff_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # Denormalized from the order: lets a restaurant's payouts be queried without joining through
     # orders, which RLS-scoped reporting needs anyway (every tenant table is filtered by this column).
@@ -66,3 +73,4 @@ class Payment(TimestampMixin, Base):
     order: Mapped["Order | None"] = relationship("Order", back_populates="payments")
     table_session: Mapped["TableSession | None"] = relationship("TableSession")
     shift: Mapped["Shift | None"] = relationship("Shift")
+    staff: Mapped["User | None"] = relationship("User")

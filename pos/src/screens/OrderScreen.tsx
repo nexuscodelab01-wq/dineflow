@@ -5,7 +5,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ApiError } from '../api/client';
 import { decodeJwtPayload } from '../api/jwt';
-import { createCounterOrder, createTableOrder, fetchMenu, fetchOpenTableSessions } from '../api/pos';
+import { clockOut, createCounterOrder, createTableOrder, fetchMenu, fetchOpenTableSessions } from '../api/pos';
 import type { MenuItem, OpenSession } from '../api/types';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -22,6 +22,7 @@ export default function OrderScreen({ navigation }: Props) {
   const removeFromCart = usePosStore((s) => s.removeFromCart);
   const decrementCartLine = usePosStore((s) => s.decrementCartLine);
   const clearCart = usePosStore((s) => s.clearCart);
+  const setTimeEntry = usePosStore((s) => s.setTimeEntry);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
@@ -76,6 +77,16 @@ export default function OrderScreen({ navigation }: Props) {
     }
   }
 
+  async function handleClockOut() {
+    if (!posSessionToken) return;
+    try {
+      await clockOut(posSessionToken);
+      setTimeEntry(null); // the navigator falls back to ClockInScreen automatically
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not clock out');
+    }
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -86,6 +97,9 @@ export default function OrderScreen({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('CloseShift')}>
             <Text style={styles.headerLink}>End shift</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleClockOut}>
+            <Text style={styles.headerLink}>Clock out</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={logoutPin}><Text style={styles.switchUser}>Switch user</Text></TouchableOpacity>
         </View>

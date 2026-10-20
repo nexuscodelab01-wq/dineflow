@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import PairingScreen from '../screens/PairingScreen';
 import PinEntryScreen from '../screens/PinEntryScreen';
+import ClockInScreen from '../screens/ClockInScreen';
 import OpenShiftScreen from '../screens/OpenShiftScreen';
 import OrderScreen from '../screens/OrderScreen';
 import CashTenderScreen from '../screens/CashTenderScreen';
@@ -15,7 +16,8 @@ import { usePosStore } from '../state/store';
 export type RootStackParamList = {
   Pairing: undefined;
   PinEntry: undefined;
-  ShiftLoading: undefined;
+  Loading: undefined;
+  ClockIn: undefined;
   OpenShift: undefined;
   Order: undefined;
   CashTender: { orderId: number; orderNumber: string; total: string };
@@ -32,8 +34,11 @@ export default function RootNavigator() {
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const shift = usePosStore((s) => s.shift);
   const shiftChecked = usePosStore((s) => s.shiftChecked);
+  const timeEntry = usePosStore((s) => s.timeEntry);
+  const timeEntryChecked = usePosStore((s) => s.timeEntryChecked);
   const loadDevice = usePosStore((s) => s.loadDevice);
   const loadShift = usePosStore((s) => s.loadShift);
+  const loadTimeEntry = usePosStore((s) => s.loadTimeEntry);
 
   useEffect(() => {
     loadDevice();
@@ -42,6 +47,10 @@ export default function RootNavigator() {
   useEffect(() => {
     if (deviceToken) loadShift();
   }, [deviceToken, loadShift]);
+
+  useEffect(() => {
+    if (posSessionToken) loadTimeEntry();
+  }, [posSessionToken, loadTimeEntry]);
 
   if (!deviceReady) {
     return (
@@ -58,8 +67,12 @@ export default function RootNavigator() {
           <Stack.Screen name="Pairing" component={PairingScreen} />
         ) : !posSessionToken ? (
           <Stack.Screen name="PinEntry" component={PinEntryScreen} />
+        ) : !timeEntryChecked ? (
+          <Stack.Screen name="Loading" component={Loading} />
+        ) : !timeEntry ? (
+          <Stack.Screen name="ClockIn" component={ClockInScreen} />
         ) : !shiftChecked ? (
-          <Stack.Screen name="ShiftLoading" component={LoadingShift} />
+          <Stack.Screen name="Loading" component={Loading} />
         ) : !shift ? (
           <Stack.Screen name="OpenShift" component={OpenShiftScreen} />
         ) : (
@@ -76,7 +89,7 @@ export default function RootNavigator() {
   );
 }
 
-function LoadingShift() {
+function Loading() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <ActivityIndicator />

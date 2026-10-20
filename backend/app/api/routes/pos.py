@@ -35,10 +35,12 @@ from app.schemas.shift import (
     ShiftReportRead,
 )
 from app.schemas.table_session import RoundCreate, SessionRoundRead, TablePaymentRead
+from app.schemas.time_entry import TimeEntryRead
 from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
 from app.services.shift_service import ShiftService
 from app.services.table_session_service import TableSessionService
+from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/pos")
 
@@ -58,6 +60,13 @@ def get_shift_service(db: Annotated[Session, Depends(get_db)]) -> ShiftService:
 
 
 Shifts = Annotated[ShiftService, Depends(get_shift_service)]
+
+
+def get_time_entry_service(db: Annotated[Session, Depends(get_db)]) -> TimeEntryService:
+    return TimeEntryService(db)
+
+
+TimeEntries = Annotated[TimeEntryService, Depends(get_time_entry_service)]
 
 
 @router.post("/auth/pin-login", response_model=PinLoginResponse)
@@ -124,6 +133,18 @@ def pos_table_pay_card(session_id: int, staff: CurrentPosStaff, db: Annotated[Se
         raise raise_http_for_app_error(exc) from exc
 
 
+@router.post("/table-sessions/{session_id}/pay-cash", status_code=204, dependencies=POS_STAFF_GATE)
+def pos_table_pay_cash(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+    """The cash-tender equivalent of pos_table_pay_card — was missing entirely until now, which meant a
+    dine-in tab's cash could only be settled via the web admin, bypassing device_id/shift_id stamping
+    and under-counting the till's Z-report. mark_paid_cash already does its own ownership/404 check via
+    staff_session, so no redundant lookup here."""
+    try:
+        TableSessionService(db).mark_paid_cash(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
 @router.post("/terminal/connection-token", response_model=PosConnectionTokenRead, dependencies=POS_STAFF_GATE)
 def terminal_connection_token(staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> PosConnectionTokenRead:
     """What @stripe/stripe-terminal-react-native's tokenProvider calls. 503 under PAYMENT_PROVIDER=mock
@@ -163,5 +184,27 @@ def close_shift(shift_id: int, data: ShiftCloseRequest, staff: CurrentPosStaff, 
 def cash_movement(shift_id: int, data: CashMovementCreate, staff: CurrentPosStaff, service: Shifts) -> None:
     try:
         service.record_cash_movement(staff.device, staff.user, data.kind, data.amount, data.reason)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/time-entries/current", response_model=TimeEntryRead | None, dependencies=POS_STAFF_GATE)
+def current_time_entry(staff: CurrentPosStaff, service: TimeEntries) -> TimeEntryRead | None:
+    # Per-person, not per-device — unlike /pos/shifts/current, this is POS_STAFF_GATE, not POS_GATE.
+    return service.current_entry(staff.device.restaurant_id, staff.user)
+
+
+@router.post("/time-entries/clock-in", response_model=TimeEntryRead, status_code=201, dependencies=POS_STAFF_GATE)
+def clock_in(staff: CurrentPosStaff, service: TimeEntries) -> TimeEntryRead:
+    try:
+        return service.clock_in(staff.device.restaurant_id, staff.user, staff.device.id)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/time-entries/clock-out", response_model=TimeEntryRead, dependencies=POS_STAFF_GATE)
+def clock_out(staff: CurrentPosStaff, service: TimeEntries) -> TimeEntryRead:
+    try:
+        return service.clock_out(staff.device.restaurant_id, staff.user)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc

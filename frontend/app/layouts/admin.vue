@@ -45,6 +45,8 @@ const allNav = [
   { to: '/admin/customers', label: 'Customers' },
   { to: '/admin/staff', label: 'Staff', adminOnly: true },
   { to: '/admin/devices', label: 'POS devices', adminOnly: true, feature: 'pos' },
+  { to: '/admin/shifts', label: 'Shifts', adminOnly: true, feature: 'pos' },
+  { to: '/admin/employees', label: 'Employees', adminOnly: true, feature: 'pos' },
   { to: '/admin/settings', label: 'Settings', adminOnly: true },
 ]
 // Staff can run the floor; menu edits, tables and settings need an admin.
