@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { ApiError } from '../api/client';
 import { decodeJwtPayload } from '../api/jwt';
 import { clockOut, createCounterOrder, createTableOrder, fetchMenu, fetchOpenTableSessions } from '../api/pos';
@@ -42,14 +43,26 @@ export default function OrderScreen({ navigation }: Props) {
       .finally(() => setLoadingMenu(false));
   }, [restaurantId]);
 
-  useEffect(() => {
-    if (mode !== 'table' || !deviceToken) return;
+  const refreshOpenSessions = useCallback(() => {
+    if (!deviceToken) return;
     fetchOpenTableSessions(deviceToken)
       .then((res) => setOpenSessions(res.sessions))
       .catch(() => setError('Could not load open tables'));
-  }, [mode, deviceToken]);
+  }, [deviceToken]);
+
+  useEffect(() => {
+    if (mode !== 'table') return;
+    refreshOpenSessions();
+  }, [mode, refreshOpenSessions]);
+
+  // Catches a table being settled from TableTender/TableCardTender and coming back here — the list
+  // (and the selected table's total) needs to reflect that the tab closed or a round was just sent.
+  useFocusEffect(useCallback(() => {
+    if (mode === 'table') refreshOpenSessions();
+  }, [mode, refreshOpenSessions]));
 
   const total = cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  const selectedTable = mode === 'table' ? openSessions.find((s) => s.session_id === selectedSession) : undefined;
 
   async function send() {
     if (!posSessionToken || cart.length === 0) return;
@@ -68,7 +81,7 @@ export default function OrderScreen({ navigation }: Props) {
       } else {
         await createTableOrder(posSessionToken, selectedSession as number, items);
         clearCart();
-        setSelectedSession(null);
+        refreshOpenSessions(); // updates the selected table's running total/round count
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not send the order');
@@ -132,6 +145,23 @@ export default function OrderScreen({ navigation }: Props) {
           )}
           ListEmptyComponent={<Text style={styles.empty}>No open tables</Text>}
         />
+      )}
+
+      {selectedTable && (
+        <View style={styles.tabBar}>
+          <Text style={styles.tabBarText}>
+            Table {selectedTable.table_number} — {selectedTable.rounds} round{selectedTable.rounds === 1 ? '' : 's'} · ${Number(selectedTable.total).toFixed(2)} on the tab
+          </Text>
+          <TouchableOpacity
+            style={[styles.tabBarButton, Number(selectedTable.total) <= 0 && styles.tabBarButtonDisabled]}
+            disabled={Number(selectedTable.total) <= 0}
+            onPress={() => navigation.navigate('TableTender', {
+              sessionId: selectedTable.session_id, tableNumber: selectedTable.table_number, total: selectedTable.total,
+            })}
+          >
+            <Text style={styles.tabBarButtonText}>Settle bill</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <View style={styles.body}>
@@ -228,6 +258,14 @@ const styles = StyleSheet.create({
   tableChipActive: { backgroundColor: '#2c6f53' },
   tableChipText: { fontWeight: '600', color: '#333' },
   tableChipTextActive: { fontWeight: '600', color: '#fff' },
+  tabBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f7f7f5', borderBottomWidth: 1, borderBottomColor: '#eee',
+  },
+  tabBarText: { fontSize: 13, color: '#444', flex: 1, marginRight: 12 },
+  tabBarButton: { backgroundColor: '#2c6f53', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16 },
+  tabBarButtonDisabled: { opacity: 0.4 },
+  tabBarButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   body: { flex: 1, flexDirection: 'row' },
   menuColumn: { flex: 2, padding: 12 },
   menuItem: {
