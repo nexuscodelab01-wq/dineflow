@@ -67,6 +67,7 @@ class SessionRead(BaseModel):
     guests: list[str]
     rounds: list[SessionRoundRead]
     total: Decimal  # everything ordered so far, excluding cancelled rounds
+    is_bar_tab: bool = False
     paid: Decimal = Decimal("0.00")  # part-payments already taken
     balance: Decimal = Decimal("0.00")  # what is still owed
     tab_name: str | None = None
@@ -106,6 +107,7 @@ class OpenSessionRead(BaseModel):
     session_id: int
     table_id: int
     table_number: str
+    is_bar_tab: bool = False  # a table-less bar tab: show its name, not its table number
     opened_at: datetime
     guests: int
     rounds: int
@@ -178,6 +180,11 @@ class SplitRequest(BaseModel):
     amount: Decimal | None = Field(default=None, gt=0)
     parts_remaining: int | None = Field(default=None, ge=1, le=50)
     item_ids: list[int] | None = Field(default=None, min_length=1)
+
+
+class BarTabRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    party_size: int | None = Field(default=None, ge=1, le=50)
 
 
 class MoveTabRequest(BaseModel):

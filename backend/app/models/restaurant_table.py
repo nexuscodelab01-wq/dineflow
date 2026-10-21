@@ -50,6 +50,9 @@ class RestaurantTable(TimestampMixin, Base):
     pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Retired tables are hidden and can't be booked, but keep their reservation history.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    # A stand-in table created for a table-less bar tab. Never active, never listed, never bookable — it exists only
+    # so the tab has the same shape (session, rounds, payments) as any other.
+    ephemeral: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="tables")
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="table")

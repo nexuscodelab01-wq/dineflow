@@ -178,7 +178,10 @@ class FakeStripe:
             create=lambda params, options=None: SimpleNamespace(id=f"pi_{len(outer.calls)}", client_secret="sec"),
             cancel=rec("pi_cancel"),
         )
-        self.v1 = SimpleNamespace(terminal=SimpleNamespace(readers=readers, locations=locs, configurations=cfgs), payment_intents=pis)
+        self.v1 = SimpleNamespace(
+            terminal=SimpleNamespace(readers=readers, locations=locs, configurations=cfgs), payment_intents=pis,
+            test_helpers=SimpleNamespace(terminal=SimpleNamespace(readers=SimpleNamespace(present_payment_method=rec("present", SimpleNamespace(id="tmr_1"))))),
+        )
 
 
 @pytest.fixture
@@ -199,7 +202,7 @@ def test_no_readers_are_listed_without_stripe(world):
 
 def test_the_till_lists_the_restaurants_readers(live):
     r = live.client.get(f"{API}/pos/readers", headers=live.h).json()
-    assert r == [{"id": "tmr_1", "label": "Counter reader", "status": "online", "device_type": "bbpos_wisepos_e"}]
+    assert r == [{"id": "tmr_1", "label": "Counter reader", "status": "online", "device_type": "bbpos_wisepos_e", "test_mode": True}]
 
 
 def test_an_admin_registers_and_removes_a_reader(live):
@@ -296,3 +299,25 @@ def test_a_pay_later_order_goes_back_to_waiting_when_the_reader_fails(live):
     _handle_reader_action_failed(w.db, stripe.StripeObject.construct_from({"id": "tmr_1", "action": {"failure_message": "Timed out", "process_payment_intent": {"payment_intent": payment.provider_intent_id}}}, "sk"))
     w.db.refresh(payment)
     assert payment.status == PaymentStatus.PENDING and payment.provider_intent_id is None  # still owes the money, ready to be tried again
+
+
+# ---------------------------------------------------------------- simulated card tap (test mode)
+
+def test_readers_say_whether_a_tap_can_be_simulated(live):
+    assert live.client.get(f"{API}/pos/readers", headers=live.h).json()[0]["test_mode"] is True
+
+
+def test_a_test_card_tap_can_be_simulated_from_the_till_and_the_admin_page(live):
+    w = live
+    assert w.client.post(f"{API}/pos/readers/tmr_1/simulate-tap", headers=w.h).status_code == 204
+    assert w.client.post(f"{API}/admin/terminal/readers/tmr_1/simulate-tap", params={"restaurant_id": w.a.rid}, headers=header(w.a.admin)).status_code == 204
+    assert [c for c in FakeStripe.calls if c[0] == "present"][0][1][0] == "tmr_1"
+    assert w.client.post(f"{API}/pos/readers/tmr_other/simulate-tap", headers=w.h).status_code == 404
+
+
+def test_a_tap_cannot_be_simulated_with_live_keys(live, monkeypatch):
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_live_real")
+    r = live.client.post(f"{API}/pos/readers/tmr_1/simulate-tap", headers=live.h)
+    assert r.status_code == 400 and "test keys" in r.json()["detail"]
+    assert live.client.get(f"{API}/pos/readers", headers=live.h).json()[0]["test_mode"] is False
+    assert not any(c[0] == "present" for c in FakeStripe.calls)

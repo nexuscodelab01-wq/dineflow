@@ -51,7 +51,7 @@ class ReceiptService:
             .where(Order.table_session_id == session.id, Order.status != OrderStatus.CANCELLED).order_by(Order.round_no, Order.id)
         ))
         payments = list(self.db.scalars(select(Payment).where(Payment.table_session_id == session.id).order_by(Payment.id)))
-        label = f"Table {session.table.table_number}" + (f" · {session.tab_name}" if session.tab_name else "")
+        label = (f"Tab · {session.tab_name}" if session.table.ephemeral else f"Table {session.table.table_number}" + (f" · {session.tab_name}" if session.tab_name else ""))
         return self._build(
             restaurant_id, kind="TAB", reference=label, orders=orders, payments=payments,
             served_by=self._name(payments[0].staff_user_id) if payments else None,

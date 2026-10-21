@@ -138,6 +138,26 @@ class TableSessionService:
                 raise  # truly shouldn't happen: the insert conflicted with a row that then isn't there
             return won_the_race
 
+    def open_bar_tab(self, restaurant_id: int, name: str, party_size: int | None = None) -> OpenSessionRead:
+        """A running tab with no table ("Mike at the bar"): a hidden stand-in table carries it, so rounds, payments, splits
+        and receipts all work exactly as for a seated table. The stand-in never shows up anywhere else."""
+        FeatureService(self.db).require(restaurant_id, "pos")
+        name = name.strip()
+        if not name:
+            raise AppError("Give the tab a name")
+        taken = self.db.scalar(select(func.count(RestaurantTable.id)).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.ephemeral.is_(True))) or 0
+        table = RestaurantTable(
+            restaurant_id=restaurant_id, table_number=f"Tab {taken + 1}", capacity=1, status=TableStatus.OCCUPIED,
+            is_active=False, ephemeral=True,
+        )
+        self.db.add(table)
+        self.db.flush()
+        session = self._open_session(table)
+        session.tab_name = name[:60]
+        session.party_size = party_size
+        self.db.commit()
+        return self._open_session_read(session)
+
     def open_for_staff(self, table_id: int, restaurant_id: int, party_size: int | None, tab_name: str | None = None) -> OpenSessionRead:
         """Staff seat a walk-in directly from the POS — no QR scan involved. Gated on "pos", not
         qr_table_ordering, since this is a POS action independent of whether guest self-ordering is on.
@@ -258,7 +278,7 @@ class TableSessionService:
         return SessionRead(
             session_id=session.id, restaurant_id=session.restaurant_id, restaurant_name=restaurant.name,
             table_number=table.table_number, guests=[n for n in names.values() if n], rounds=rounds, total=total,
-            paid=paid, balance=max(total - paid, Decimal("0.00")), tab_name=session.tab_name,
+            paid=paid, balance=max(total - paid, Decimal("0.00")), tab_name=session.tab_name, is_bar_tab=table.ephemeral,
             requests=requests, stripe_account_id=restaurant.stripe_account_id,
             stripe_charges_enabled=restaurant.stripe_charges_enabled,
         )
@@ -377,7 +397,7 @@ class TableSessionService:
         asked = list(self.db.scalars(select(ServiceRequest.kind).where(
             ServiceRequest.table_session_id == s.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
         return OpenSessionRead(
-            session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
+            session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, is_bar_tab=s.table.ephemeral, opened_at=s.opened_at,
             guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked, tab_name=s.tab_name,
             balance=max(Decimal(rounds[1]) - self._paid(s.id), Decimal("0.00")),
         )

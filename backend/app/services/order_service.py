@@ -217,6 +217,8 @@ class OrderService:
         payment_method = PaymentMethod.CARD if provider_name == "STRIPE" else PaymentMethod.MOCK
         client_secret: str | None = None
 
+        if data.pay_later and data.tip > 0:
+            raise AppError("A tip can't be added to an order you'll pay for later — add it when you pay")
         if data.pay_later and total > Decimal("0.00"):
             self._place_pay_later(order, payment_user=user, restaurant=restaurant, total=total, phone=data.customer_phone)
             self.db.commit()
@@ -230,8 +232,9 @@ class OrderService:
         # called at all (it rightly refuses a zero amount) — but the order still gets a payment row
         # of 0.00 so "every confirmed order has a payment" stays true for the rest of the system.
         if total > Decimal("0.00"):
+            tip = self._online_tip(data, restaurant, subtotal)
             intent = self.payment_provider.create_intent(
-                total,
+                total + tip,  # the tip rides on the same card payment but is not part of the bill
                 currency=restaurant.currency,
                 connected_account_id=restaurant.stripe_account_id,
                 metadata={"order_id": str(order.id), "restaurant_id": str(restaurant.id)},
@@ -242,6 +245,7 @@ class OrderService:
                 order_id=order.id,
                 restaurant_id=restaurant.id,
                 amount=total,
+                tip_amount=tip,
                 currency=restaurant.currency,
                 status=intent.status,
                 payment_method=payment_method,
@@ -280,6 +284,22 @@ class OrderService:
         result = OrderRead.model_validate(refreshed)
         result.client_secret = client_secret
         return result
+
+    # ------------------------------------------------------------------ online tip
+
+    def _online_tip(self, data: OrderCreate, restaurant: Restaurant, subtotal: Decimal) -> Decimal:
+        """A tip added at online checkout (pickup / delivery). Charged with the order, kept apart from the bill, and — with no
+        server to credit — it joins the restaurant's unassigned tips."""
+        tip = data.tip.quantize(Decimal("0.01"))
+        if tip <= 0:
+            return Decimal("0.00")
+        if data.order_type not in (OrderType.PICKUP, OrderType.DELIVERY):
+            raise AppError("Tips can be added to pickup and delivery orders")
+        if not (restaurant.tips_enabled and self.features.is_enabled(restaurant.id, "tips")):
+            raise AppError("This restaurant isn't taking tips online")
+        if tip > max(subtotal, Decimal("1.00")):
+            raise AppError("That tip is larger than the order itself — please check the amount")
+        return tip
 
     # ------------------------------------------------------------------ pay later
 

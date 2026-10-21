@@ -33,6 +33,22 @@ class ReaderService:
         return restaurant
 
     @staticmethod
+    def _test_mode() -> bool:
+        return settings.STRIPE_SECRET_KEY.startswith("sk_test_")
+
+    def simulate_tap(self, restaurant_id: int, reader_id: str) -> None:
+        """Test mode only: make a simulated reader act as if a customer tapped a test card, so a payment can be
+        completed with no hardware at all."""
+        if not self._test_mode():
+            raise AppError("Simulated card taps only work with Stripe test keys")
+        restaurant = self._restaurant(restaurant_id)
+        self.require(restaurant_id, reader_id)
+        try:
+            self._client().v1.test_helpers.terminal.readers.present_payment_method(reader_id, {}, options={"stripe_account": restaurant.stripe_account_id})
+        except stripe.StripeError as exc:
+            raise AppError(str(exc.user_message or exc)) from exc
+
+    @staticmethod
     def _live() -> bool:
         return settings.PAYMENT_PROVIDER.strip().lower() == "stripe"
 
@@ -50,7 +66,7 @@ class ReaderService:
         except stripe.StripeError as exc:
             logger.warning("Could not list readers: %s", exc)
             return []
-        return [ReaderRead(id=r.id, label=r.label or r.id, status=r.status or "unknown", device_type=r.device_type) for r in readers.data]
+        return [ReaderRead(id=r.id, label=r.label or r.id, status=r.status or "unknown", device_type=r.device_type, test_mode=self._test_mode()) for r in readers.data]
 
     def register(self, restaurant_id: int, registration_code: str, label: str) -> ReaderRead:
         restaurant = self._restaurant(restaurant_id)

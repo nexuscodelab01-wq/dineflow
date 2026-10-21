@@ -33,6 +33,7 @@ class TipReportRead(BaseModel):
     end: datetime
     total: Decimal
     rows: list[TipRow]
+    unassigned: Decimal = Decimal("0.00")  # online tips with no server to credit (shared out only when tips are pooled)
     already_finalized: bool = False
 
 

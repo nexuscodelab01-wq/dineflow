@@ -36,6 +36,14 @@ def register_reader(data: ReaderRegister, restaurant_id: RestaurantId, _: AdminU
         raise raise_http_for_app_error(exc) from exc
 
 
+@router.post("/readers/{reader_id}/simulate-tap", status_code=204)
+def simulate_tap(reader_id: str, restaurant_id: RestaurantId, _: AdminUser, service: Service) -> None:
+    try:
+        service.simulate_tap(restaurant_id, reader_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
 @router.delete("/readers/{reader_id}", status_code=204)
 def remove_reader(reader_id: str, restaurant_id: RestaurantId, _: AdminUser, service: Service) -> None:
     try:

@@ -87,7 +87,7 @@ POS = {
     ("POST", "/pos/table-sessions/{session_id}/move"),
     ("GET", "/pos/orders/{order_id}/receipt"), ("GET", "/pos/table-sessions/{session_id}/receipt"), ("GET", "/pos/orders/{order_id}/receipt/escpos"),
     ("GET", "/pos/table-sessions/{session_id}/receipt/escpos"), ("POST", "/pos/orders/{order_id}/receipt/email"), ("POST", "/pos/table-sessions/{session_id}/receipt/email"),
-    ("GET", "/pos/readers"), ("POST", "/pos/orders/{order_id}/pay-reader"), ("POST", "/pos/table-sessions/{session_id}/pay-reader"),
+    ("GET", "/pos/readers"), ("POST", "/pos/tabs"), ("POST", "/pos/readers/{reader_id}/simulate-tap"), ("POST", "/pos/orders/{order_id}/pay-reader"), ("POST", "/pos/table-sessions/{session_id}/pay-reader"),
     ("POST", "/pos/readers/{reader_id}/cancel"), ("GET", "/pos/payments/{payment_id}"), ("POST", "/pos/table-sessions/{session_id}/merge"), ("POST", "/pos/table-sessions/{session_id}/fire"), ("GET", "/pos/menu"), ("GET", "/pos/customers"), ("POST", "/pos/coupons/preview"),
     ("POST", "/pos/menu-items/{item_id}/availability"), ("GET", "/pos/shifts/current/report"), ("POST", "/pos/orders/{order_id}/refund"), ("POST", "/pos/table-sessions/{session_id}/refund"),
 }

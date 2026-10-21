@@ -55,6 +55,12 @@ def cancel_reader(reader_id: str, staff: CurrentPosStaff, db: Annotated[Session,
     _run(lambda: ReaderService(db).cancel(staff.device.restaurant_id, staff.user.id, reader_id))
 
 
+@router.post("/readers/{reader_id}/simulate-tap", status_code=204)
+def simulate_tap(reader_id: str, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+    """Test mode: pretend a customer tapped a test card on this simulated reader."""
+    _run(lambda: ReaderService(db).simulate_tap(staff.device.restaurant_id, reader_id))
+
+
 @router.get("/payments/{payment_id}", response_model=PaymentStatusRead)
 def payment_status(payment_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> PaymentStatusRead:
     """Poll a card payment the reader is taking: PENDING until it finishes, then COMPLETED or FAILED."""

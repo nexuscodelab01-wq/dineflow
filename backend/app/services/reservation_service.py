@@ -1157,7 +1157,7 @@ class ReservationService:
         return timedelta(minutes=restaurant.reservation_buffer_minutes if restaurant else 0)
 
     def _active_tables(self, restaurant_id: int, include_inactive: bool = False) -> list[RestaurantTable]:
-        stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id)
+        stmt = select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.ephemeral.is_(False))
         if not include_inactive:
             stmt = stmt.where(RestaurantTable.is_active.is_(True))
         return list(self.db.scalars(stmt.order_by(RestaurantTable.table_number)).all())

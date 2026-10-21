@@ -40,6 +40,15 @@ class TipService:
         ).all()
         return {uid: Decimal(total) for uid, total in rows if uid is not None and Decimal(total) > 0}
 
+    def unassigned_tips(self, restaurant_id: int, start: datetime, end: datetime) -> Decimal:
+        """Tips on payments nobody took at a till — i.e. added online by customers (delivery, pickup)."""
+        return Decimal(self.db.scalar(
+            select(func.coalesce(func.sum(Payment.tip_amount), 0)).where(
+                Payment.restaurant_id == restaurant_id, Payment.staff_user_id.is_(None),
+                Payment.status == PaymentStatus.COMPLETED, Payment.created_at >= start, Payment.created_at <= end,
+            )
+        ) or 0)
+
     def cash_tips(self, restaurant_id: int, start: datetime, end: datetime) -> dict[int, Decimal]:
         """Declared cash tips: a server's own at clock-out, plus a till closer's declaration at shift close."""
         out: dict[int, Decimal] = {}
@@ -74,7 +83,11 @@ class TipService:
         user_ids = sorted(set(card) | set(cash) | (set(hours) if restaurant.tip_pool_mode != "KEEP" else set()))
         names = {u.id: u.first_name for u in self.db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
         collected = {uid: card.get(uid, ZERO) + cash.get(uid, ZERO) for uid in user_ids}
-        total = sum(collected.values(), ZERO)
+        unassigned = self.unassigned_tips(restaurant_id, start, end)
+        # Tips nobody collected (online orders) belong to the pot when tips are pooled; under "keep your own" they have no
+        # owner and are reported separately for the restaurant to decide.
+        pooled = restaurant.tip_pool_mode != "KEEP"
+        total = sum(collected.values(), ZERO) + (unassigned if pooled else ZERO)
         payouts = self._payouts(restaurant.tip_pool_mode, user_ids, collected, hours, total)
         finalized = self.db.scalar(
             select(TipAllocation.id).where(
@@ -88,7 +101,7 @@ class TipService:
             )
             for uid in user_ids
         ]
-        return TipReportRead(mode=restaurant.tip_pool_mode, start=start, end=end, total=total, rows=rows, already_finalized=finalized)
+        return TipReportRead(mode=restaurant.tip_pool_mode, start=start, end=end, total=total, rows=rows, unassigned=unassigned, already_finalized=finalized)
 
     @staticmethod
     def _payouts(mode: str, user_ids: list[int], collected: dict[int, Decimal], hours: dict[int, Decimal], total: Decimal) -> dict[int, Decimal]:

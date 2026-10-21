@@ -42,6 +42,7 @@ from app.schemas.shift import (
     ShiftReportRead,
 )
 from app.schemas.table_session import (
+    BarTabRequest,
     FireCourseRead,
     FireCourseRequest,
     MergeTabRequest,
@@ -200,6 +201,15 @@ def tab_detail(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, D
     tables = TableSessionService(db)
     try:
         return tables.view(tables.staff_session(session_id, staff.device.restaurant_id))
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/tabs", response_model=OpenSessionRead, status_code=201, dependencies=POS_STAFF_GATE)
+def open_bar_tab(data: BarTabRequest, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> OpenSessionRead:
+    """Start a running tab with no table (a bar tab)."""
+    try:
+        return TableSessionService(db).open_bar_tab(staff.device.restaurant_id, data.name, data.party_size)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

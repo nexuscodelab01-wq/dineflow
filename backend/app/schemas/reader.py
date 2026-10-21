@@ -10,6 +10,7 @@ class ReaderRead(BaseModel):
     label: str
     status: str
     device_type: str | None = None
+    test_mode: bool = False  # Stripe test keys: a card tap can be simulated
 
 
 class ReaderRegister(BaseModel):

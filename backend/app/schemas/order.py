@@ -45,6 +45,8 @@ class OrderCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
     # Pay at pickup / cash on delivery instead of paying online now (only where the restaurant allows it).
     pay_later: bool = False
+    # A tip for the kitchen / driver, added at checkout. Charged with the order; not part of the bill.
+    tip: Decimal = Field(default=Decimal("0.00"), ge=0, le=Decimal(1000))
 
 
 class OrderQuoteRequest(BaseModel):
@@ -108,6 +110,7 @@ class PaymentRead(BaseModel):
 
     id: int
     amount: Decimal
+    tip_amount: Decimal = Decimal("0.00")
     status: PaymentStatus
     payment_method: PaymentMethod
 
