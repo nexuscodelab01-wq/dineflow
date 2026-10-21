@@ -44,6 +44,11 @@ export function registerReader(restaurantId: number, registrationCode: string, l
   })
 }
 
+/** Test mode only: act as if a customer tapped a test card on a simulated reader. */
+export function simulateReaderTap(restaurantId: number, readerId: string) {
+  return apiFetch<void>(`/api/v1/admin/terminal/readers/${readerId}/simulate-tap?restaurant_id=${restaurantId}`, { method: 'POST' })
+}
+
 export function removeReader(restaurantId: number, readerId: string) {
   return apiFetch<void>(`/api/v1/admin/terminal/readers/${readerId}?restaurant_id=${restaurantId}`, { method: 'DELETE' })
 }

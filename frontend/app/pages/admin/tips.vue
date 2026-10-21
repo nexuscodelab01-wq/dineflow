@@ -91,6 +91,11 @@ onMounted(async () => {
         <div>
           <p class="font-semibold text-ink">{{ modeLabel[report.mode] }}</p>
           <p class="text-sm text-ink-muted">Total tips in this period: <strong>{{ money(Number(report.total)) }}</strong></p>
+          <p v-if="Number(report.unassigned)" class="text-xs text-ink-subtle">
+            {{ money(Number(report.unassigned)) }} came in as online tips (delivery / pickup) with no server to credit
+            <span v-if="report.mode === 'KEEP'"> — they are not in the total above; share them out yourself.</span>
+            <span v-else> — they are included in the pool.</span>
+          </p>
         </div>
         <AppButton v-if="report.rows.length && !report.already_finalized" :disabled="finalizing" @click="finalize">
           {{ finalizing ? 'Saving…' : 'Finalize period' }}

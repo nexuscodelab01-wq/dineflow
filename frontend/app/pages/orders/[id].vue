@@ -102,6 +102,7 @@ onUnmounted(() => {
           <div class="flex justify-between"><span>Tax</span><span>{{ money(Number(order.tax)) }}</span></div>
           <div v-if="Number(order.delivery_fee)" class="flex justify-between"><span>Delivery</span><span>{{ money(Number(order.delivery_fee)) }}</span></div>
           <div class="flex justify-between font-semibold"><span>Total</span><span>{{ money(Number(order.total)) }}</span></div>
+          <div v-if="Number(order.payments?.[0]?.tip_amount)" class="flex justify-between text-ink-muted"><span>Tip (paid with your card)</span><span>{{ money(Number(order.payments[0].tip_amount)) }}</span></div>
         </div>
       </section>
     </div>

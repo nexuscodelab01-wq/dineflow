@@ -156,6 +156,18 @@ const payLaterOffered = computed(() => {
 })
 watch(payLaterOffered, (offered) => { if (!offered) payLater.value = false })
 
+// An optional tip for pickup / delivery, charged with the card payment (not part of the bill).
+const tipsFlag = useFeature('tips')
+const tipChoice = ref<number | 'custom' | 0>(0) // a preset percentage, 'custom', or 0 for none
+const customTip = ref('')
+const tipOffered = computed(() => tipsFlag.value && !!restaurant.current?.tips_enabled && !payLater.value && (orderType.value === 'PICKUP' || orderType.value === 'DELIVERY'))
+const tipAmount = computed(() => {
+  if (!tipOffered.value || !totals.value) return 0
+  if (tipChoice.value === 'custom') return Math.max(0, Math.round(Number(customTip.value || 0) * 100) / 100)
+  return Math.round(totals.value.subtotal * (Number(tipChoice.value) / 100) * 100) / 100
+})
+watch(tipOffered, (offered) => { if (!offered) { tipChoice.value = 0; customTip.value = '' } })
+
 const couponsEnabled = useFeature('coupons')
 const couponCode = ref('')
 const appliedCoupon = ref<{ code: string, discount: number } | null>(null)
@@ -279,6 +291,7 @@ async function submitOrder() {
       customer_email: form.customer_email,
       customer_phone: form.customer_phone || undefined,
       pay_later: payLater.value || undefined,
+      tip: tipAmount.value > 0 ? tipAmount.value.toFixed(2) : undefined,
       coupon_code: appliedCoupon.value?.code,
       scheduled_for: whenMode.value === 'later' ? chosenSlot.value : undefined,
       reservation_id: orderType.value === 'DINE_IN' ? reservationId.value : undefined,
@@ -437,6 +450,17 @@ async function payNow() {
           </div>
         </section>
 
+        <section v-if="tipOffered" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+          <h2 class="font-semibold text-ink">Add a tip?</h2>
+          <p class="mt-1 text-sm text-ink-muted">{{ orderType === 'DELIVERY' ? 'Goes to the team and your driver.' : 'Goes to the team.' }} It is charged with your card payment.</p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium" :class="tipChoice === 0 ? 'bg-brand-700 text-white' : 'border border-brand-200 hover:bg-brand-50'" @click="tipChoice = 0">No tip</button>
+            <button v-for="pct in restaurant.current?.tip_presets ?? []" :key="pct" type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium" :class="tipChoice === pct ? 'bg-brand-700 text-white' : 'border border-brand-200 hover:bg-brand-50'" @click="tipChoice = pct">{{ pct }}%</button>
+            <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium" :class="tipChoice === 'custom' ? 'bg-brand-700 text-white' : 'border border-brand-200 hover:bg-brand-50'" @click="tipChoice = 'custom'">Other</button>
+          </div>
+          <input v-if="tipChoice === 'custom'" v-model="customTip" type="number" min="0" step="0.01" placeholder="Amount" class="mt-3 w-32 rounded-lg border border-brand-200 px-3 py-2 text-sm">
+        </section>
+
         <section v-if="payLaterOffered" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <h2 class="font-semibold text-ink">How would you like to pay?</h2>
           <div class="mt-3 space-y-2 text-sm">
@@ -492,7 +516,7 @@ async function payNow() {
           <div ref="paymentElementContainer" class="mt-4" />
           <p v-if="paymentError" class="mt-3 text-sm text-red-600" role="alert">{{ paymentError }}</p>
           <AppButton class="mt-4 w-full" :disabled="confirmingPayment" @click="payNow">
-            {{ confirmingPayment ? 'Confirming…' : totals ? `Pay ${money(totals.total)}` : 'Pay' }}
+            {{ confirmingPayment ? 'Confirming…' : totals ? `Pay ${money(totals.total + tipAmount)}` : 'Pay' }}
           </AppButton>
         </section>
         <section v-else class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
@@ -538,7 +562,8 @@ async function payNow() {
             <div v-if="totals.service_charge" class="flex justify-between"><span>Service charge</span><span>{{ money(totals.service_charge) }}</span></div>
             <div class="flex justify-between"><span>Tax<span v-if="quoting" class="text-ink-subtle"> (updating…)</span></span><span>{{ money(totals.tax) }}</span></div>
             <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ money(totals.delivery_fee) }}</span></div>
-            <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total) }}</span></div>
+            <div v-if="tipAmount > 0" class="flex justify-between"><span>Tip</span><span>{{ money(tipAmount) }}</span></div>
+            <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total + tipAmount) }}</span></div>
           </div>
           <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
           <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting" @click="submitOrder">

@@ -3,7 +3,7 @@ export type DeviceKind = 'TILL' | 'HANDHELD'
 
 export type DevicePrinter = { host: string | null, port: number, cash_drawer: boolean, auto_print: boolean }
 
-export type CardReader = { id: string, label: string, status: string, device_type: string | null }
+export type CardReader = { id: string, label: string, status: string, device_type: string | null, test_mode?: boolean }
 
 export type PosDevice = {
   id: number

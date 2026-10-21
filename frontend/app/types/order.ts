@@ -69,7 +69,7 @@ export type Order = {
   updated_at: string
   items: OrderItem[]
   status_history: OrderStatusHistory[]
-  payments: { id: number; amount: string; status: string; payment_method: string }[]
+  payments: { id: number; amount: string; tip_amount?: string; status: string; payment_method: string }[]
   /** Only present on the response to creating an order that still needs a real payment confirmed
    * (Stripe, amount > 0) — pass straight to stripe.confirmPayment(). Never fetched again afterwards. */
   client_secret?: string | null
@@ -100,6 +100,8 @@ export type OrderItemInput = {
 
 export type CreateOrderPayload = {
   pay_later?: boolean
+  /** A tip for the team, charged with the card payment; not part of the bill. */
+  tip?: string
   restaurant_id: number
   order_type: OrderType
   items: OrderItemInput[]

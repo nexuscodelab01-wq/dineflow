@@ -2,7 +2,7 @@
 import QRCode from 'qrcode'
 import type { CardReader, DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
 import type { StaffMember } from '~/types/staff'
-import { fetchDevices, fetchReaders, pairDevice, registerReader, removeReader, revokeDevice, setStaffPin, updateDevicePrinter } from '~/services/pos'
+import { fetchDevices, fetchReaders, pairDevice, registerReader, removeReader, revokeDevice, simulateReaderTap, setStaffPin, updateDevicePrinter } from '~/services/pos'
 import { fetchStaff } from '~/services/staff'
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
@@ -70,6 +70,17 @@ async function addReader() {
   }
   finally {
     addingReader.value = false
+  }
+}
+
+async function simulateTap(reader: CardReader) {
+  if (!admin.restaurantId) return
+  try {
+    await simulateReaderTap(admin.restaurantId, reader.id)
+    ui.success('Simulated a card tap')
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not simulate a tap')
   }
 }
 
@@ -272,7 +283,10 @@ async function submitPin(member: StaffMember) {
             <span class="font-semibold text-ink">{{ reader.label }}</span>
             <span class="ml-2 text-xs text-ink-subtle">{{ reader.device_type }} · {{ reader.status }}</span>
           </div>
-          <button type="button" class="text-sm text-red-700 hover:underline" @click="dropReader(reader)">Remove</button>
+          <div class="flex gap-4">
+            <button v-if="reader.test_mode" type="button" class="text-sm text-brand-700 hover:underline" title="Stripe test mode only" @click="simulateTap(reader)">Simulate card tap</button>
+            <button type="button" class="text-sm text-red-700 hover:underline" @click="dropReader(reader)">Remove</button>
+          </div>
         </li>
       </ul>
       <form class="mt-4 grid gap-3 sm:grid-cols-3" @submit.prevent="addReader">

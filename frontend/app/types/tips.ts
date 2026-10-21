@@ -13,6 +13,8 @@ export type TipReport = {
   start: string
   end: string
   total: string
+  /** Online tips (delivery / pickup) with no server to credit. */
+  unassigned?: string
   rows: TipRow[]
   already_finalized: boolean
 }
