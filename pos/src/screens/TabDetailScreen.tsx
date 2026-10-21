@@ -3,8 +3,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ApiError } from '../api/client';
-import { fetchTab, runControl } from '../api/pos';
-import type { ControlKind, TabDetail, TabItem } from '../api/types';
+import { fetchOpenTableSessions, fetchTab, fetchTables, fireCourse, mergeTab, moveTab, runControl } from '../api/pos';
+import type { ControlKind, OpenSession, RestaurantTableRow, TabDetail, TabItem } from '../api/types';
 import ControlSheet, { type ControlFields } from '../components/ControlSheet';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -19,15 +19,45 @@ export default function TabDetailScreen({ route, navigation }: Props) {
   const { sessionId } = route.params;
   const money = useMoney();
   const token = usePosStore((s) => s.posSessionToken);
+  const controlsEnabled = usePosStore((s) => s.controlsEnabled);
   const [tab, setTab] = useState<TabDetail | null>(null);
   const [error, setError] = useState('');
   const [target, setTarget] = useState<Target | null>(null);
+  const [picker, setPicker] = useState<'move' | 'merge' | null>(null);
+  const [moveTargets, setMoveTargets] = useState<RestaurantTableRow[]>([]);
+  const [mergeTargets, setMergeTargets] = useState<OpenSession[]>([]);
 
   const load = useCallback(() => {
     if (!token) return;
     fetchTab(token, sessionId).then(setTab).catch((e) => setError(e instanceof ApiError ? e.message : 'Could not load the tab'));
   }, [token, sessionId]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  async function openPicker(kind: 'move' | 'merge') {
+    if (!token) return;
+    setError('');
+    try {
+      const [tables, open] = await Promise.all([fetchTables(token), fetchOpenTableSessions(token)]);
+      const busy = new Set(open.sessions.map((s) => s.table_id));
+      setMoveTargets(tables.filter((t) => !busy.has(t.table_id)));
+      setMergeTargets(open.sessions.filter((s) => s.session_id !== sessionId));
+      setPicker(kind);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not load tables');
+    }
+  }
+
+  async function doPick(action: () => Promise<unknown>, thenLeave: boolean) {
+    try {
+      await action();
+      setPicker(null);
+      if (thenLeave) navigation.goBack(); else load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'That did not work');
+    }
+  }
+
+  const heldCourses = Array.from(new Set((tab?.rounds ?? []).flatMap((r) => r.items).filter((i) => i.held).map((i) => i.course))).sort();
 
   async function run(fields: ControlFields, override?: string) {
     if (!token || !target) return;
@@ -66,20 +96,52 @@ export default function TabDetailScreen({ route, navigation }: Props) {
                   {Number(item.discount_amount) > 0 && <Text style={styles.meta}>−{money(item.discount_amount)} off</Text>}
                 </View>
                 <Text style={styles.lineTotal}>{money(item.line_total)}</Text>
-                <View style={styles.actions}>
-                  <TouchableOpacity onPress={() => open('VOID', item)}><Text style={styles.action}>Void</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => open('COMP', item)}><Text style={styles.action}>Comp</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => open('DISCOUNT', item)}><Text style={styles.action}>Disc.</Text></TouchableOpacity>
-                </View>
+                {controlsEnabled && (
+                  <View style={styles.actions}>
+                    <TouchableOpacity onPress={() => open('VOID', item)}><Text style={styles.action}>Void</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => open('COMP', item)}><Text style={styles.action}>Comp</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => open('DISCOUNT', item)}><Text style={styles.action}>Disc.</Text></TouchableOpacity>
+                  </View>
+                )}
               </View>
             ))}
           </View>
         ))}
         {tab.rounds.length === 0 && <Text style={styles.empty}>Nothing on this tab yet.</Text>}
       </ScrollView>
-      <TouchableOpacity style={styles.discountTab} onPress={() => setTarget({ kind: 'DISCOUNT', type: 'tab', id: sessionId, title: 'Discount the whole tab', mode: 'percent' })}>
+      {heldCourses.map((course) => (
+        <TouchableOpacity key={course} style={styles.fire} onPress={() => doPick(() => fireCourse(token as string, sessionId, course), false)}>
+          <Text style={styles.fireText}>Fire course {course}</Text>
+        </TouchableOpacity>
+      ))}
+      <View style={styles.rowButtons}>
+        <TouchableOpacity style={styles.smallBtn} onPress={() => openPicker('move')}><Text style={styles.smallBtnText}>Move table</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.smallBtn} onPress={() => openPicker('merge')}><Text style={styles.smallBtnText}>Merge into…</Text></TouchableOpacity>
+      </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {picker && (
+        <View style={styles.picker}>
+          <Text style={styles.pickerTitle}>{picker === 'move' ? 'Move this tab to' : 'Merge this tab into'}</Text>
+          <ScrollView style={{ maxHeight: 160 }}>
+            {picker === 'move'
+              ? moveTargets.map((t) => (
+                  <TouchableOpacity key={t.table_id} style={styles.pickerRow} onPress={() => doPick(() => moveTab(token as string, sessionId, t.table_id), true)}>
+                    <Text>Table {t.table_number}</Text>
+                  </TouchableOpacity>
+                ))
+              : mergeTargets.map((s) => (
+                  <TouchableOpacity key={s.session_id} style={styles.pickerRow} onPress={() => doPick(() => mergeTab(token as string, sessionId, s.session_id), true)}>
+                    <Text>Table {s.table_number}{s.tab_name ? ` · ${s.tab_name}` : ''}</Text>
+                  </TouchableOpacity>
+                ))}
+            {(picker === 'move' ? moveTargets : mergeTargets).length === 0 && <Text style={styles.empty}>Nothing available</Text>}
+          </ScrollView>
+          <TouchableOpacity onPress={() => setPicker(null)}><Text style={styles.backText}>Cancel</Text></TouchableOpacity>
+        </View>
+      )}
+      {controlsEnabled && <TouchableOpacity style={styles.discountTab} onPress={() => setTarget({ kind: 'DISCOUNT', type: 'tab', id: sessionId, title: 'Discount the whole tab', mode: 'percent' })}>
         <Text style={styles.discountTabText}>Discount whole tab</Text>
-      </TouchableOpacity>
+      </TouchableOpacity>}
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}><Text style={styles.backText}>Back</Text></TouchableOpacity>
       {target && (
         <ControlSheet
@@ -115,5 +177,13 @@ const styles = StyleSheet.create({
   discountTabText: { color: '#2c6f53', fontWeight: '600', fontSize: 16 },
   back: { alignItems: 'center', marginTop: 12 },
   backText: { color: '#888' },
-  error: { color: '#c0392b' },
+  error: { color: '#c0392b', marginTop: 6 },
+  fire: { backgroundColor: '#e67e22', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
+  fireText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  rowButtons: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  smallBtn: { flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 12, alignItems: 'center' },
+  smallBtnText: { color: '#333', fontWeight: '600' },
+  picker: { borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 12, marginTop: 8 },
+  pickerTitle: { fontWeight: '700', marginBottom: 6 },
+  pickerRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
 });

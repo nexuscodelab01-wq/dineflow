@@ -73,6 +73,8 @@ export type OpenSession = {
   guests: number;
   rounds: number;
   total: string;
+  balance?: string;
+  tab_name?: string | null;
   requests: string[];
 };
 
@@ -92,6 +94,7 @@ export type PosOrderItem = {
   quantity: number;
   modifier_option_ids: number[];
   special_instructions?: string | null;
+  course?: number;
 };
 
 export type PosOrderRead = {
@@ -115,6 +118,15 @@ export type PosConnectionTokenResponse = {
 export type TablePaymentRead = {
   client_secret?: string | null;
   closed?: boolean;
+  balance?: string;
+};
+
+/** How much of a tab one payment covers — see SplitRequest on the backend. */
+export type SplitPayload = {
+  mode: 'FULL' | 'EVEN' | 'ITEMS' | 'AMOUNT';
+  amount?: string;
+  parts_remaining?: number;
+  item_ids?: number[];
 };
 
 export type ShiftRead = {
@@ -173,9 +185,21 @@ export type TabItem = {
   discount_amount: string;
   special_instructions: string | null;
   options: string[];
+  course: number;
+  held: boolean;
+  paid: boolean;
+  amount_due: string;
 };
 export type TabRound = { order_id: number; order_number: string; round_no: number | null; status: string; total: string; items: TabItem[] };
-export type TabDetail = { session_id: number; table_number: string; rounds: TabRound[]; total: string };
+export type TabDetail = {
+  session_id: number;
+  table_number: string;
+  rounds: TabRound[];
+  total: string;
+  paid: string;
+  balance: string;
+  tab_name: string | null;
+};
 
 export type RecentPayment = {
   kind: 'ORDER' | 'TAB';

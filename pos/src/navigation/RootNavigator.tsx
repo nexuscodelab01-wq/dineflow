@@ -1,3 +1,4 @@
+import type { SplitPayload } from '../api/types';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -30,7 +31,7 @@ export type RootStackParamList = {
   CashTender: { orderId: number; orderNumber: string; total: string };
   CardTender: { orderId: number; orderNumber: string; total: string };
   TableTender: { sessionId: number; tableNumber: string; total: string };
-  TableCardTender: { sessionId: number; tableNumber: string; total: string };
+  TableCardTender: { sessionId: number; tableNumber: string; total: string; split?: SplitPayload };
   CloseShift: undefined;
   ClockOut: undefined;
   XReport: undefined;

@@ -17,6 +17,7 @@ import type {
   TimeEntryRead,
   AdjustmentResult,
   AwaitingPayment,
+  SplitPayload,
   CouponPreview,
   MenuItemDetail,
   MenuListResponse as PosMenuResponse,
@@ -51,9 +52,9 @@ export function fetchTables(deviceToken: string) {
   return apiFetch<RestaurantTableRow[]>('/pos/tables', { token: deviceToken });
 }
 
-export function seatTable(posSessionToken: string, tableId: number, partySize?: number) {
+export function seatTable(posSessionToken: string, tableId: number, partySize?: number, tabName?: string) {
   return apiFetch<OpenSession>(`/pos/tables/${tableId}/seat`, {
-    method: 'POST', token: posSessionToken, body: { party_size: partySize ?? null },
+    method: 'POST', token: posSessionToken, body: { party_size: partySize ?? null, tab_name: tabName || null },
   });
 }
 
@@ -80,12 +81,12 @@ export function createCardIntent(posSessionToken: string, orderId: number) {
   return apiFetch<PosCardIntentRead>(`/pos/orders/${orderId}/pay-card`, { method: 'POST', token: posSessionToken });
 }
 
-export function createTableCardIntent(posSessionToken: string, sessionId: number) {
-  return apiFetch<TablePaymentRead>(`/pos/table-sessions/${sessionId}/pay-card`, { method: 'POST', token: posSessionToken });
+export function createTableCardIntent(posSessionToken: string, sessionId: number, split?: SplitPayload) {
+  return apiFetch<TablePaymentRead>(`/pos/table-sessions/${sessionId}/pay-card`, { method: 'POST', token: posSessionToken, body: split });
 }
 
-export function payCashForTable(posSessionToken: string, sessionId: number) {
-  return apiFetch<void>(`/pos/table-sessions/${sessionId}/pay-cash`, { method: 'POST', token: posSessionToken });
+export function payCashForTable(posSessionToken: string, sessionId: number, split?: SplitPayload) {
+  return apiFetch<void>(`/pos/table-sessions/${sessionId}/pay-cash`, { method: 'POST', token: posSessionToken, body: split });
 }
 
 export function fetchTerminalConnectionToken(posSessionToken: string) {
@@ -198,4 +199,18 @@ export function fetchXReport(token: string) {
 /** Online pay-at-pickup / cash-on-delivery orders that still owe money. */
 export function fetchAwaitingPayment(token: string) {
   return apiFetch<AwaitingPayment[]>('/pos/orders/awaiting-payment', { token });
+}
+
+// ---- floor ops: move, merge, fire a course ---------------------------------------------------------
+
+export function moveTab(token: string, sessionId: number, tableId: number) {
+  return apiFetch<void>(`/pos/table-sessions/${sessionId}/move`, { method: 'POST', token, body: { table_id: tableId } });
+}
+
+export function mergeTab(token: string, sessionId: number, intoSessionId: number) {
+  return apiFetch<void>(`/pos/table-sessions/${sessionId}/merge`, { method: 'POST', token, body: { into_session_id: intoSessionId } });
+}
+
+export function fireCourse(token: string, sessionId: number, course: number) {
+  return apiFetch<{ fired: number }>(`/pos/table-sessions/${sessionId}/fire`, { method: 'POST', token, body: { course } });
 }

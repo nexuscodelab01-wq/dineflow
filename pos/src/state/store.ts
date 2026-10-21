@@ -17,6 +17,8 @@ export type CartLine = {
   // Chosen modifier options (price already includes their adjustments). Part of what makes a line unique.
   modifierOptionIds?: number[];
   modifierLabels?: string[];
+  // Table rounds only: 1 goes to the kitchen now, 2+ are held until the server fires that course.
+  course?: number;
 };
 
 type PosState = {
@@ -61,6 +63,7 @@ type PosState = {
   removeFromCart: (lineId: string) => void;
   decrementCartLine: (lineId: string) => void;
   setCartLineNote: (lineId: string, note: string) => void;
+  cycleCartLineCourse: (lineId: string) => void;
   clearCart: () => void;
 };
 
@@ -137,7 +140,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       // (menuItemId, note), not menuItemId alone.
       const sig = (ids?: number[]) => [...(ids ?? [])].sort((a, b) => a - b).join(',');
       const existing = state.cart.find(
-        (l) => l.menuItemId === line.menuItemId && l.note === line.note && sig(l.modifierOptionIds) === sig(line.modifierOptionIds),
+        (l) => l.menuItemId === line.menuItemId && l.note === line.note && (l.course ?? 1) === (line.course ?? 1) && sig(l.modifierOptionIds) === sig(line.modifierOptionIds),
       );
       if (existing) {
         return {
@@ -166,6 +169,11 @@ export const usePosStore = create<PosState>((set, get) => ({
   setCartLineNote: (lineId, note) =>
     set((state) => ({
       cart: state.cart.map((l) => (l.lineId === lineId ? { ...l, note: note || undefined } : l)),
+    })),
+
+  cycleCartLineCourse: (lineId) =>
+    set((state) => ({
+      cart: state.cart.map((l) => (l.lineId === lineId ? { ...l, course: ((l.course ?? 1) % 3) + 1 } : l)),
     })),
 
   clearCart: () => set({ cart: [] }),

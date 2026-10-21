@@ -30,6 +30,7 @@ export default function OrderScreen({ navigation }: Props) {
   const removeFromCart = usePosStore((s) => s.removeFromCart);
   const decrementCartLine = usePosStore((s) => s.decrementCartLine);
   const setCartLineNote = usePosStore((s) => s.setCartLineNote);
+  const cycleCartLineCourse = usePosStore((s) => s.cycleCartLineCourse);
   const clearCart = usePosStore((s) => s.clearCart);
   const setTimeEntry = usePosStore((s) => s.setTimeEntry);
   const isTill = usePosStore((s) => s.deviceKind) !== 'HANDHELD';
@@ -46,6 +47,7 @@ export default function OrderScreen({ navigation }: Props) {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [seatingTableId, setSeatingTableId] = useState<number | null>(null);
   const [partySize, setPartySize] = useState('');
+  const [tabName, setTabName] = useState('');
   const [seating, setSeating] = useState(false);
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
   const [customer, setCustomer] = useState<PosCustomer | null>(null);
@@ -108,11 +110,12 @@ export default function OrderScreen({ navigation }: Props) {
     setError('');
     try {
       const parsed = partySize.trim() ? Number(partySize.trim()) : undefined;
-      const session = await seatTable(posSessionToken, tableId, parsed);
+      const session = await seatTable(posSessionToken, tableId, parsed, tabName.trim() || undefined);
       refreshOpenSessions();
       setSelectedSession(session.session_id);
       setSeatingTableId(null);
       setPartySize('');
+      setTabName('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not seat that table');
     } finally {
@@ -131,6 +134,7 @@ export default function OrderScreen({ navigation }: Props) {
     const items = cart.map((l) => ({
       menu_item_id: l.menuItemId, quantity: l.quantity, modifier_option_ids: l.modifierOptionIds ?? [],
       special_instructions: l.note || null,
+      course: mode === 'table' ? l.course ?? 1 : 1,
     }));
     try {
       if (mode === 'counter') {
@@ -273,7 +277,7 @@ export default function OrderScreen({ navigation }: Props) {
                   onPress={() => setSelectedSession(item.session_id)}
                 >
                   <Text style={selectedSession === item.session_id ? styles.tableChipTextActive : styles.tableChipText}>
-                    Table {item.table_number}
+                    Table {item.table_number}{item.tab_name ? ` · ${item.tab_name}` : ''}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -305,8 +309,15 @@ export default function OrderScreen({ navigation }: Props) {
             style={styles.seatInput}
             value={partySize}
             onChangeText={setPartySize}
-            placeholder="Optional"
+            placeholder="Guests"
             keyboardType="number-pad"
+          />
+          <TextInput
+            style={[styles.seatInput, { width: 130 }]}
+            value={tabName}
+            onChangeText={setTabName}
+            placeholder="Tab name"
+            maxLength={60}
           />
           <TouchableOpacity
             style={[styles.tabBarButton, seating && styles.tabBarButtonDisabled]}
@@ -315,7 +326,7 @@ export default function OrderScreen({ navigation }: Props) {
           >
             {seating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.tabBarButtonText}>Seat</Text>}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { setSeatingTableId(null); setPartySize(''); }}>
+          <TouchableOpacity onPress={() => { setSeatingTableId(null); setPartySize(''); setTabName(''); }}>
             <Text style={styles.seatCancel}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -326,11 +337,9 @@ export default function OrderScreen({ navigation }: Props) {
           <Text style={styles.tabBarText}>
             Table {selectedTable.table_number} — {selectedTable.rounds} round{selectedTable.rounds === 1 ? '' : 's'} · {money(selectedTable.total)} on the tab
           </Text>
-          {controlsEnabled && (
-            <TouchableOpacity style={styles.tabBarSecondary} onPress={() => navigation.navigate('TabDetail', { sessionId: selectedTable.session_id })}>
-              <Text style={styles.tabBarSecondaryText}>Edit tab</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.tabBarSecondary} onPress={() => navigation.navigate('TabDetail', { sessionId: selectedTable.session_id })}>
+            <Text style={styles.tabBarSecondaryText}>Edit tab</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabBarButton, Number(selectedTable.total) <= 0 && styles.tabBarButtonDisabled]}
             disabled={Number(selectedTable.total) <= 0}
@@ -424,10 +433,15 @@ export default function OrderScreen({ navigation }: Props) {
                   <Text style={styles.qtyText}>{item.quantity}</Text>
                   <TouchableOpacity
                     style={styles.qtyButton}
-                    onPress={() => addToCart({ menuItemId: item.menuItemId, name: item.name, price: item.price, note: item.note, modifierOptionIds: item.modifierOptionIds, modifierLabels: item.modifierLabels })}
+                    onPress={() => addToCart({ menuItemId: item.menuItemId, name: item.name, price: item.price, note: item.note, course: item.course, modifierOptionIds: item.modifierOptionIds, modifierLabels: item.modifierLabels })}
                   >
                     <Text style={styles.qtyButtonText}>+</Text>
                   </TouchableOpacity>
+                  {mode === 'table' && (
+                    <TouchableOpacity style={styles.noteButton} onPress={() => cycleCartLineCourse(item.lineId)}>
+                      <Text style={styles.noteButtonText}>Course {item.course ?? 1}</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity style={styles.noteButton} onPress={() => openNoteEditor(item.lineId, item.note)}>
                     <Text style={styles.noteButtonText}>{item.note ? 'Edit note' : '+ Note'}</Text>
                   </TouchableOpacity>

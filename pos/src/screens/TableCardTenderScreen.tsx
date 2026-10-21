@@ -15,7 +15,7 @@ type Stage = 'connecting' | 'waiting_for_card' | 'processing' | 'paid' | 'error'
 
 export default function TableCardTenderScreen({ route, navigation }: Props) {
   const money = useMoney();
-  const { sessionId, tableNumber, total } = route.params;
+  const { sessionId, tableNumber, total, split } = route.params;
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const tipsEnabled = usePosStore((s) => s.tipsEnabled);
   const [stage, setStage] = useState<Stage>('connecting');
@@ -56,7 +56,7 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
     setStage('waiting_for_card');
     setError('');
     try {
-      const intentResult = await createTableCardIntent(posSessionToken, sessionId);
+      const intentResult = await createTableCardIntent(posSessionToken, sessionId, split);
       if (!intentResult.client_secret) {
         // The mock provider settled synchronously (backend tests / no reader attached) and already
         // closed the tab — nothing left for the reader to do.
@@ -107,7 +107,7 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
     connecting: 'Connecting to the card reader…',
     waiting_for_card: 'Starting the payment…',
     processing: 'Processing — please wait…',
-    paid: 'Paid — card, tab closed',
+    paid: 'Paid — card',
     error: 'Something went wrong',
   };
 
@@ -119,8 +119,9 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
       {stage === 'paid' ? (
         <>
           <Text style={styles.paidText}>{statusText.paid}</Text>
-          <TouchableOpacity style={styles.button} onPress={() => navigation.popToTop()}>
-            <Text style={styles.buttonText}>Done</Text>
+          {/* The bill screen re-reads the tab: it shows what is still owed, or "settled" once nothing is. */}
+          <TouchableOpacity style={styles.button} onPress={() => navigation.replace('TableTender', { sessionId, tableNumber, total })}>
+            <Text style={styles.buttonText}>Back to the bill</Text>
           </TouchableOpacity>
         </>
       ) : stage === 'error' ? (
