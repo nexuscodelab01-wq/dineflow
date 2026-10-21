@@ -83,7 +83,8 @@ POS = {
     ("GET", "/pos/reasons"), ("POST", "/pos/authorize"), ("GET", "/pos/table-sessions/{session_id}"),
     ("POST", "/pos/order-items/{item_id}/void"), ("POST", "/pos/order-items/{item_id}/comp"), ("POST", "/pos/order-items/{item_id}/discount"),
     ("POST", "/pos/orders/{order_id}/discount"), ("POST", "/pos/table-sessions/{session_id}/discount"),
-    ("GET", "/pos/recent-payments"), ("POST", "/pos/orders/{order_id}/refund"), ("POST", "/pos/table-sessions/{session_id}/refund"),
+    ("GET", "/pos/recent-payments"), ("GET", "/pos/menu"), ("GET", "/pos/customers"), ("POST", "/pos/coupons/preview"),
+    ("POST", "/pos/menu-items/{item_id}/availability"), ("GET", "/pos/shifts/current/report"), ("POST", "/pos/orders/{order_id}/refund"), ("POST", "/pos/table-sessions/{session_id}/refund"),
 }
 # Platform-only.
 PLATFORM = {

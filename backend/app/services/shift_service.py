@@ -124,6 +124,18 @@ class ShiftService:
             card_tips=self._card_tips(shift.id), cash_tips=cash_tips,
         )
 
+    def x_report(self, device: Device) -> ShiftReportRead:
+        """A mid-shift read of the till: the same figures as the Z-report, but nothing is closed or reset."""
+        shift = self._open_shift_or_error(device)
+        cash_total, card_total, order_count = self._totals(shift.id)
+        expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id) - self._cash_refunds_out(shift.id)
+        return ShiftReportRead(
+            shift_id=shift.id, opened_at=shift.opened_at, opened_by=shift.opened_by.first_name if shift.opened_by else None,
+            closed_at=None, closed_by=None, starting_float=shift.starting_float, cash_total=cash_total, card_total=card_total,
+            order_count=order_count, expected_cash=expected_cash, counted_cash=None, variance=None,
+            card_tips=self._card_tips(shift.id), cash_tips=Decimal("0.00"),
+        )
+
     def list_shifts(self, restaurant_id: int) -> list[ShiftReportRead]:
         shifts = self.db.scalars(
             select(Shift).where(Shift.restaurant_id == restaurant_id).order_by(Shift.opened_at.desc())

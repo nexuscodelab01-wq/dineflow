@@ -51,6 +51,9 @@ class PinLoginResponse(BaseModel):
 class PosOrderCreate(BaseModel):
     items: list["PosOrderItemCreate"] = Field(min_length=1, max_length=40)
     notes: str | None = Field(default=None, max_length=500)
+    # A known customer (from lookup): the order is theirs, so loyalty points follow it. Optional.
+    customer_id: int | None = None
+    coupon_code: str | None = Field(default=None, max_length=40)
 
 
 class PosOrderItemCreate(BaseModel):
@@ -80,3 +83,33 @@ class PosCardIntentRead(BaseModel):
     status: str  # "CONFIRMED" (mock, settled synchronously) or "PENDING" (Stripe, webhook still pending)
     client_secret: str | None = None
     provider_intent_id: str | None = None
+
+
+class PosCustomerRead(BaseModel):
+    id: int
+    name: str
+    email: str | None
+    phone: str | None
+    points: int = 0
+    is_vip: bool = False
+
+
+class PosCouponPreviewRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    subtotal: Decimal = Field(ge=0)
+    customer_id: int | None = None
+
+
+class PosCouponPreviewRead(BaseModel):
+    code: str
+    description: str | None
+    discount: Decimal
+
+
+class AvailabilityRequest(BaseModel):
+    is_available: bool
+
+
+class AvailabilityRead(BaseModel):
+    item_id: int
+    is_available: bool

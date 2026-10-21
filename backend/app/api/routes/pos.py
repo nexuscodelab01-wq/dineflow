@@ -18,12 +18,18 @@ from app.dependencies.features import (
 from app.dependencies.pos import CurrentDevice, CurrentPosStaff
 from app.models.restaurant import Restaurant
 from app.models.table_session import TableSession
+from app.schemas.menu import MenuListResponse
 from app.schemas.pos import (
+    AvailabilityRead,
+    AvailabilityRequest,
     OpenTableSessionsResponse,
     PinLoginRequest,
     PinLoginResponse,
     PosCardIntentRead,
     PosConnectionTokenRead,
+    PosCouponPreviewRead,
+    PosCouponPreviewRequest,
+    PosCustomerRead,
     PosOrderCreate,
     PosOrderRead,
 )
@@ -44,6 +50,7 @@ from app.schemas.table_session import (
 )
 from app.schemas.time_entry import TimeEntryRead
 from app.schemas.tips import CashUpRequest
+from app.services.menu_service import MenuService
 from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
 from app.services.shift_service import ShiftService
@@ -170,6 +177,35 @@ def pos_table_pay_cash(session_id: int, staff: CurrentPosStaff, db: Annotated[Se
         raise raise_http_for_app_error(exc) from exc
 
 
+@router.get("/menu", response_model=MenuListResponse, dependencies=POS_STAFF_GATE)
+def pos_menu(staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> MenuListResponse:
+    """The whole menu for the till, sold-out dishes included (the public menu hides them, but the till needs to
+    show them greyed out so a server can bring one back)."""
+    return MenuService(db).list_items(restaurant_id=staff.device.restaurant_id, is_available=None, page=1, page_size=100, sort="popular")
+
+
+@router.get("/customers", response_model=list[PosCustomerRead], dependencies=POS_STAFF_GATE)
+def search_customers(staff: CurrentPosStaff, service: Pos, q: str = "") -> list[PosCustomerRead]:
+    return service.search_customers(staff.device.restaurant_id, q)
+
+
+@router.post("/coupons/preview", response_model=PosCouponPreviewRead, dependencies=POS_STAFF_GATE)
+def preview_coupon(data: PosCouponPreviewRequest, staff: CurrentPosStaff, service: Pos) -> PosCouponPreviewRead:
+    try:
+        return service.preview_coupon(staff.device.restaurant_id, data)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/menu-items/{item_id}/availability", response_model=AvailabilityRead, dependencies=POS_STAFF_GATE)
+def set_availability(item_id: int, data: AvailabilityRequest, staff: CurrentPosStaff, service: Pos) -> AvailabilityRead:
+    """86 a dish (or bring it back) from the till."""
+    try:
+        return service.set_item_availability(staff.user, staff.device.restaurant_id, item_id, data.is_available)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
 @router.post("/terminal/connection-token", response_model=PosConnectionTokenRead, dependencies=POS_STAFF_GATE)
 def terminal_connection_token(staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> PosConnectionTokenRead:
     """What @stripe/stripe-terminal-react-native's tokenProvider calls. 503 under PAYMENT_PROVIDER=mock
@@ -194,6 +230,15 @@ def open_shift(data: ShiftOpenRequest, staff: CurrentPosStaff, service: Shifts) 
     try:
         return service.open_shift(staff.device, staff.user, data.starting_float)
     except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/shifts/current/report", response_model=ShiftReportRead, dependencies=POS_STAFF_GATE)
+def shift_x_report(staff: CurrentPosStaff, service: Shifts) -> ShiftReportRead:
+    """X-report: where the till stands right now. Reads only — nothing is closed or reset."""
+    try:
+        return service.x_report(staff.device)
+    except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 
 

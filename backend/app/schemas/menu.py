@@ -57,6 +57,7 @@ class MenuItemListRead(BaseModel):
     is_popular: bool
     station: str = "KITCHEN"
     tax_code: str | None = None
+    has_modifiers: bool = False
     allergens: list[str] = Field(default_factory=list)
 
 

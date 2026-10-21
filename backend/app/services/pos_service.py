@@ -15,7 +15,7 @@ import secrets
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,6 +30,8 @@ from app.core.security import (
 from app.models.audit_log import AuditLog
 from app.models.device import TILL, Device
 from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
+from app.models.loyalty import LoyaltyAccount
+from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
@@ -37,10 +39,14 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.pos import (
+    AvailabilityRead,
     DevicePairResponse,
     DeviceRead,
     PinLoginResponse,
     PosCardIntentRead,
+    PosCouponPreviewRead,
+    PosCouponPreviewRequest,
+    PosCustomerRead,
     PosOrderCreate,
     PosOrderRead,
 )
@@ -143,21 +149,33 @@ class PosService:
             if len(items_by_id) != len(set(item_ids)):
                 raise AppError("One or more menu items are invalid for this restaurant")
 
+            customer = self._customer(restaurant.id, data.customer_id) if data.customer_id else None
             order = Order(
-                user_id=staff.id, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
+                # A looked-up customer owns the order (so loyalty follows them); otherwise it's the staff member's, as before.
+                user_id=customer.id if customer else staff.id, restaurant_id=restaurant.id, order_number=orders._next_order_number(restaurant.id),
                 order_type=OrderType.COUNTER, status=OrderStatus.PENDING,
                 subtotal=Decimal("0.00"), tax=Decimal("0.00"), delivery_fee=Decimal("0.00"), discount=Decimal("0.00"), total=Decimal("0.00"),
-                customer_name=f"{staff.first_name} (staff)", customer_email=None,
+                customer_name=f"{customer.first_name} {customer.last_name}".strip() if customer else f"{staff.first_name} (staff)",
+                customer_email=customer.email if customer else None,
                 notes=data.notes, client_token=secrets.token_urlsafe(16),
             )
             orders.orders.add(order)
             subtotal = orders._add_lines(order, data.items, items_by_id)
-            service_charge = service_charge_for(restaurant, OrderType.COUNTER, subtotal)
+            coupon = None
+            if data.coupon_code:
+                if not FeatureService(self.db).is_enabled(restaurant.id, "coupons"):
+                    raise AppError("Discount codes are not available for this restaurant")
+                coupon, order.discount = orders.coupons.apply_to_order(restaurant.id, data.coupon_code, subtotal, customer)
+            taxable = max(subtotal - order.discount, Decimal("0.00"))
+            service_charge = service_charge_for(restaurant, OrderType.COUNTER, taxable)
             tax = price_order_tax(
-                self.db, restaurant, order, taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
+                self.db, restaurant, order, discount=order.discount,
+                taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
             ).tax_total
-            total = (subtotal + tax + service_charge).quantize(Decimal("0.01"))
+            total = (taxable + tax + service_charge).quantize(Decimal("0.01"))
             order.subtotal, order.tax, order.service_charge, order.total = subtotal, tax, service_charge, total
+            if coupon is not None:
+                orders.coupons.record_redemption(coupon, order, customer, order.discount)
 
             self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=staff.id))
             # Stays PENDING, nothing published — see module docstring. mark_counter_order_paid_cash
@@ -166,6 +184,60 @@ class PosService:
         order_id, order_number, total = order.id, order.order_number, order.total
         self.db.commit()
         return PosOrderRead(order_id=order_id, order_number=order_number, total=total, status=OrderStatus.PENDING.value)
+
+    # ------------------------------------------------------------------ customers, coupons, 86
+
+    def _customer(self, restaurant_id: int, customer_id: int) -> User:
+        customer = self.db.get(User, customer_id)
+        if customer is None or customer.restaurant_id != restaurant_id:
+            raise NotFoundError("Customer not found")
+        return customer
+
+    def search_customers(self, restaurant_id: int, query: str) -> list[PosCustomerRead]:
+        """Registered customers of this restaurant by name, email or phone — for attaching to a sale."""
+        q = query.strip()
+        if len(q) < 2:
+            return []
+        pattern = f"%{q}%"
+        users = self.db.scalars(
+            select(User).where(
+                User.restaurant_id == restaurant_id, User.is_active.is_(True),
+                or_(User.first_name.ilike(pattern), User.last_name.ilike(pattern), User.email.ilike(pattern), User.phone.ilike(pattern)),
+            ).order_by(User.first_name).limit(10)
+        ).all()
+        balances = {
+            a.user_id: a.balance for a in self.db.scalars(
+                select(LoyaltyAccount).where(LoyaltyAccount.restaurant_id == restaurant_id, LoyaltyAccount.user_id.in_([u.id for u in users]))
+            )
+        } if users else {}
+        return [
+            PosCustomerRead(
+                id=u.id, name=f"{u.first_name} {u.last_name}".strip(), email=u.email, phone=u.phone,
+                points=balances.get(u.id, 0), is_vip=u.is_vip,
+            )
+            for u in users
+        ]
+
+    def preview_coupon(self, restaurant_id: int, data: PosCouponPreviewRequest) -> PosCouponPreviewRead:
+        if not FeatureService(self.db).is_enabled(restaurant_id, "coupons"):
+            raise AppError("Discount codes are not available for this restaurant")
+        customer = self._customer(restaurant_id, data.customer_id) if data.customer_id else None
+        coupon, discount = OrderService(self.db).coupons.preview(restaurant_id, data.code, data.subtotal, customer)
+        return PosCouponPreviewRead(code=coupon.code, description=coupon.description, discount=discount)
+
+    def set_item_availability(self, staff: User, restaurant_id: int, item_id: int, is_available: bool) -> AvailabilityRead:
+        """86 an item (or bring it back) from the till — takes effect on the web menu and every other device at once."""
+        item = self.db.get(MenuItem, item_id)
+        if item is None or item.restaurant_id != restaurant_id:
+            raise NotFoundError("Menu item not found")
+        if item.is_available != is_available:
+            item.is_available = is_available
+            self.db.add(AuditLog(
+                restaurant_id=restaurant_id, actor_user_id=staff.id, actor_label=staff.email,
+                action="pos.item_availability", target=f"menu_item:{item.id}", details={"is_available": is_available},
+            ))
+            self.db.commit()
+        return AvailabilityRead(item_id=item.id, is_available=item.is_available)
 
     def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None) -> None:
         order = self.db.get(Order, order_id)

@@ -69,7 +69,7 @@ class MenuRepository:
         total = self.db.scalar(count_stmt) or 0
 
         stmt = (
-            stmt.options(joinedload(MenuItem.category))
+            stmt.options(joinedload(MenuItem.category), selectinload(MenuItem.modifier_links))
         )
 
         sort_map = {

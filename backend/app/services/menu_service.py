@@ -61,6 +61,7 @@ class MenuService:
             is_popular=item.is_popular,
             station=item.station,
             tax_code=item.tax_code,
+            has_modifiers=bool(item.modifier_links),
             allergens=item.allergens,
         )
 
