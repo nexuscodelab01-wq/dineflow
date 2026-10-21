@@ -186,3 +186,15 @@ export type RecentPayment = {
   paid_at: string;
   refundable: boolean;
 };
+
+export type AwaitingPayment = {
+  order_id: number;
+  order_number: string;
+  order_type: string;
+  customer_name: string;
+  customer_phone: string | null;
+  total: string;
+  placed_at: string;
+  scheduled_for: string | null;
+  status: string;
+};

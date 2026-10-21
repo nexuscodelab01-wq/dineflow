@@ -235,6 +235,9 @@ export default function OrderScreen({ navigation }: Props) {
               </TouchableOpacity>
             </>
           )}
+          <TouchableOpacity onPress={() => navigation.navigate('AwaitingPayment')}>
+            <Text style={styles.headerLink}>Pay later</Text>
+          </TouchableOpacity>
           {controlsEnabled && (
             <TouchableOpacity onPress={() => navigation.navigate('RecentPayments')}>
               <Text style={styles.headerLink}>Refunds</Text>

@@ -16,6 +16,7 @@ import type {
   TablePaymentRead,
   TimeEntryRead,
   AdjustmentResult,
+  AwaitingPayment,
   CouponPreview,
   MenuItemDetail,
   MenuListResponse as PosMenuResponse,
@@ -192,4 +193,9 @@ export function previewCoupon(token: string, code: string, subtotal: number, cus
 /** X-report: where the till stands now; closes nothing. */
 export function fetchXReport(token: string) {
   return apiFetch<ShiftReportRead>('/pos/shifts/current/report', { token });
+}
+
+/** Online pay-at-pickup / cash-on-delivery orders that still owe money. */
+export function fetchAwaitingPayment(token: string) {
+  return apiFetch<AwaitingPayment[]>('/pos/orders/awaiting-payment', { token });
 }
