@@ -1,6 +1,8 @@
 """Staff seat a walk-in table directly from the POS — no QR scan needed. Idempotent like the guest-QR
 path's own _open_session (tapping "Seat" twice on the same table returns the same session)."""
 
+from decimal import Decimal
+
 import pytest
 
 from app.db.session import get_db
@@ -110,3 +112,47 @@ def test_a_round_can_be_sent_to_a_staff_seated_table(world):
         json={"items": [{"menu_item_id": w.a.item.id, "quantity": 1, "modifier_option_ids": []}]},
     )
     assert r.status_code == 200, r.text
+
+
+def test_a_guest_can_join_and_order_on_a_table_staff_already_seated_and_settle_the_combined_bill(world):
+    """Staff seat a walk-in and ring a round from the POS; the same table's guests scan the QR code
+    afterward and order more themselves — both land on the one shared tab (_open_session is keyed purely
+    on table_id + OPEN state, same session either way), and the POS shows the combined total for staff
+    to settle. Table.status is flipped OCCUPIED by open_for_staff, which is exactly what _closed_reason
+    requires before a guest's own QR scan is even allowed to order."""
+    w = world
+    device_headers, staff_headers = pos_session(w, w.a, w.a.staff)
+
+    seated = w.client.post(f"{API}/pos/tables/{w.a.table.id}/seat", headers=staff_headers, json={"party_size": 2})
+    session_id = seated.json()["session_id"]
+    staff_round = w.client.post(
+        f"{API}/pos/table-sessions/{session_id}/orders", headers=staff_headers,
+        json={"items": [{"menu_item_id": w.a.item.id, "quantity": 1, "modifier_option_ids": []}]},
+    )
+    assert staff_round.status_code == 200, staff_round.text
+
+    # The guest at that same table scans the table's own QR code — joins the SAME session, not a new one.
+    joined = w.client.post(f"{API}/t/{w.a.table.qr_token}/join", params={"restaurant_id": w.a.rid}, json={"name": "Guest"})
+    assert joined.status_code == 200, joined.text
+    assert joined.json()["session_id"] == session_id
+    guest_headers = {"Authorization": f"Bearer {joined.json()['access_token']}"}
+
+    guest_round = w.client.post(
+        f"{API}/table-session/orders", headers=guest_headers,
+        json={"items": [{"menu_item_id": w.a.item.id, "quantity": 2, "modifier_option_ids": []}]},
+    )
+    assert guest_round.status_code == 201, guest_round.text
+
+    # The POS, looking at that table, sees both rounds combined on the one bill.
+    open_sessions = w.client.get(f"{API}/pos/table-sessions/open", headers=device_headers)
+    assert open_sessions.status_code == 200, open_sessions.text
+    row = next(s for s in open_sessions.json()["sessions"] if s["session_id"] == session_id)
+    assert row["rounds"] == 2
+    expected_total = (Decimal("12.00") * 3 * Decimal("1.10")).quantize(Decimal("0.01"))  # 1 (staff) + 2 (guest)
+    assert Decimal(row["total"]) == expected_total
+
+    # Staff settles the combined bill from the POS.
+    paid = w.client.post(f"{API}/pos/table-sessions/{session_id}/pay-cash", headers=staff_headers)
+    assert paid.status_code == 204, paid.text
+    session = w.db.get(TableSession, session_id)
+    assert session.state != "OPEN"
