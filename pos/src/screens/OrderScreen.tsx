@@ -9,7 +9,7 @@ import { useMoney } from '../utils/money';
 import { decodeJwtPayload } from '../api/jwt';
 import {
   clockOut, createCounterOrder, createTableOrder, fetchCategories, fetchPosMenu,
-  fetchOpenTableSessions, fetchTables, previewCoupon, seatTable, setItemAvailability,
+  fetchOpenTableSessions, fetchTables, openBarTab, previewCoupon, seatTable, setItemAvailability,
 } from '../api/pos';
 import type { Category, MenuItem, OpenSession, PosCustomer, RestaurantTableRow } from '../api/types';
 import CustomerSheet from '../components/CustomerSheet';
@@ -48,6 +48,8 @@ export default function OrderScreen({ navigation }: Props) {
   const [seatingTableId, setSeatingTableId] = useState<number | null>(null);
   const [partySize, setPartySize] = useState('');
   const [tabName, setTabName] = useState('');
+  const [barTabOpen, setBarTabOpen] = useState(false);
+  const [barTabName, setBarTabName] = useState('');
   const [seating, setSeating] = useState(false);
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
   const [customer, setCustomer] = useState<PosCustomer | null>(null);
@@ -103,6 +105,20 @@ export default function OrderScreen({ navigation }: Props) {
   const total = cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
   const selectedTable = mode === 'table' ? openSessions.find((s) => s.session_id === selectedSession) : undefined;
   const availableTables = tables.filter((t) => !openSessions.some((s) => s.table_id === t.table_id));
+
+  async function startBarTab() {
+    if (!posSessionToken || !barTabName.trim()) return;
+    setError('');
+    try {
+      const tab = await openBarTab(posSessionToken, barTabName.trim());
+      refreshOpenSessions();
+      setSelectedSession(tab.session_id);
+      setBarTabOpen(false);
+      setBarTabName('');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not start the tab');
+    }
+  }
 
   async function handleSeat(tableId: number) {
     if (!posSessionToken || seating) return;
@@ -277,11 +293,23 @@ export default function OrderScreen({ navigation }: Props) {
                   onPress={() => setSelectedSession(item.session_id)}
                 >
                   <Text style={selectedSession === item.session_id ? styles.tableChipTextActive : styles.tableChipText}>
-                    Table {item.table_number}{item.tab_name ? ` · ${item.tab_name}` : ''}
+                    {item.is_bar_tab ? `Tab · ${item.tab_name ?? item.table_number}` : `Table ${item.table_number}${item.tab_name ? ` · ${item.tab_name}` : ''}`}
                   </Text>
                 </TouchableOpacity>
               )}
             />
+          )}
+          {barTabOpen ? (
+            <View style={styles.seatBar}>
+              <Text style={styles.seatBarText}>Name the tab</Text>
+              <TextInput style={[styles.seatInput, { width: 180 }]} value={barTabName} onChangeText={setBarTabName} placeholder="e.g. Mike at the bar" maxLength={60} autoFocus onSubmitEditing={startBarTab} />
+              <TouchableOpacity style={styles.tabBarButton} onPress={startBarTab}><Text style={styles.tabBarButtonText}>Start</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { setBarTabOpen(false); setBarTabName(''); }}><Text style={styles.seatCancel}>Cancel</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.tableChipEmpty} onPress={() => setBarTabOpen(true)}>
+              <Text style={styles.tableChipEmptyText}>+ New tab (no table)</Text>
+            </TouchableOpacity>
           )}
           {availableTables.length > 0 && (
             <FlatList

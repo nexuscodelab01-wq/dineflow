@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ApiError } from '../api/client';
-import { cancelReader, fetchPaymentStatus, payOnReader } from '../api/pos';
+import { cancelReader, fetchPaymentStatus, payOnReader, simulateTap } from '../api/pos';
 import type { CardReader } from '../api/types';
 import ReceiptActions from '../components/ReceiptActions';
 import { usePosStore } from '../state/store';
@@ -104,6 +104,11 @@ export default function ReaderTenderScreen({ route, navigation }: Props) {
         <>
           <ActivityIndicator style={{ marginBottom: 12 }} />
           <Text style={styles.status}>{stage === 'sending' ? 'Sending to the reader…' : `Waiting for the customer on ${reader?.label ?? 'the reader'}…`}</Text>
+          {stage === 'waiting' && reader?.test_mode && (
+            <TouchableOpacity style={styles.test} onPress={() => token && simulateTap(token, reader.id).catch(() => setError('Could not simulate a tap'))}>
+              <Text style={styles.testText}>Simulate card tap (test mode)</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.secondary} onPress={cancel}><Text style={styles.secondaryText}>Cancel</Text></TouchableOpacity>
         </>
       )}
@@ -146,5 +151,7 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2c6f53', borderRadius: 10, paddingVertical: 16, paddingHorizontal: 36, marginTop: 20 },
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   secondary: { marginTop: 16, padding: 10 },
+  test: { marginTop: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: '#e67e22', borderRadius: 10, padding: 12 },
+  testText: { color: '#e67e22', fontWeight: '600' },
   secondaryText: { color: '#2c6f53', fontSize: 15, fontWeight: '600' },
 });

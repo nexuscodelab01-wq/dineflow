@@ -81,7 +81,7 @@ export default function TabDetailScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Table {tab.table_number}</Text>
+        <Text style={styles.title}>{tab.is_bar_tab ? `Tab · ${tab.tab_name}` : `Table ${tab.table_number}`}</Text>
         <Text style={styles.total}>{money(tab.total)}</Text>
       </View>
       <ScrollView>

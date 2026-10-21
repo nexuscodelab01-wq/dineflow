@@ -73,6 +73,7 @@ export type OpenSession = {
   opened_at: string;
   guests: number;
   rounds: number;
+  is_bar_tab?: boolean;
   total: string;
   balance?: string;
   tab_name?: string | null;
@@ -200,6 +201,7 @@ export type TabDetail = {
   paid: string;
   balance: string;
   tab_name: string | null;
+  is_bar_tab?: boolean;
 };
 
 export type RecentPayment = {
@@ -225,6 +227,6 @@ export type AwaitingPayment = {
 };
 
 export type PrinterSettings = { host: string | null; port: number; cash_drawer: boolean; auto_print: boolean };
-export type CardReader = { id: string; label: string; status: string; device_type: string | null };
+export type CardReader = { id: string; label: string; status: string; device_type: string | null; test_mode?: boolean };
 export type PaymentStatus = { payment_id: number; status: string; failure_message: string | null; tip_amount: string; closed: boolean };
 export type ReceiptTarget = { kind: 'order' | 'tab'; id: number };

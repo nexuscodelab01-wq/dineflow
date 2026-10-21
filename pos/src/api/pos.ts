@@ -251,3 +251,13 @@ export function fetchPaymentStatus(token: string, paymentId: number) {
 export function cancelReader(token: string, readerId: string) {
   return apiFetch<void>(`/pos/readers/${readerId}/cancel`, { method: 'POST', token });
 }
+
+/** Test mode: pretend a customer tapped a test card on a simulated reader. */
+export function simulateTap(token: string, readerId: string) {
+  return apiFetch<void>(`/pos/readers/${readerId}/simulate-tap`, { method: 'POST', token });
+}
+
+/** A running tab with no table. */
+export function openBarTab(token: string, name: string, partySize?: number) {
+  return apiFetch<OpenSession>('/pos/tabs', { method: 'POST', token, body: { name, party_size: partySize ?? null } });
+}

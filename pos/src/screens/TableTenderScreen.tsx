@@ -85,7 +85,7 @@ export default function TableTenderScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.orderNumber}>Table {tableNumber}{tab.tab_name ? ` · ${tab.tab_name}` : ''}</Text>
+      <Text style={styles.orderNumber}>{tab.is_bar_tab ? `Tab · ${tab.tab_name}` : `Table ${tableNumber}${tab.tab_name ? ` · ${tab.tab_name}` : ''}`}</Text>
       <Text style={styles.total}>{money(balance)}</Text>
       <Text style={styles.sub}>{Number(tab.paid) > 0 ? `${money(tab.paid)} already paid of ${money(tab.total)}` : 'still to pay'}</Text>
 
