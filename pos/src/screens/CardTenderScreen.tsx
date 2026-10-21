@@ -5,6 +5,7 @@ import { useStripeTerminal } from '@stripe/stripe-terminal-react-native';
 import type { Reader } from '@stripe/stripe-terminal-react-native';
 import { ApiError } from '../api/client';
 import { createCardIntent } from '../api/pos';
+import ReceiptActions from '../components/ReceiptActions';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMoney } from '../utils/money';
@@ -119,6 +120,7 @@ export default function CardTenderScreen({ route, navigation }: Props) {
       {stage === 'paid' ? (
         <>
           <Text style={styles.paidText}>{statusText.paid}</Text>
+          <ReceiptActions target={{ kind: 'order', id: orderId }} />
           <TouchableOpacity style={styles.button} onPress={() => navigation.popToTop()}>
             <Text style={styles.buttonText}>New order</Text>
           </TouchableOpacity>

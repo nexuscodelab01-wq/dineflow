@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ApiError } from '../api/client';
-import { payCash } from '../api/pos';
+import { fetchReaders, payCash } from '../api/pos';
+import ReceiptActions from '../components/ReceiptActions';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMoney } from '../utils/money';
@@ -31,6 +32,14 @@ export default function CashTenderScreen({ route, navigation }: Props) {
     }
   }
 
+  // A smart reader on the network takes priority; with none registered, fall back to the Bluetooth reader.
+  async function payByCard() {
+    if (!posSessionToken) return;
+    const readers = await fetchReaders(posSessionToken).catch(() => []);
+    if (readers.length > 0) navigation.replace('ReaderTender', { kind: 'order', id: orderId, label: `Order ${orderNumber}`, total, readers });
+    else navigation.replace('CardTender', { orderId, orderNumber, total });
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.orderNumber}>Order {orderNumber}</Text>
@@ -39,7 +48,8 @@ export default function CashTenderScreen({ route, navigation }: Props) {
       {paid ? (
         <>
           <Text style={styles.paidText}>Paid — cash</Text>
-          <TouchableOpacity style={styles.button} onPress={() => navigation.popToTop()}>
+          <ReceiptActions target={{ kind: 'order', id: orderId }} cash />
+          <TouchableOpacity style={[styles.button, { marginTop: 24 }]} onPress={() => navigation.popToTop()}>
             <Text style={styles.buttonText}>New order</Text>
           </TouchableOpacity>
         </>
@@ -51,7 +61,7 @@ export default function CashTenderScreen({ route, navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => navigation.replace('CardTender', { orderId, orderNumber, total })}
+            onPress={payByCard}
             disabled={busy}
           >
             <Text style={styles.secondaryButtonText}>Pay by card</Text>

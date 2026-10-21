@@ -3,7 +3,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ApiError } from '../api/client';
-import { fetchTab, payCashForTable } from '../api/pos';
+import { fetchReaders, fetchTab, payCashForTable } from '../api/pos';
+import ReceiptActions from '../components/ReceiptActions';
 import type { SplitPayload, TabDetail } from '../api/types';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -75,6 +76,7 @@ export default function TableTenderScreen({ route, navigation }: Props) {
       <View style={styles.container}>
         <Text style={styles.orderNumber}>Table {tableNumber}</Text>
         <Text style={styles.paidText}>{lastPaid ? `Paid ${lastPaid} — ` : ''}tab settled</Text>
+        <ReceiptActions target={{ kind: 'tab', id: sessionId }} cash />
         <TouchableOpacity style={styles.button} onPress={() => navigation.popToTop()}><Text style={styles.buttonText}>Done</Text></TouchableOpacity>
       </View>
     );
@@ -135,7 +137,11 @@ export default function TableTenderScreen({ route, navigation }: Props) {
       <TouchableOpacity
         style={styles.secondaryButton}
         disabled={busy || !ready}
-        onPress={() => navigation.replace('TableCardTender', { sessionId, tableNumber, total: String(thisPayment), split })}
+        onPress={async () => {
+          const readers = token ? await fetchReaders(token).catch(() => []) : [];
+          if (readers.length > 0) navigation.replace('ReaderTender', { kind: 'tab', id: sessionId, label: tableNumber, total: String(thisPayment), readers, split });
+          else navigation.replace('TableCardTender', { sessionId, tableNumber, total: String(thisPayment), split });
+        }}
       >
         <Text style={[styles.secondaryButtonText, !ready && { opacity: 0.4 }]}>Pay by card</Text>
       </TouchableOpacity>

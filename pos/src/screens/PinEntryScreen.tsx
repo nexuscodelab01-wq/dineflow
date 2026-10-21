@@ -10,6 +10,7 @@ export default function PinEntryScreen() {
   const deviceToken = usePosStore((s) => s.deviceToken);
   const unpair = usePosStore((s) => s.unpair);
   const loginWithPin = usePosStore((s) => s.loginWithPin);
+  const setPrinter = usePosStore((s) => s.setPrinter);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +22,7 @@ export default function PinEntryScreen() {
     try {
       const result = await pinLogin(deviceToken, currentPin);
       loginWithPin(result.pos_session_token, result.staff_name, result.device_kind, result.currency, result.country, result.tips_enabled, result.controls_enabled);
+      setPrinter(result.printer);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not log in');
       setPin('');

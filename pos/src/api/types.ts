@@ -15,6 +15,7 @@ export type PinLoginResponse = {
   country: string;
   tips_enabled: boolean;
   controls_enabled: boolean;
+  printer: PrinterSettings;
   expires_in: number;
 };
 
@@ -222,3 +223,8 @@ export type AwaitingPayment = {
   scheduled_for: string | null;
   status: string;
 };
+
+export type PrinterSettings = { host: string | null; port: number; cash_drawer: boolean; auto_print: boolean };
+export type CardReader = { id: string; label: string; status: string; device_type: string | null };
+export type PaymentStatus = { payment_id: number; status: string; failure_message: string | null; tip_amount: string; closed: boolean };
+export type ReceiptTarget = { kind: 'order' | 'tab'; id: number };

@@ -1,4 +1,4 @@
-import type { SplitPayload } from '../api/types';
+import type { CardReader, SplitPayload } from '../api/types';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -15,6 +15,7 @@ import TableCardTenderScreen from '../screens/TableCardTenderScreen';
 import CloseShiftScreen from '../screens/CloseShiftScreen';
 import ClockOutScreen from '../screens/ClockOutScreen';
 import XReportScreen from '../screens/XReportScreen';
+import ReaderTenderScreen from '../screens/ReaderTenderScreen';
 import AwaitingPaymentScreen from '../screens/AwaitingPaymentScreen';
 import RecentPaymentsScreen from '../screens/RecentPaymentsScreen';
 import TabDetailScreen from '../screens/TabDetailScreen';
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   CloseShift: undefined;
   ClockOut: undefined;
   XReport: undefined;
+  ReaderTender: { kind: 'order' | 'tab'; id: number; label: string; total: string; readers: CardReader[]; split?: SplitPayload };
   AwaitingPayment: undefined;
   TabDetail: { sessionId: number };
   RecentPayments: undefined;
@@ -87,6 +89,7 @@ export default function RootNavigator() {
       <Stack.Screen name="TabDetail" component={TabDetailScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="RecentPayments" component={RecentPaymentsScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="AwaitingPayment" component={AwaitingPaymentScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="ReaderTender" component={ReaderTenderScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="XReport" component={XReportScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="ClockOut" component={ClockOutScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="CashMovement" component={CashMovementScreen} options={{ presentation: 'modal' }} />

@@ -17,6 +17,9 @@ import type {
   TimeEntryRead,
   AdjustmentResult,
   AwaitingPayment,
+  CardReader,
+  PaymentStatus,
+  ReceiptTarget,
   SplitPayload,
   CouponPreview,
   MenuItemDetail,
@@ -213,4 +216,38 @@ export function mergeTab(token: string, sessionId: number, intoSessionId: number
 
 export function fireCourse(token: string, sessionId: number, course: number) {
   return apiFetch<{ fired: number }>(`/pos/table-sessions/${sessionId}/fire`, { method: 'POST', token, body: { course } });
+}
+
+// ---- receipts and server-driven card readers ---------------------------------------------------------
+
+const receiptPath = (t: ReceiptTarget) => (t.kind === 'order' ? `/pos/orders/${t.id}/receipt` : `/pos/table-sessions/${t.id}/receipt`);
+
+export function fetchReceipt(token: string, target: ReceiptTarget) {
+  return apiFetch<Record<string, unknown>>(receiptPath(target), { token });
+}
+
+/** The receipt as printer bytes (base64) for a network thermal printer. */
+export function fetchReceiptBytes(token: string, target: ReceiptTarget, kick = false) {
+  return apiFetch<{ data: string; drawer_kick: boolean }>(`${receiptPath(target)}/escpos`, { token, params: { kick: String(kick) } });
+}
+
+export function emailReceipt(token: string, target: ReceiptTarget, email: string) {
+  return apiFetch<void>(`${receiptPath(target)}/email`, { method: 'POST', token, body: { email } });
+}
+
+export function fetchReaders(token: string) {
+  return apiFetch<CardReader[]>('/pos/readers', { token });
+}
+
+export function payOnReader(token: string, target: ReceiptTarget, readerId: string, split?: SplitPayload) {
+  const path = target.kind === 'order' ? `/pos/orders/${target.id}/pay-reader` : `/pos/table-sessions/${target.id}/pay-reader`;
+  return apiFetch<{ payment_id: number | null; closed?: boolean; balance?: string }>(path, { method: 'POST', token, body: { reader_id: readerId, split } });
+}
+
+export function fetchPaymentStatus(token: string, paymentId: number) {
+  return apiFetch<PaymentStatus>(`/pos/payments/${paymentId}`, { token });
+}
+
+export function cancelReader(token: string, readerId: string) {
+  return apiFetch<void>(`/pos/readers/${readerId}/cancel`, { method: 'POST', token });
 }

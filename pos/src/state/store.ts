@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { fetchCurrentShift, fetchCurrentTimeEntry } from '../api/pos';
-import type { DeviceKind, ShiftRead, TimeEntryRead } from '../api/types';
+import type { DeviceKind, PrinterSettings, ShiftRead, TimeEntryRead } from '../api/types';
 
 const DEVICE_TOKEN_KEY = 'dineflow_pos_device_token';
 
@@ -38,6 +38,8 @@ type PosState = {
   tipsEnabled: boolean;
   // Whether voids / comps / discounts / refunds are switched on for this restaurant.
   controlsEnabled: boolean;
+  // This till's receipt printer (set by an admin on the devices page), learned at PIN login.
+  printer: PrinterSettings;
   cart: CartLine[];
   // A shift is scoped to this device, not the current PIN session — it survives a staff switch, so it's
   // always re-fetched fresh from the backend rather than inferred client-side (avoids staleness if the
@@ -59,6 +61,7 @@ type PosState = {
   setShift: (shift: ShiftRead | null) => void;
   loadTimeEntry: () => Promise<void>;
   setTimeEntry: (entry: TimeEntryRead | null) => void;
+  setPrinter: (printer: PrinterSettings) => void;
   addToCart: (line: Omit<CartLine, 'quantity' | 'lineId'>, quantity?: number) => void;
   removeFromCart: (lineId: string) => void;
   decrementCartLine: (lineId: string) => void;
@@ -77,6 +80,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   country: 'US',
   tipsEnabled: false,
   controlsEnabled: false,
+  printer: { host: null, port: 9100, cash_drawer: false, auto_print: false },
   cart: [],
   shift: null,
   shiftChecked: false,
@@ -133,6 +137,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   setTimeEntry: (entry) => set({ timeEntry: entry }),
+  setPrinter: (printer) => set({ printer }),
 
   addToCart: (line, quantity = 1) =>
     set((state) => {
