@@ -11,8 +11,8 @@ import {
 } from '~/services/admin'
 import { STATIONS } from '~/utils/kitchen'
 import { ALLERGENS, allergenLabel } from '~/utils/allergens'
-import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -287,7 +287,7 @@ async function removeItem(item: MenuItemDetail) {
               </div>
             </td>
             <td class="px-4 py-3 text-ink-muted">{{ item.category_name }}</td>
-            <td class="px-4 py-3">{{ formatCurrency(Number(item.price)) }}</td>
+            <td class="px-4 py-3">{{ money(Number(item.price)) }}</td>
             <td class="px-4 py-3">
               <span class="rounded-full px-2 py-0.5 text-xs" :class="item.is_available ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'">
                 {{ item.is_available ? 'Available' : 'Unavailable' }}

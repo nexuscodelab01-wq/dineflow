@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CustomerDetail } from '~/types/admin'
 import { fetchAdminCustomer, updateAdminCustomer } from '~/services/admin'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -70,7 +70,7 @@ const reservationStatusLabel: Record<string, string> = {
           </div>
           <p class="mt-1 text-sm text-ink-muted">{{ detail.email }}<span v-if="detail.phone"> · {{ detail.phone }}</span></p>
           <p class="mt-2 text-sm text-ink-muted">
-            {{ detail.total_orders }} order{{ detail.total_orders === 1 ? '' : 's' }} · {{ formatCurrency(Number(detail.total_spending)) }} total ·
+            {{ detail.total_orders }} order{{ detail.total_orders === 1 ? '' : 's' }} · {{ money(Number(detail.total_spending)) }} total ·
             {{ detail.total_bookings }} booking{{ detail.total_bookings === 1 ? '' : 's' }}
           </p>
           <p v-if="detail.allergies" class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900">
@@ -83,7 +83,7 @@ const reservationStatusLabel: Record<string, string> = {
           <ul class="mt-4 space-y-3">
             <li v-for="order in detail.orders" :key="order.id" class="flex justify-between text-sm">
               <span>{{ order.order_number }} · {{ new Date(order.created_at).toLocaleDateString() }}</span>
-              <span>{{ formatCurrency(Number(order.total)) }}</span>
+              <span>{{ money(Number(order.total)) }}</span>
             </li>
           </ul>
         </section>

@@ -2,7 +2,7 @@
 import type { DateRangePreset } from '~/types/analytics'
 import type { EmployeeReportRow } from '~/types/shift'
 import { fetchEmployeeReport } from '~/services/employees'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
@@ -59,11 +59,11 @@ onMounted(async () => {
         <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Cash</p>
-            <p class="font-semibold text-ink">{{ formatCurrency(Number(row.cash_total)) }}</p>
+            <p class="font-semibold text-ink">{{ money(Number(row.cash_total)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Card</p>
-            <p class="font-semibold text-ink">{{ formatCurrency(Number(row.card_total)) }}</p>
+            <p class="font-semibold text-ink">{{ money(Number(row.card_total)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Orders</p>
@@ -75,7 +75,7 @@ onMounted(async () => {
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Sales / labour hour</p>
-            <p class="font-semibold text-ink">{{ row.sales_per_labour_hour === null ? '—' : formatCurrency(Number(row.sales_per_labour_hour)) }}</p>
+            <p class="font-semibold text-ink">{{ row.sales_per_labour_hour === null ? '—' : money(Number(row.sales_per_labour_hour)) }}</p>
           </div>
         </div>
       </li>

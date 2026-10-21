@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Order, OrderStatus } from '~/types/order'
 import { fetchAdminOrders } from '~/services/admin'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -90,7 +90,7 @@ watch(statusFilter, load)
             </td>
             <td class="px-4 py-3">{{ order.customer_name }}</td>
             <td class="px-4 py-3">{{ order.order_type.replace('_', ' ') }}</td>
-            <td class="px-4 py-3">{{ formatCurrency(Number(order.total)) }}</td>
+            <td class="px-4 py-3">{{ money(Number(order.total)) }}</td>
             <td class="px-4 py-3"><StatusBadge :status="order.status" /></td>
             <td class="px-4 py-3 text-ink-muted">{{ new Date(order.created_at).toLocaleString() }}</td>
           </tr>

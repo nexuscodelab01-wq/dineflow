@@ -6,11 +6,11 @@ import { fetchAdminMenu, updateOrderStatus, updateTableStatus } from '~/services
 import { subscribeKitchen } from '~/services/realtime'
 import { closeSession, fetchServiceRequests, fetchTabDetail, fetchWaiterFloor, finishServiceRequest, markSessionPaidCash, sendStaffRound, transferTab } from '~/services/table'
 import type { ServiceRequest } from '~/types/table'
-import { formatCurrency } from '~/utils/format'
 import type { TableLine } from '~/utils/table-cart'
 import { toRoundPayload } from '~/utils/table-cart'
 import { attentionQueue, attentionReasons, planTables, transferTargets } from '~/utils/waiter'
 import type { SseStatus } from '~/utils/sse'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -28,7 +28,7 @@ const selectedId = ref<number | null>(null)
 const tab = ref<TableSessionView | null>(null)
 const busy = ref(false)
 
-const plan = computed(() => planTables(tables.value))
+const plan = computed(() => planTables(tables.value, money))
 const queue = computed(() => attentionQueue(tables.value))
 const selected = computed(() => tables.value.find(t => t.table_id === selectedId.value) ?? null)
 const reasons = computed(() => (selected.value ? attentionReasons(selected.value) : []))
@@ -259,7 +259,7 @@ const statusLabel = (s: string) => ({ CONFIRMED: 'Received', PREPARING: 'Being p
               </li>
               <li v-if="!(tab?.rounds.length)" class="text-sm text-ink-subtle">Nothing ordered yet.</li>
             </ul>
-            <p class="mt-3 flex justify-between border-t border-brand-100 pt-3 font-semibold"><span>Tab (with tax)</span><span>{{ formatCurrency(Number(selected.session.total)) }}</span></p>
+            <p class="mt-3 flex justify-between border-t border-brand-100 pt-3 font-semibold"><span>Tab (with tax)</span><span>{{ money(Number(selected.session.total)) }}</span></p>
 
             <div class="mt-4 grid gap-2">
               <AppButton :disabled="busy" @click="openPicker">Add items for the table</AppButton>

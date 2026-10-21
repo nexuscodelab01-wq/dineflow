@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 const cart = useCartStore()
 const restaurant = useRestaurantStore()
@@ -37,7 +37,7 @@ onMounted(() => restaurant.load())
               "{{ line.special_instructions }}"
             </p>
           </div>
-          <p class="font-semibold text-brand-800">{{ formatCurrency(line.unit_price * line.quantity) }}</p>
+          <p class="font-semibold text-brand-800">{{ money(line.unit_price * line.quantity) }}</p>
         </div>
         <div class="mt-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -50,7 +50,7 @@ onMounted(() => restaurant.load())
       </article>
 
       <div v-if="restaurant.current" class="rounded-2xl border border-brand-100 bg-brand-50/50 p-4 text-sm">
-        <div class="flex justify-between"><span>Subtotal</span><span>{{ formatCurrency(cart.computeTotals(restaurant.current, 'PICKUP').subtotal) }}</span></div>
+        <div class="flex justify-between"><span>Subtotal</span><span>{{ money(cart.computeTotals(restaurant.current, 'PICKUP').subtotal) }}</span></div>
         <p class="mt-2 text-xs text-ink-subtle">Tax and fees calculated at checkout.</p>
       </div>
 

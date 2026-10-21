@@ -3,7 +3,7 @@ import { useIntervalFn } from '@vueuse/core'
 import type { Order } from '~/types/order'
 import { fetchOrder } from '~/services/orders'
 import { subscribeOrder } from '~/services/realtime'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ middleware: ['auth'] })
 
@@ -92,10 +92,10 @@ onUnmounted(() => {
         <h2 class="font-semibold text-ink">Items</h2>
         <OrderItemList class="mt-4" :items="order.items" show-prices />
         <div class="mt-4 space-y-1 border-t border-brand-100 pt-4 text-sm">
-          <div class="flex justify-between"><span>Subtotal</span><span>{{ formatCurrency(Number(order.subtotal)) }}</span></div>
-          <div class="flex justify-between"><span>Tax</span><span>{{ formatCurrency(Number(order.tax)) }}</span></div>
-          <div v-if="Number(order.delivery_fee)" class="flex justify-between"><span>Delivery</span><span>{{ formatCurrency(Number(order.delivery_fee)) }}</span></div>
-          <div class="flex justify-between font-semibold"><span>Total</span><span>{{ formatCurrency(Number(order.total)) }}</span></div>
+          <div class="flex justify-between"><span>Subtotal</span><span>{{ money(Number(order.subtotal)) }}</span></div>
+          <div class="flex justify-between"><span>Tax</span><span>{{ money(Number(order.tax)) }}</span></div>
+          <div v-if="Number(order.delivery_fee)" class="flex justify-between"><span>Delivery</span><span>{{ money(Number(order.delivery_fee)) }}</span></div>
+          <div class="flex justify-between font-semibold"><span>Total</span><span>{{ money(Number(order.total)) }}</span></div>
         </div>
       </section>
     </div>

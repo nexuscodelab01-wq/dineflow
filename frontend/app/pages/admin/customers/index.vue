@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CustomerSummary } from '~/types/admin'
 import { fetchAdminCustomers } from '~/services/admin'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -66,7 +66,7 @@ const filtered = computed(() => {
               <td class="px-4 py-3">{{ customer.email }}</td>
               <td class="px-4 py-3">{{ customer.total_orders }}</td>
               <td class="px-4 py-3">{{ customer.total_bookings }}</td>
-              <td class="px-4 py-3">{{ formatCurrency(Number(customer.total_spending)) }}</td>
+              <td class="px-4 py-3">{{ money(Number(customer.total_spending)) }}</td>
               <td class="px-4 py-3 text-ink-muted">{{ customer.last_seen_at ? new Date(customer.last_seen_at).toLocaleDateString() : '—' }}</td>
             </tr>
             <tr v-if="!filtered.length">

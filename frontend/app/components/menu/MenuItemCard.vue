@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { allergenLabel } from '~/utils/allergens'
-import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl, thumbnailUrl } from '~/utils/media'
+const { money } = useMoney()
 
 const props = defineProps<{
   name: string
@@ -64,7 +64,7 @@ const resolvedImage = computed(() =>
         Contains: {{ allergens.map(allergenLabel).join(', ') }}
       </p>
       <p class="mt-auto pt-3 text-lg font-semibold text-brand-800">
-        {{ formatCurrency(Number(price)) }}
+        {{ money(Number(price)) }}
       </p>
     </div>
   </article>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MenuItemDetail } from '~/types/menu'
-import { formatCurrency } from '~/utils/format'
 import { addLine, changeQuantity, lineCount, subtotal, type TableLine } from '~/utils/table-cart'
+const { money } = useMoney()
 
 /**
  * A waiter picks dishes for a table and sends them to the kitchen as one round. Dishes with options
@@ -87,7 +87,7 @@ function addConfigured() {
                 <span class="block text-xs text-ink-subtle">{{ item.category_name }}<span v-if="needsPanel(item)"> · has options</span></span>
               </span>
               <span class="flex items-center gap-3">
-                <span class="text-sm font-semibold text-brand-800">{{ formatCurrency(Number(item.price)) }}</span>
+                <span class="text-sm font-semibold text-brand-800">{{ money(Number(item.price)) }}</span>
                 <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-700 text-lg text-white" aria-hidden="true">+</span>
               </span>
             </button>
@@ -108,7 +108,7 @@ function addConfigured() {
         </ul>
         <input v-model="notes" type="text" maxlength="200" placeholder="Note for the kitchen (optional)" class="mb-3 w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
         <AppButton class="w-full py-3 text-base" :disabled="!lines.length || sending" @click="emit('send', lines, notes)">
-          {{ sending ? 'Sending…' : lines.length ? `Send to kitchen · ${lineCount(lines)} item${lineCount(lines) === 1 ? '' : 's'} · ${formatCurrency(subtotal(lines))}` : 'Pick something to send' }}
+          {{ sending ? 'Sending…' : lines.length ? `Send to kitchen · ${lineCount(lines)} item${lineCount(lines) === 1 ? '' : 's'} · ${money(subtotal(lines))}` : 'Pick something to send' }}
         </AppButton>
       </footer>
     </div>
@@ -123,7 +123,7 @@ function addConfigured() {
               <input :type="m.max_selections === 1 ? 'radio' : 'checkbox'" :name="`opt-${m.id}`" :checked="(options[m.id] ?? []).includes(o.id)" @change="toggle(m.id, o.id, m.max_selections)">
               {{ o.name }}
             </span>
-            <span v-if="Number(o.price_adjustment) > 0" class="text-sm text-ink-muted">+{{ formatCurrency(Number(o.price_adjustment)) }}</span>
+            <span v-if="Number(o.price_adjustment) > 0" class="text-sm text-ink-muted">+{{ money(Number(o.price_adjustment)) }}</span>
           </label>
         </div>
         <label class="mt-4 block text-sm font-medium">Special requests

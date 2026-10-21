@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ShiftReportRead } from '~/types/shift'
 import { fetchShifts } from '~/services/shifts'
-import { formatCurrency } from '~/utils/format'
 import { formatWhen } from '~/utils/datetime'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
@@ -64,22 +64,22 @@ function variance(shift: ShiftReportRead) {
           <div v-if="variance(shift) !== null" class="text-right">
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Variance</p>
             <p :class="variance(shift) === 0 ? 'text-emerald-700' : 'text-red-600'" class="text-lg font-semibold">
-              {{ formatCurrency(variance(shift)!) }}
+              {{ money(variance(shift)!) }}
             </p>
           </div>
         </div>
         <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Starting float</p>
-            <p class="font-semibold text-ink">{{ formatCurrency(Number(shift.starting_float)) }}</p>
+            <p class="font-semibold text-ink">{{ money(Number(shift.starting_float)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Cash</p>
-            <p class="font-semibold text-ink">{{ formatCurrency(Number(shift.cash_total)) }}</p>
+            <p class="font-semibold text-ink">{{ money(Number(shift.cash_total)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Card</p>
-            <p class="font-semibold text-ink">{{ formatCurrency(Number(shift.card_total)) }}</p>
+            <p class="font-semibold text-ink">{{ money(Number(shift.card_total)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Orders</p>
@@ -87,7 +87,7 @@ function variance(shift: ShiftReportRead) {
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Counted cash</p>
-            <p class="font-semibold text-ink">{{ shift.counted_cash === null ? '—' : formatCurrency(Number(shift.counted_cash)) }}</p>
+            <p class="font-semibold text-ink">{{ shift.counted_cash === null ? '—' : money(Number(shift.counted_cash)) }}</p>
           </div>
         </div>
       </li>

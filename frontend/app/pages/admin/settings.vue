@@ -37,6 +37,8 @@ const form = reactive({
   delivery_enabled: true,
   pickup_enabled: true,
   dine_in_enabled: true,
+  country: 'US',
+  currency: 'usd',
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
@@ -108,6 +110,8 @@ onMounted(async () => {
       delivery_enabled: settings.value.delivery_enabled,
       pickup_enabled: settings.value.pickup_enabled,
       dine_in_enabled: settings.value.dine_in_enabled,
+      country: settings.value.country || 'US',
+      currency: settings.value.currency || 'usd',
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
@@ -267,6 +271,9 @@ async function connectStripe() {
   }
 }
 
+// Stripe fixes the connected account's country at creation, so the backend refuses changes after that.
+const localeLocked = computed(() => !!settings.value?.stripe_account_id)
+
 async function save() {
   if (!admin.restaurantId) return
   saving.value = true
@@ -293,6 +300,10 @@ async function save() {
       opening_hours: openingHours,
       closures: closures.value.map(c => ({ date: c.date, label: c.label || null })),
     })
+    // Everything that formats money reads currency off these copies, so refresh them now rather than on reload.
+    for (const r of [admin.restaurant, useRestaurantStore().current]) {
+      if (r && r.id === settings.value.id) Object.assign(r, { country: settings.value.country, currency: settings.value.currency })
+    }
     message.value = 'Settings saved'
   }
   catch (err) {
@@ -471,6 +482,21 @@ async function save() {
         <label class="flex items-center gap-2 text-sm"><input v-model="form.pickup_enabled" type="checkbox"> Pickup enabled</label>
         <label class="flex items-center gap-2 text-sm"><input v-model="form.dine_in_enabled" type="checkbox"> Dine-in enabled</label>
         <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="text-ink-muted">Country</span>
+            <select v-model="form.country" :disabled="localeLocked" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" @change="form.currency = form.country === 'CA' ? 'cad' : 'usd'">
+              <option value="US">United States</option>
+              <option value="CA">Canada</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="text-ink-muted">Currency</span>
+            <select v-model="form.currency" :disabled="localeLocked" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+              <option value="usd">US dollar (USD)</option>
+              <option value="cad">Canadian dollar (CAD)</option>
+            </select>
+          </label>
+          <p v-if="localeLocked" class="text-xs text-ink-subtle sm:col-span-2">Country and currency are fixed once Stripe is connected.</p>
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>

@@ -8,7 +8,7 @@ import { previewCoupon } from '~/services/coupons'
 import { fetchPickupSlots } from '~/services/scheduling'
 import { fetchMyReservations } from '~/services/reservations'
 import { getStripe } from '~/services/stripe'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ middleware: ['auth'] })
 
@@ -417,7 +417,7 @@ async function payNow() {
           <div ref="paymentElementContainer" class="mt-4" />
           <p v-if="paymentError" class="mt-3 text-sm text-red-600" role="alert">{{ paymentError }}</p>
           <AppButton class="mt-4 w-full" :disabled="confirmingPayment" @click="payNow">
-            {{ confirmingPayment ? 'Confirming…' : totals ? `Pay ${formatCurrency(totals.total)}` : 'Pay' }}
+            {{ confirmingPayment ? 'Confirming…' : totals ? `Pay ${money(totals.total)}` : 'Pay' }}
           </AppButton>
         </section>
         <section v-else class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
@@ -432,7 +432,7 @@ async function payNow() {
           <ul class="mt-4 space-y-2 text-sm">
             <li v-for="line in cart.lines" :key="line.id" class="flex justify-between gap-2">
               <span>{{ line.quantity }}× {{ line.name }}</span>
-              <span>{{ formatCurrency(line.unit_price * line.quantity) }}</span>
+              <span>{{ money(line.unit_price * line.quantity) }}</span>
             </li>
           </ul>
           <div v-if="couponsEnabled" class="mt-4 border-t border-brand-100 pt-4">
@@ -456,13 +456,13 @@ async function payNow() {
           </div>
 
           <div v-if="totals" class="mt-4 space-y-1 border-t border-brand-100 pt-4 text-sm">
-            <div class="flex justify-between"><span>Subtotal</span><span>{{ formatCurrency(totals.subtotal) }}</span></div>
+            <div class="flex justify-between"><span>Subtotal</span><span>{{ money(totals.subtotal) }}</span></div>
             <div v-if="totals.discount" class="flex justify-between text-emerald-700">
-              <span>Discount</span><span>−{{ formatCurrency(totals.discount) }}</span>
+              <span>Discount</span><span>−{{ money(totals.discount) }}</span>
             </div>
-            <div class="flex justify-between"><span>Tax</span><span>{{ formatCurrency(totals.tax) }}</span></div>
-            <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ formatCurrency(totals.delivery_fee) }}</span></div>
-            <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ formatCurrency(totals.total) }}</span></div>
+            <div class="flex justify-between"><span>Tax</span><span>{{ money(totals.tax) }}</span></div>
+            <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ money(totals.delivery_fee) }}</span></div>
+            <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total) }}</span></div>
           </div>
           <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
           <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting" @click="submitOrder">

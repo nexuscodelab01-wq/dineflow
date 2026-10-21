@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Order, OrderStatus } from '~/types/order'
 import { fetchAdminOrder, updateOrderStatus } from '~/services/admin'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -103,7 +103,7 @@ async function cancelOrder() {
           <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
         </p>
         <p v-if="order.payments.length" class="mt-4 text-sm text-ink-muted">Payment: {{ order.payments[0].status }}</p>
-        <p class="mt-4 font-semibold">Total: {{ formatCurrency(Number(order.total)) }}</p>
+        <p class="mt-4 font-semibold">Total: {{ money(Number(order.total)) }}</p>
       </section>
     </div>
   </div>

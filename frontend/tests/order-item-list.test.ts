@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import OrderItemList from '../app/components/orders/OrderItemList.vue'
 import type { OrderItem } from '../app/types/order'
+import { formatCurrency } from '../app/utils/format'
+
+// Nuxt auto-imports useMoney; outside Nuxt it has to be provided.
+beforeAll(() => { vi.stubGlobal('useMoney', () => ({ money: (n: number) => formatCurrency(n) })) })
 
 const item = (over: Partial<OrderItem> = {}): OrderItem => ({
   id: 1, menu_item_id: 10, item_name: 'Margherita Pizza', quantity: 2, unit_price: '18.00', line_total: '36.00',

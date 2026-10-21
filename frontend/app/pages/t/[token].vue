@@ -7,10 +7,10 @@ import { subscribeTableSession } from '~/services/realtime'
 import { askForService, fetchTableInfo, fetchTableSession, joinTable, payTableSession, sendRound } from '~/services/table'
 import { getStripe } from '~/services/stripe'
 import { ApiError } from '~/utils/api-error'
-import { formatCurrency } from '~/utils/format'
 import { resolveMediaUrl } from '~/utils/media'
 import { addLine, changeQuantity, lineCount, subtotal, toRoundPayload, type TableLine } from '~/utils/table-cart'
 import { clearPass, loadPass, savePass, type TablePass } from '~/utils/table-pass'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'table' })
 
@@ -434,7 +434,7 @@ const statusText: Record<string, string> = {
               <span class="min-w-0 flex-1">
                 <span class="block font-semibold text-ink">{{ item.name }}</span>
                 <span v-if="item.description" class="line-clamp-2 block text-sm text-ink-muted">{{ item.description }}</span>
-                <span class="mt-1 block text-sm font-semibold text-brand-800">{{ item.is_available ? formatCurrency(Number(item.price)) : 'Sold out' }}</span>
+                <span class="mt-1 block text-sm font-semibold text-brand-800">{{ item.is_available ? money(Number(item.price)) : 'Sold out' }}</span>
               </span>
               <img v-if="item.image_url" :src="resolveMediaUrl(item.image_url) ?? ''" :alt="item.name" class="h-16 w-16 rounded-lg object-cover">
               <span v-if="item.is_available" class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-xl text-white" aria-hidden="true">+</span>
@@ -461,7 +461,7 @@ const statusText: Record<string, string> = {
           </ul>
         </article>
         <div v-if="session?.rounds.length" class="flex items-center justify-between rounded-xl bg-brand-50 p-4 font-semibold">
-          <span>Table total (with tax)</span><span>{{ formatCurrency(Number(session.total)) }}</span>
+          <span>Table total (with tax)</span><span>{{ money(Number(session.total)) }}</span>
         </div>
 
         <div v-if="awaitingCardEntry" class="rounded-xl border border-brand-200 bg-white p-4">
@@ -469,7 +469,7 @@ const statusText: Record<string, string> = {
           <div ref="paymentElementContainer" class="mt-3" />
           <p v-if="payError" class="mt-3 text-sm text-red-600" role="alert">{{ payError }}</p>
           <AppButton class="mt-4 w-full py-3 text-base" :disabled="confirmingPayment" @click="confirmCardPayment">
-            {{ confirmingPayment ? 'Confirming…' : `Pay ${formatCurrency(Number(session?.total ?? 0))}` }}
+            {{ confirmingPayment ? 'Confirming…' : `Pay ${money(Number(session?.total ?? 0))}` }}
           </AppButton>
         </div>
         <template v-else>
@@ -487,7 +487,7 @@ const statusText: Record<string, string> = {
             :disabled="paying"
             @click="payNow"
           >
-            {{ paying ? 'Starting payment…' : `Pay now · ${formatCurrency(Number(session.total))}` }}
+            {{ paying ? 'Starting payment…' : `Pay now · ${money(Number(session.total))}` }}
           </button>
           <p v-if="payError" class="text-center text-sm text-red-600" role="alert">{{ payError }}</p>
           <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">Pay now from your phone, or ask a member of staff.</p>
@@ -497,7 +497,7 @@ const statusText: Record<string, string> = {
       <!-- cart bar -->
       <div v-if="lines.length && tab === 'menu'" class="fixed inset-x-0 bottom-0 border-t border-brand-100 bg-surface-elevated p-3 shadow-lg">
         <div class="mx-auto max-w-2xl">
-          <AppButton class="w-full py-3 text-base" @click="reviewing = true">Review order · {{ lineCount(lines) }} item{{ lineCount(lines) === 1 ? '' : 's' }} · {{ formatCurrency(subtotal(lines)) }}</AppButton>
+          <AppButton class="w-full py-3 text-base" @click="reviewing = true">Review order · {{ lineCount(lines) }} item{{ lineCount(lines) === 1 ? '' : 's' }} · {{ money(subtotal(lines)) }}</AppButton>
         </div>
       </div>
     </template>
@@ -517,7 +517,7 @@ const statusText: Record<string, string> = {
               <input :type="m.max_selections === 1 ? 'radio' : 'checkbox'" :name="`m-${m.id}`" :checked="(pickOptions[m.id] ?? []).includes(o.id)" @change="toggleOption(m.id, o.id, m.max_selections)">
               {{ o.name }}
             </span>
-            <span v-if="Number(o.price_adjustment) > 0" class="text-sm text-ink-muted">+{{ formatCurrency(Number(o.price_adjustment)) }}</span>
+            <span v-if="Number(o.price_adjustment) > 0" class="text-sm text-ink-muted">+{{ money(Number(o.price_adjustment)) }}</span>
           </label>
         </div>
         <label class="mt-4 block text-sm font-medium">Special requests
@@ -531,7 +531,7 @@ const statusText: Record<string, string> = {
           </div>
         </div>
         <p v-if="pickError" class="mt-3 text-sm text-red-600">{{ pickError }}</p>
-        <AppButton class="mt-4 w-full py-3 text-base" @click="addPicked">Add · {{ formatCurrency(pickUnitPrice * pickQty) }}</AppButton>
+        <AppButton class="mt-4 w-full py-3 text-base" @click="addPicked">Add · {{ money(pickUnitPrice * pickQty) }}</AppButton>
       </div>
     </div>
 
@@ -559,7 +559,7 @@ const statusText: Record<string, string> = {
         <label class="mt-2 block text-sm font-medium">Anything for the kitchen?
           <input v-model="roundNotes" type="text" maxlength="200" class="mt-1 w-full rounded-lg border border-brand-200 px-3 py-2.5 text-base" placeholder="Bring starters first…">
         </label>
-        <p class="mt-3 flex justify-between text-sm"><span>Subtotal</span><span class="font-semibold">{{ formatCurrency(subtotal(lines)) }}</span></p>
+        <p class="mt-3 flex justify-between text-sm"><span>Subtotal</span><span class="font-semibold">{{ money(subtotal(lines)) }}</span></p>
         <p class="text-xs text-ink-subtle">Tax is added to your table's bill. You pay at the end of the meal.</p>
         <AppButton class="mt-4 w-full py-3 text-base" :disabled="sending || !lines.length" @click="send">{{ sending ? 'Sending…' : 'Send to kitchen' }}</AppButton>
       </div>

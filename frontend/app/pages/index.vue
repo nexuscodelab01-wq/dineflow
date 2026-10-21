@@ -7,9 +7,9 @@ import { fetchMenu } from '~/services/menu'
 import { fetchPublicReviews } from '~/services/reviews'
 import { resolveMediaUrl } from '~/utils/media'
 import { getPublicApiBaseUrl } from '~/services/http'
-import { formatCurrency } from '~/utils/format'
 import { wallClockIn } from '~/utils/timezone'
 import { weeklyHoursLabels } from '~/utils/hours'
+const { money } = useMoney()
 
 const restaurant = useRestaurantStore()
 const { status: openStatus, todayLabel } = useOpeningStatus()
@@ -289,7 +289,7 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
           </div>
           <div class="flex items-baseline justify-between gap-3 p-5">
             <p class="font-medium text-ink">{{ item.name }}</p>
-            <p class="shrink-0 font-display text-lg font-semibold text-brand-700">{{ formatCurrency(Number(item.price)) }}</p>
+            <p class="shrink-0 font-display text-lg font-semibold text-brand-700">{{ money(Number(item.price)) }}</p>
           </div>
         </NuxtLink>
       </div>

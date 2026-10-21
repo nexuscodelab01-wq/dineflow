@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { OrderItem } from '~/types/order'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 /**
  * The lines of an order, with everything the cook or guest needs: options chosen
@@ -48,7 +48,7 @@ withDefaults(defineProps<{
           <span class="mr-1 uppercase tracking-wide">Note:</span>{{ item.special_instructions }}
         </p>
       </div>
-      <span v-if="showPrices" class="shrink-0 text-sm">{{ formatCurrency(Number(item.line_total)) }}</span>
+      <span v-if="showPrices" class="shrink-0 text-sm">{{ money(Number(item.line_total)) }}</span>
     </li>
   </ul>
 </template>

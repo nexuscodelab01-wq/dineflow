@@ -7,6 +7,7 @@ definePageMeta({ layout: 'admin', middleware: ['staff'] })
 const admin = useAdminStore()
 const auth = useAuthStore()
 const ui = useUiStore()
+const { money } = useMoney()
 
 const coupons = ref<Coupon[]>([])
 const loading = ref(true)
@@ -109,13 +110,13 @@ async function remove(coupon: Coupon) {
 function valueLabel(coupon: Coupon) {
   return coupon.discount_type === 'PERCENT'
     ? `${Number(coupon.discount_value)}% off`
-    : `${Number(coupon.discount_value).toFixed(2)} off`
+    : `${money(Number(coupon.discount_value))} off`
 }
 
 function limitLabel(coupon: Coupon) {
   const parts: string[] = []
-  if (coupon.min_order_amount) parts.push(`min ${Number(coupon.min_order_amount).toFixed(2)}`)
-  if (coupon.max_discount_amount) parts.push(`max ${Number(coupon.max_discount_amount).toFixed(2)} off`)
+  if (coupon.min_order_amount) parts.push(`min ${money(Number(coupon.min_order_amount))}`)
+  if (coupon.max_discount_amount) parts.push(`max ${money(Number(coupon.max_discount_amount))} off`)
   if (coupon.max_redemptions) parts.push(`${coupon.times_redeemed}/${coupon.max_redemptions} claimed`)
   else parts.push(`${coupon.times_redeemed} claimed`)
   if (coupon.max_per_customer) parts.push(`${coupon.max_per_customer} per customer`)

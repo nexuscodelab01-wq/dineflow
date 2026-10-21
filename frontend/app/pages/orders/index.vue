@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Order } from '~/types/order'
 import { fetchOrders } from '~/services/orders'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ middleware: ['auth'] })
 
@@ -58,7 +58,7 @@ function statusClass(status: string) {
           </div>
           <div class="text-right">
             <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass(order.status)">{{ order.status.replace('_', ' ') }}</span>
-            <p class="mt-2 font-semibold text-brand-800">{{ formatCurrency(Number(order.total)) }}</p>
+            <p class="mt-2 font-semibold text-brand-800">{{ money(Number(order.total)) }}</p>
           </div>
         </div>
       </NuxtLink>

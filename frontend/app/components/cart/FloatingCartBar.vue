@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 const cart = useCartStore()
 const route = useRoute()
@@ -31,7 +31,7 @@ const itemLabel = computed(() => {
       >
         <div class="min-w-0 flex-1">
           <p class="text-sm font-semibold text-ink">
-            {{ itemLabel }} · {{ formatCurrency(cart.subtotal) }}
+            {{ itemLabel }} · {{ money(cart.subtotal) }}
           </p>
           <p class="truncate text-xs text-ink-subtle">Ready when you are</p>
         </div>

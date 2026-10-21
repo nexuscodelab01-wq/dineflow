@@ -16,10 +16,11 @@ export function attentionReasons(t: WaiterTable): string[] {
   return out
 }
 
-const money = (value: string | number) => `$${Number(value).toFixed(2)}`
+const defaultMoney = (value: string | number) => `$${Number(value).toFixed(2)}`
 
 /** Tables as the floor plan draws them: a table with a tab shows its total, and glows when it needs someone. */
-export function planTables(tables: WaiterTable[]): PlanTable[] {
+export function planTables(tables: WaiterTable[], format: (value: number) => string = defaultMoney): PlanTable[] {
+  const money = (value: string | number) => format(Number(value))
   return tables.map((t) => {
     const reasons = attentionReasons(t)
     const state = t.session ? (reasons.length ? 'ATTENTION' : 'OCCUPIED') : t.status

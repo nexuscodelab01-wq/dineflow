@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AnalyticsResponse, DateRangePreset } from '~/types/analytics'
 import { exportAnalyticsCsv, fetchAnalytics } from '~/services/admin'
-import { formatCurrency } from '~/utils/format'
+const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -122,7 +122,7 @@ async function exportCsv() {
         </div>
         <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <p class="text-xs uppercase tracking-wide text-ink-subtle">Revenue</p>
-          <p class="mt-2 text-3xl font-semibold text-brand-900">{{ formatCurrency(Number(analytics.summary.today_revenue)) }}</p>
+          <p class="mt-2 text-3xl font-semibold text-brand-900">{{ money(Number(analytics.summary.today_revenue)) }}</p>
         </div>
         <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <p class="text-xs uppercase tracking-wide text-ink-subtle">Pending</p>
@@ -134,7 +134,7 @@ async function exportCsv() {
         </div>
         <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <p class="text-xs uppercase tracking-wide text-ink-subtle">Avg order</p>
-          <p class="mt-2 text-3xl font-semibold text-brand-900">{{ formatCurrency(Number(analytics.summary.average_order_value)) }}</p>
+          <p class="mt-2 text-3xl font-semibold text-brand-900">{{ money(Number(analytics.summary.average_order_value)) }}</p>
         </div>
         <div class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <p class="text-xs uppercase tracking-wide text-ink-subtle">No-show rate</p>
