@@ -35,6 +35,10 @@ export type TableSessionView = {
   guests: string[]
   rounds: SessionRound[]
   total: string
+  /** Part-payments already taken, and what is still owed. */
+  paid?: string
+  balance?: string
+  tab_name?: string | null
   /** What this table has asked for and staff haven't answered yet: WAITER and/or BILL. */
   requests: string[]
   /** Whether this restaurant can take a real payment yet, and its connected-account id, for the

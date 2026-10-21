@@ -461,7 +461,7 @@ const statusText: Record<string, string> = {
           </ul>
         </article>
         <div v-if="session?.rounds.length" class="flex items-center justify-between rounded-xl bg-brand-50 p-4 font-semibold">
-          <span>Table total (with tax)</span><span>{{ money(Number(session.total)) }}</span>
+          <span>{{ Number(session.paid) > 0 ? 'Still to pay (with tax)' : 'Table total (with tax)' }}</span><span>{{ money(Number(session.paid) > 0 ? Number(session.balance) : Number(session.total)) }}</span>
         </div>
 
         <div v-if="awaitingCardEntry" class="rounded-xl border border-brand-200 bg-white p-4">
@@ -469,7 +469,7 @@ const statusText: Record<string, string> = {
           <div ref="paymentElementContainer" class="mt-3" />
           <p v-if="payError" class="mt-3 text-sm text-red-600" role="alert">{{ payError }}</p>
           <AppButton class="mt-4 w-full py-3 text-base" :disabled="confirmingPayment" @click="confirmCardPayment">
-            {{ confirmingPayment ? 'Confirming…' : `Pay ${money(Number(session?.total ?? 0))}` }}
+            {{ confirmingPayment ? 'Confirming…' : `Pay ${money(Number((Number(session?.paid) > 0 ? session?.balance : session?.total) ?? 0))}` }}
           </AppButton>
         </div>
         <template v-else>
@@ -487,7 +487,7 @@ const statusText: Record<string, string> = {
             :disabled="paying"
             @click="payNow"
           >
-            {{ paying ? 'Starting payment…' : `Pay now · ${money(Number(session.total))}` }}
+            {{ paying ? 'Starting payment…' : `Pay now · ${money(Number(session.paid) > 0 ? Number(session.balance) : Number(session.total))}` }}
           </button>
           <p v-if="payError" class="text-center text-sm text-red-600" role="alert">{{ payError }}</p>
           <p v-if="session?.rounds.length" class="text-center text-sm text-ink-muted">Pay now from your phone, or ask a member of staff.</p>
