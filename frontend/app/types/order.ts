@@ -84,6 +84,7 @@ export type DeliveryAddressInput = {
   street: string
   city: string
   postal_code: string
+  state?: string
   delivery_instructions?: string
 }
 

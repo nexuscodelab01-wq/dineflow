@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { Restaurant } from '~/types/menu'
-import { fetchAdminSettings, startStripeOnboarding, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
+import { fetchAdminSettings, runTaxCheck, startStripeOnboarding, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
 import { resolveMediaUrl } from '~/utils/media'
 import { DAYS, type Day, parseDay } from '~/utils/hours'
 import { COMMON_TIMEZONES } from '~/utils/timezones'
+import { TAX_CODES } from '~/utils/taxCodes'
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
 
@@ -39,6 +40,9 @@ const form = reactive({
   dine_in_enabled: true,
   country: 'US',
   currency: 'usd',
+  state: '',
+  tax_mode: 'FLAT' as 'FLAT' | 'STRIPE',
+  default_tax_code: 'txcd_40060003',
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
@@ -112,6 +116,9 @@ onMounted(async () => {
       dine_in_enabled: settings.value.dine_in_enabled,
       country: settings.value.country || 'US',
       currency: settings.value.currency || 'usd',
+      state: settings.value.state || '',
+      tax_mode: settings.value.tax_mode || 'FLAT',
+      default_tax_code: settings.value.default_tax_code || 'txcd_40060003',
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
@@ -271,6 +278,27 @@ async function connectStripe() {
   }
 }
 
+// Stripe Tax: flag-gated, needs a connected Stripe account. The flat rate below stays as the fallback.
+const stripeTaxFlag = useFeature('stripe_tax')
+const taxCheck = ref<{ ok: boolean, message: string, rate_percent: string | null } | null>(null)
+const taxChecking = ref(false)
+async function checkTax() {
+  if (!admin.restaurantId) return
+  taxChecking.value = true
+  taxCheck.value = null
+  try {
+    // Save first so the check runs against what's on screen, not what was saved last week.
+    await save()
+    taxCheck.value = await runTaxCheck(admin.restaurantId)
+  }
+  catch (err) {
+    taxCheck.value = { ok: false, message: err instanceof Error ? err.message : 'Check failed', rate_percent: null }
+  }
+  finally {
+    taxChecking.value = false
+  }
+}
+
 // Stripe fixes the connected account's country at creation, so the backend refuses changes after that.
 const localeLocked = computed(() => !!settings.value?.stripe_account_id)
 
@@ -302,7 +330,7 @@ async function save() {
     })
     // Everything that formats money reads currency off these copies, so refresh them now rather than on reload.
     for (const r of [admin.restaurant, useRestaurantStore().current]) {
-      if (r && r.id === settings.value.id) Object.assign(r, { country: settings.value.country, currency: settings.value.currency })
+      if (r && r.id === settings.value.id) Object.assign(r, { country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
     }
     message.value = 'Settings saved'
   }
@@ -497,7 +525,31 @@ async function save() {
             </select>
           </label>
           <p v-if="localeLocked" class="text-xs text-ink-subtle sm:col-span-2">Country and currency are fixed once Stripe is connected.</p>
-          <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Tax rate (0.0875)">
+          <label class="block text-sm">
+            <span class="text-ink-muted">State / province</span>
+            <input v-model="form.state" maxlength="3" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm uppercase" placeholder="WA, ON, QC…">
+          </label>
+          <label v-if="stripeTaxFlag" class="block text-sm">
+            <span class="text-ink-muted">Sales tax</span>
+            <select v-model="form.tax_mode" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+              <option value="FLAT">Flat rate (below)</option>
+              <option value="STRIPE" :disabled="!settings?.stripe_account_id">By address — Stripe Tax</option>
+            </select>
+          </label>
+          <label v-if="stripeTaxFlag && form.tax_mode === 'STRIPE'" class="block text-sm">
+            <span class="text-ink-muted">Default tax category</span>
+            <select v-model="form.default_tax_code" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+              <option v-for="(label, code) in TAX_CODES" :key="code" :value="code">{{ label }}</option>
+            </select>
+          </label>
+          <div v-if="stripeTaxFlag && form.tax_mode === 'STRIPE'" class="sm:col-span-2 space-y-2">
+            <AppButton type="button" :disabled="taxChecking" @click="checkTax">{{ taxChecking ? 'Checking…' : 'Test tax setup' }}</AppButton>
+            <p v-if="taxCheck" class="text-sm" :class="taxCheck.ok ? 'text-emerald-700' : 'text-amber-700'">
+              {{ taxCheck.message }}<span v-if="taxCheck.rate_percent"> ({{ Number(taxCheck.rate_percent).toFixed(2) }}%)</span>
+            </p>
+            <p class="text-xs text-ink-subtle">Stripe only charges tax where you've added a registration in your Stripe Dashboard. The flat rate below is used if Stripe can't be reached.</p>
+          </div>
+          <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Flat tax rate (0.0875) — the fallback">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
       </section>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { StripeElements } from '@stripe/stripe-js'
 import type { OrderType } from '~/types/order'
+import type { CartTotals } from '~/types/cart'
 import type { Reservation } from '~/types/reservation'
 import type { PickupSlot } from '~/types/scheduling'
-import { createOrder } from '~/services/orders'
+import { createOrder, quoteOrder } from '~/services/orders'
 import { previewCoupon } from '~/services/coupons'
 import { fetchPickupSlots } from '~/services/scheduling'
 import { fetchMyReservations } from '~/services/reservations'
@@ -46,6 +47,7 @@ const form = reactive({
   street: '',
   city: restaurant.current?.city || '',
   postal_code: restaurant.current?.postal_code || '',
+  state: restaurant.current?.state || '',
   delivery_instructions: '',
   notes: '',
 })
@@ -150,10 +152,53 @@ const appliedCoupon = ref<{ code: string, discount: number } | null>(null)
 const couponError = ref('')
 const checkingCoupon = ref(false)
 
+// Address-based tax (Stripe Tax) can't be worked out in the browser: the server quotes the cart and that figure
+// is shown and charged. Until a quote arrives (or for flat-rate restaurants) the local estimate is used.
+const serverQuote = ref<CartTotals | null>(null)
+const quoting = ref(false)
 const totals = computed(() => {
   if (!restaurant.current) return null
+  if (restaurant.current.tax_mode === 'STRIPE' && serverQuote.value) return serverQuote.value
   return cart.computeTotals(restaurant.current, orderType.value, appliedCoupon.value?.discount ?? 0)
 })
+
+let quoteTimer: ReturnType<typeof setTimeout> | null = null
+let quoteSeq = 0
+watch(
+  () => [JSON.stringify(cart.toOrderItems()), orderType.value, form.street, form.city, form.postal_code, form.state, appliedCoupon.value?.code],
+  () => {
+    if (quoteTimer) clearTimeout(quoteTimer)
+    if (!import.meta.client || restaurant.current?.tax_mode !== 'STRIPE' || !cart.lines.length) return
+    const delivery = orderType.value === 'DELIVERY'
+    if (delivery && !(form.street && form.city && form.postal_code)) {
+      serverQuote.value = null
+      return
+    }
+    quoteTimer = setTimeout(async () => {
+      const seq = ++quoteSeq
+      quoting.value = true
+      try {
+        const q = await quoteOrder({
+          restaurant_id: restaurant.current!.id,
+          order_type: orderType.value,
+          items: cart.toOrderItems(),
+          coupon_code: appliedCoupon.value?.code,
+          delivery_address: delivery ? { street: form.street, city: form.city, postal_code: form.postal_code, state: form.state || undefined } : undefined,
+        })
+        if (seq === quoteSeq) {
+          serverQuote.value = { subtotal: Number(q.subtotal), discount: Number(q.discount), tax: Number(q.tax), delivery_fee: Number(q.delivery_fee), total: Number(q.total) }
+        }
+      }
+      catch {
+        if (seq === quoteSeq) serverQuote.value = null // keep the local estimate; the server prices the order anyway
+      }
+      finally {
+        if (seq === quoteSeq) quoting.value = false
+      }
+    }, 400)
+  },
+  { immediate: true },
+)
 
 async function applyCoupon() {
   const code = couponCode.value.trim()
@@ -231,6 +276,7 @@ async function submitOrder() {
             street: form.street,
             city: form.city,
             postal_code: form.postal_code,
+            state: form.state || undefined,
             delivery_instructions: form.delivery_instructions || undefined,
           }
         : undefined,
@@ -388,6 +434,7 @@ async function payNow() {
               <input v-model="form.city" required placeholder="City" class="rounded-lg border border-brand-200 px-3 py-2 text-sm">
               <input v-model="form.postal_code" required placeholder="Postal code" class="rounded-lg border border-brand-200 px-3 py-2 text-sm">
             </div>
+            <input v-if="restaurant.current?.tax_mode === 'STRIPE'" v-model="form.state" maxlength="3" placeholder="State / province (e.g. WA, ON)" class="rounded-lg border border-brand-200 px-3 py-2 text-sm uppercase">
             <input v-model="form.delivery_instructions" placeholder="Delivery instructions" class="rounded-lg border border-brand-200 px-3 py-2 text-sm">
           </div>
         </section>
@@ -460,7 +507,7 @@ async function payNow() {
             <div v-if="totals.discount" class="flex justify-between text-emerald-700">
               <span>Discount</span><span>−{{ money(totals.discount) }}</span>
             </div>
-            <div class="flex justify-between"><span>Tax</span><span>{{ money(totals.tax) }}</span></div>
+            <div class="flex justify-between"><span>Tax<span v-if="quoting" class="text-ink-subtle"> (updating…)</span></span><span>{{ money(totals.tax) }}</span></div>
             <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ money(totals.delivery_fee) }}</span></div>
             <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total) }}</span></div>
           </div>

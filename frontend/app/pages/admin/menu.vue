@@ -12,6 +12,7 @@ import {
 import { STATIONS } from '~/utils/kitchen'
 import { ALLERGENS, allergenLabel } from '~/utils/allergens'
 import { resolveMediaUrl } from '~/utils/media'
+import { TAX_CODES } from '~/utils/taxCodes'
 const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
@@ -38,12 +39,15 @@ const form = reactive({
   category_id: 0,
   image_url: '',
   station: 'KITCHEN',
+  tax_code: '',
   is_available: true,
   is_vegetarian: false,
   is_spicy: false,
   is_popular: false,
   allergens: [] as string[],
 })
+
+const taxModeStripe = computed(() => admin.restaurant?.tax_mode === 'STRIPE')
 
 const previewUrl = computed(() => resolveMediaUrl(form.image_url || null))
 
@@ -78,6 +82,7 @@ function resetFormDefaults() {
     category_id: categories.value[0]?.id || 0,
     image_url: '',
     station: 'KITCHEN',
+    tax_code: '',
     is_available: true,
     is_vegetarian: false,
     is_spicy: false,
@@ -104,6 +109,7 @@ function openEdit(item: MenuItemDetail) {
     category_id: item.category_id,
     image_url: item.image_url || '',
     station: item.station || 'KITCHEN',
+    tax_code: item.tax_code || '',
     is_available: item.is_available,
     is_vegetarian: item.is_vegetarian,
     is_spicy: item.is_spicy,
@@ -192,6 +198,7 @@ async function saveItem() {
       category_id: Number(form.category_id),
       image_url: form.image_url || null,
       station: form.station,
+      tax_code: form.tax_code || null,
       is_available: form.is_available,
       is_vegetarian: form.is_vegetarian,
       is_spicy: form.is_spicy,
@@ -386,6 +393,14 @@ async function removeItem(item: MenuItemDetail) {
               <option v-for="s in STATIONS" :key="s.key" :value="s.key">{{ s.label }}</option>
             </select>
             <span class="mt-1 block text-xs font-normal text-ink-subtle">Which kitchen screen shows this dish.</span>
+          </label>
+
+          <label v-if="taxModeStripe" class="block text-sm font-medium">Tax category
+            <select v-model="form.tax_code" class="mt-1 w-full rounded-lg border border-brand-200 px-3 py-2 text-sm">
+              <option value="">Restaurant default</option>
+              <option v-for="(label, code) in TAX_CODES" :key="code" :value="code">{{ label }}</option>
+            </select>
+            <span class="mt-1 block text-xs font-normal text-ink-subtle">Used by Stripe Tax — alcohol, groceries and hot food are taxed differently.</span>
           </label>
 
           <div class="flex flex-wrap gap-4 text-sm">

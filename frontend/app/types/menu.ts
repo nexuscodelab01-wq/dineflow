@@ -21,6 +21,11 @@ export type Restaurant = {
   pickup_enabled: boolean
   dine_in_enabled: boolean
   tax_rate: string
+  /** US state / Canadian province code. */
+  state?: string | null
+  /** FLAT = the tax_rate above; STRIPE = address-based tax from Stripe Tax (quoted by the server). */
+  tax_mode?: 'FLAT' | 'STRIPE'
+  default_tax_code?: string
   delivery_fee: string
   /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */
   reservation_buffer_minutes?: number
@@ -107,6 +112,8 @@ export type MenuItem = {
   is_popular: boolean
   /** Which kitchen screen makes it: KITCHEN, BAR or DESSERT. */
   station?: string
+  /** Stripe Tax category; null = the restaurant default. */
+  tax_code?: string | null
   /** Codes from `~/utils/allergens`, e.g. ["milk", "nuts"]. */
   allergens?: string[]
 }

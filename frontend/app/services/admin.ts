@@ -165,6 +165,13 @@ export function startStripeOnboarding(restaurantId: number) {
   return apiFetch<{ url: string }>(q(restaurantId, '/settings/stripe/onboard'), { method: 'POST' })
 }
 
+export type TaxCheck = { mode: string, ok: boolean, rate_percent: string | null, message: string }
+
+/** A dry-run tax calculation at the restaurant's own address through whatever tax mode is live. */
+export function runTaxCheck(restaurantId: number) {
+  return apiFetch<TaxCheck>(q(restaurantId, '/settings/tax-check'), { method: 'POST' })
+}
+
 export function fetchStripeStatus(restaurantId: number) {
   return apiFetch<{ connected: boolean, charges_enabled: boolean }>(q(restaurantId, '/settings/stripe/status'))
 }
