@@ -50,6 +50,10 @@ const form = reactive({
   service_charge_pct: '0',
   service_charge_order_types: ['DINE_IN'] as string[],
   service_charge_taxable: false,
+  pos_void: false,
+  pos_comp: false,
+  pos_refund: false,
+  pos_discount_max: 10,
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
@@ -132,6 +136,10 @@ onMounted(async () => {
       service_charge_pct: String(Math.round(Number(settings.value.service_charge_rate ?? 0) * 10000) / 100),
       service_charge_order_types: [...(settings.value.service_charge_order_types ?? ['DINE_IN'])],
       service_charge_taxable: settings.value.service_charge_taxable ?? false,
+      pos_void: settings.value.pos_staff_permissions?.void ?? false,
+      pos_comp: settings.value.pos_staff_permissions?.comp ?? false,
+      pos_refund: settings.value.pos_staff_permissions?.refund ?? false,
+      pos_discount_max: settings.value.pos_staff_permissions?.discount_max_pct ?? 10,
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
@@ -292,6 +300,7 @@ async function connectStripe() {
 }
 
 // Tips & service charge: flag-gated. Card tips are chosen on the reader itself; saving pushes the presets to Stripe.
+const posControlsFlag = useFeature('pos_controls')
 const tipsFlag = useFeature('tips')
 const syncingReader = ref(false)
 const readerMessage = ref('')
@@ -354,6 +363,7 @@ async function save() {
       ...form,
       tax_rate: form.tax_rate,
       service_charge_rate: String(Number(form.service_charge_pct || 0) / 100),
+      pos_staff_permissions: { void: form.pos_void, comp: form.pos_comp, refund: form.pos_refund, discount_max_pct: Number(form.pos_discount_max) || 0 },
       delivery_fee: form.delivery_fee,
       // An emptied number input leaves the ref as '' rather than null.
       max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
@@ -371,7 +381,7 @@ async function save() {
     })
     // Everything that formats money reads currency off these copies, so refresh them now rather than on reload.
     for (const r of [admin.restaurant, useRestaurantStore().current]) {
-      if (r && r.id === settings.value.id) Object.assign(r, { tips_enabled: settings.value.tips_enabled, service_charge_rate: settings.value.service_charge_rate, service_charge_order_types: settings.value.service_charge_order_types, service_charge_taxable: settings.value.service_charge_taxable, country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
+      if (r && r.id === settings.value.id) Object.assign(r, { pos_staff_permissions: settings.value.pos_staff_permissions, tips_enabled: settings.value.tips_enabled, service_charge_rate: settings.value.service_charge_rate, service_charge_order_types: settings.value.service_charge_order_types, service_charge_taxable: settings.value.service_charge_taxable, country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
     }
     message.value = 'Settings saved'
   }
@@ -593,6 +603,18 @@ async function save() {
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Flat tax rate (0.0875) — the fallback">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
+      </section>
+
+      <section v-if="posControlsFlag" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">POS controls</h2>
+        <p class="text-xs text-ink-subtle">Admins can always void, comp, discount and refund at the POS. Choose what other staff may do on their own — for the rest they ask a manager, who enters their PIN to approve it.</p>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.pos_void" type="checkbox"> Staff can void items</label>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.pos_comp" type="checkbox"> Staff can comp items</label>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.pos_refund" type="checkbox"> Staff can refund payments</label>
+        <label class="block text-sm">
+          <span class="text-ink-muted">Largest discount staff can give without approval (%)</span>
+          <input v-model.number="form.pos_discount_max" type="number" min="0" max="100" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm sm:w-40">
+        </label>
       </section>
 
       <section v-if="tipsFlag" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
