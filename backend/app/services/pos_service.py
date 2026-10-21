@@ -40,6 +40,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.pos import (
     AvailabilityRead,
+    AwaitingPaymentRead,
     DevicePairResponse,
     DeviceRead,
     PinLoginResponse,
@@ -239,15 +240,44 @@ class PosService:
             self.db.commit()
         return AvailabilityRead(item_id=item.id, is_available=item.is_available)
 
+    def _waiting_payment(self, order: Order) -> Payment | None:
+        """The unpaid placeholder of a pay-later order, if this is one that still owes money."""
+        if not order.pay_later or order.status == OrderStatus.CANCELLED:
+            return None
+        return self.db.scalar(select(Payment).where(Payment.order_id == order.id, Payment.status == PaymentStatus.PENDING).order_by(Payment.id.desc()))
+
+    def awaiting_payment(self, restaurant_id: int) -> list[AwaitingPaymentRead]:
+        """Online orders placed to be paid at pickup / on delivery that haven't been paid yet, oldest first."""
+        rows = self.db.execute(
+            select(Order, Payment).join(Payment, Payment.order_id == Order.id).where(
+                Order.restaurant_id == restaurant_id, Order.pay_later.is_(True), Order.status != OrderStatus.CANCELLED,
+                Payment.status == PaymentStatus.PENDING,
+            ).order_by(Order.created_at)
+        ).all()
+        return [
+            AwaitingPaymentRead(
+                order_id=o.id, order_number=o.order_number, order_type=o.order_type.value, customer_name=o.customer_name,
+                customer_phone=o.customer_phone, total=o.total, placed_at=o.created_at, scheduled_for=o.scheduled_for, status=o.status.value,
+            )
+            for o, _ in rows
+        ]
+
     def mark_counter_order_paid_cash(self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None) -> None:
         order = self.db.get(Order, order_id)
         if order is None or order.restaurant_id != restaurant_id:
             raise NotFoundError("Order not found")
-        if order.status != OrderStatus.PENDING:
+        waiting = self._waiting_payment(order)
+        if order.status != OrderStatus.PENDING and waiting is None:
             raise AppError("This order has already been paid")
         restaurant = self.db.get(Restaurant, restaurant_id)
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
+        if waiting is not None:  # a pay-later order: it's already in the kitchen, only its payment is outstanding
+            waiting.payment_method, waiting.provider = PaymentMethod.CASH, "MANUAL"
+            waiting.shift_id, waiting.staff_user_id = ShiftService(self.db).current_shift_id(device_id), staff.id
+            OrderService(self.db).settle_pay_later(order, waiting, user_id=staff.id)
+            self.db.commit()
+            return
         payment = Payment(
             order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
             payment_method=PaymentMethod.CASH, provider="MANUAL",
@@ -268,7 +298,8 @@ class PosService:
         order = self.db.get(Order, order_id)
         if order is None or order.restaurant_id != restaurant_id:
             raise NotFoundError("Order not found")
-        if order.status != OrderStatus.PENDING:
+        waiting = self._waiting_payment(order)
+        if order.status != OrderStatus.PENDING and waiting is None:
             raise AppError("This order has already been paid")
         restaurant = self.db.get(Restaurant, restaurant_id)
         if restaurant is None:
@@ -282,14 +313,25 @@ class PosService:
         if intent.status == PaymentStatus.FAILED:
             raise AppError(intent.failure_message or "Payment failed")
 
-        payment = Payment(
-            order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
-            status=intent.status, payment_method=PaymentMethod.CARD, provider=provider_name,
-            provider_reference=intent.provider_intent_id, provider_intent_id=intent.provider_intent_id,
-            shift_id=ShiftService(self.db).current_shift_id(device_id), staff_user_id=staff.id,
-        )
-        self.db.add(payment)
+        if waiting is not None:  # pay-later: turn the waiting placeholder into this card payment
+            payment = waiting
+            payment.status, payment.payment_method, payment.provider = intent.status, PaymentMethod.CARD, provider_name
+            payment.provider_reference = payment.provider_intent_id = intent.provider_intent_id
+            payment.shift_id, payment.staff_user_id = ShiftService(self.db).current_shift_id(device_id), staff.id
+        else:
+            payment = Payment(
+                order_id=order.id, restaurant_id=restaurant_id, amount=order.total, currency=restaurant.currency,
+                status=intent.status, payment_method=PaymentMethod.CARD, provider=provider_name,
+                provider_reference=intent.provider_intent_id, provider_intent_id=intent.provider_intent_id,
+                shift_id=ShiftService(self.db).current_shift_id(device_id), staff_user_id=staff.id,
+            )
+            self.db.add(payment)
         self.db.flush()
+
+        if intent.status == PaymentStatus.COMPLETED and waiting is not None:
+            OrderService(self.db).settle_pay_later(order, payment, user_id=staff.id)
+            self.db.commit()
+            return PosCardIntentRead(order_id=order.id, status=OrderStatus.CONFIRMED.value)
 
         if intent.status == PaymentStatus.COMPLETED:
             # Mock provider settles synchronously — same reasoning as OrderService.create_order.

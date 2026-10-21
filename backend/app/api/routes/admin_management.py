@@ -1136,6 +1136,18 @@ def update_settings(
         raise raise_http_for_app_error(exc) from exc
 
 
+@router.post("/orders/{order_id}/mark-paid", status_code=204)
+def mark_order_paid(
+    order_id: int, user: StaffUser, restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> None:
+    """Record cash taken for a pay-at-pickup / cash-on-delivery order without a till."""
+    try:
+        service.mark_order_paid(order_id, restaurant_id, user)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
 @router.post("/settings/tax-check", response_model=TaxCheckRead)
 def tax_check(
     _: AdminUser,

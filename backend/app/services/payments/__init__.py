@@ -54,6 +54,11 @@ def reverse_payment(payment: Payment, *, connected_account_id: str | None) -> Re
             payment.failure_message = result.message
         return result
 
+    if payment.status == PaymentStatus.PENDING and not payment.provider_intent_id:
+        payment.status = PaymentStatus.FAILED  # a pay-later placeholder that was never paid: closed with the order
+        payment.failure_message = "Cancelled before payment"
+        return RefundResult(success=True)
+
     return RefundResult(success=True)  # already FAILED/REFUNDED, or a PENDING payment with nothing to cancel
 
 

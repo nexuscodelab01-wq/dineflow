@@ -41,6 +41,8 @@ class OrderCreate(BaseModel):
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=1000)
+    # Pay at pickup / cash on delivery instead of paying online now (only where the restaurant allows it).
+    pay_later: bool = False
 
 
 class OrderQuoteRequest(BaseModel):
@@ -115,6 +117,7 @@ class OrderRead(BaseModel):
     order_type: OrderType
     table_number: str | None = None
     status: OrderStatus
+    pay_later: bool = False
     subtotal: Decimal
     tax: Decimal
     service_charge: Decimal = Decimal("0.00")

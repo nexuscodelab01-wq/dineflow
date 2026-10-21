@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,6 +14,7 @@ from app.core.hours import status_at
 from app.core.realtime import kitchen_topic, publish
 from app.core.tenancy import ensure_customer_of
 from app.models.address import Address
+from app.models.audit_log import AuditLog
 from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier_option import MenuModifierOption
@@ -216,6 +217,15 @@ class OrderService:
         payment_method = PaymentMethod.CARD if provider_name == "STRIPE" else PaymentMethod.MOCK
         client_secret: str | None = None
 
+        if data.pay_later and total > Decimal("0.00"):
+            self._place_pay_later(order, payment_user=user, restaurant=restaurant, total=total, phone=data.customer_phone)
+            self.db.commit()
+            logger.info("Pay-later order created: order_number=%s user_id=%s", order.order_number, user.id)
+            refreshed = self.orders.get_by_id(order.id)
+            if refreshed is None:
+                raise AppError("Order could not be loaded after creation")
+            return OrderRead.model_validate(refreshed)
+
         # A coupon can cover the whole bill. There is nothing to charge then, so the gateway is not
         # called at all (it rightly refuses a zero amount) — but the order still gets a payment row
         # of 0.00 so "every confirmed order has a payment" stays true for the rest of the system.
@@ -270,6 +280,66 @@ class OrderService:
         result = OrderRead.model_validate(refreshed)
         result.client_secret = client_secret
         return result
+
+    # ------------------------------------------------------------------ pay later
+
+    def _place_pay_later(self, order: Order, *, payment_user: User, restaurant: Restaurant, total: Decimal, phone: str | None) -> None:
+        """Pay at pickup / cash on delivery: the order goes to the kitchen now and its payment waits, PENDING, for staff to
+        take the money. The rules are the no-show protection: allowed per order type, capped, never for a new customer,
+        and only a couple unpaid at once."""
+        if not self.features.is_enabled(restaurant.id, "pay_later"):
+            raise AppError("Paying later isn't available for this restaurant")
+        allowed = (
+            (order.order_type == OrderType.PICKUP and restaurant.pay_at_pickup_enabled)
+            or (order.order_type == OrderType.DELIVERY and restaurant.cash_on_delivery_enabled)
+        )
+        if not allowed:
+            raise AppError("Please pay online for this kind of order")
+        if not (phone or "").strip():
+            raise AppError("A phone number is needed so the restaurant can reach you about an order you'll pay for later")
+        if total > restaurant.pay_later_max_order:
+            raise AppError(f"Orders over {restaurant.pay_later_max_order} need to be paid online")
+        paid_before = self.db.scalar(
+            select(Payment.id).join(Order, Order.id == Payment.order_id).where(
+                Order.user_id == payment_user.id, Order.restaurant_id == restaurant.id, Payment.status == PaymentStatus.COMPLETED,
+            ).limit(1)
+        ) is not None
+        if restaurant.pay_later_first_order_prepaid and not paid_before:
+            raise AppError("Your first order needs to be paid online — after that you can pay when you collect")
+        unpaid = self.db.scalar(
+            select(func.count(Order.id)).where(
+                Order.user_id == payment_user.id, Order.restaurant_id == restaurant.id, Order.pay_later.is_(True),
+                Order.status != OrderStatus.CANCELLED, Order.id != order.id,
+                Order.id.in_(select(Payment.order_id).where(Payment.status == PaymentStatus.PENDING)),
+            )
+        ) or 0
+        if unpaid >= 2:
+            raise AppError("You already have orders waiting to be paid — please settle those first")
+
+        order.pay_later = True
+        self.db.add(Payment(
+            order_id=order.id, restaurant_id=restaurant.id, amount=total, currency=restaurant.currency,
+            status=PaymentStatus.PENDING, payment_method=PaymentMethod.CASH, provider="MANUAL",
+        ))
+        order.status = OrderStatus.CONFIRMED
+        what = "pay at pickup" if order.order_type == OrderType.PICKUP else "cash on delivery"
+        self.db.add(OrderStatusHistory(
+            order_id=order.id, previous_status=OrderStatus.PENDING, new_status=OrderStatus.CONFIRMED,
+            changed_by_user_id=payment_user.id, notes=f"Placed — {what}, not yet paid",
+        ))
+        self.db.flush()
+        notify_order_placed(self.db, restaurant, order, _email_lines_from_order(order))
+        publish(self.db, kitchen_topic(order.restaurant_id), "order.created", {"order_id": order.id, "order_number": order.order_number})
+
+    def settle_pay_later(self, order: Order, payment: Payment, *, user_id: int | None) -> None:
+        """The money for a pay-later order has arrived (cash handed over, or a card tapped): complete the payment that
+        was waiting. The order itself is already confirmed and in the kitchen, so nothing else changes."""
+        payment.status = PaymentStatus.COMPLETED
+        record_paid_order(self.db, self.restaurants.get_by_id(order.restaurant_id), order)
+        self.db.add(AuditLog(
+            restaurant_id=order.restaurant_id, actor_user_id=user_id, actor_label=f"user:{user_id}" if user_id else "system",
+            action="order.pay_later_settled", target=f"order:{order.id}", details={"amount": str(payment.amount), "method": payment.payment_method.value},
+        ))
 
     def quote(self, data: OrderQuoteRequest, user: User) -> OrderQuoteRead:
         """Totals for a cart exactly as `create_order` would price them, with nothing kept: the lines go through

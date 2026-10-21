@@ -333,6 +333,10 @@ class RestaurantSettingsUpdate(BaseModel):
     service_charge_order_types: list[str] | None = None
     service_charge_taxable: bool | None = None
     pos_staff_permissions: dict[str, Any] | None = None
+    pay_at_pickup_enabled: bool | None = None
+    cash_on_delivery_enabled: bool | None = None
+    pay_later_max_order: Decimal | None = Field(default=None, gt=0, le=10000)
+    pay_later_first_order_prepaid: bool | None = None
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
     # Guest booking policy — staff can still book outside these limits for private events or corrections.
     # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).

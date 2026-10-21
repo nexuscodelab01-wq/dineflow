@@ -62,6 +62,10 @@ class RestaurantRead(BaseModel):
     service_charge_rate: Decimal = Decimal(0)
     service_charge_order_types: list[str] = ["DINE_IN"]
     service_charge_taxable: bool = False
+    pay_at_pickup_enabled: bool = False
+    cash_on_delivery_enabled: bool = False
+    pay_later_max_order: Decimal = Decimal("100.00")
+    pay_later_first_order_prepaid: bool = True
     pos_staff_permissions: dict[str, Any] = {"void": False, "comp": False, "refund": False, "discount_max_pct": 10}
     # Whether this restaurant can actually take a real payment yet — not the internal Stripe account id,
     # just enough for the site to know "show a payment form" vs "online ordering isn't set up yet".

@@ -113,6 +113,11 @@ def _handle_payment_succeeded(db: Session, intent: stripe.StripeObject) -> None:
         logger.info("Table session %s paid by webhook (intent %s)", payment.table_session_id, intent["id"])
         return
     order = db.get(Order, payment.order_id)
+    if order is not None and order.pay_later and payment.status != PaymentStatus.COMPLETED and order.status != OrderStatus.CANCELLED:
+        # A pay-later order is already confirmed and in the kitchen: the card arriving only settles its payment.
+        OrderService(db).settle_pay_later(order, payment, user_id=payment.staff_user_id)
+        db.commit()
+        return
     if order is None or order.status != OrderStatus.PENDING:
         return  # already confirmed by an earlier delivery of this same event — nothing to do
     OrderService(db).confirm_payment(order, payment, user_id=None, notes="Payment confirmed (Stripe)")

@@ -106,6 +106,20 @@ class PosCouponPreviewRead(BaseModel):
     discount: Decimal
 
 
+class AwaitingPaymentRead(BaseModel):
+    """An online order the customer will pay for when they collect it (or on delivery)."""
+
+    order_id: int
+    order_number: str
+    order_type: str
+    customer_name: str
+    customer_phone: str | None
+    total: Decimal
+    placed_at: datetime
+    scheduled_for: datetime | None
+    status: str
+
+
 class AvailabilityRequest(BaseModel):
     is_available: bool
 

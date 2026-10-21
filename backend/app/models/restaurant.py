@@ -122,6 +122,11 @@ class Restaurant(TimestampMixin, Base):
     service_charge_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal(0), server_default="0", nullable=False)
     service_charge_order_types: Mapped[list[str]] = mapped_column(JSONB, default=lambda: ["DINE_IN"], server_default="'[\"DINE_IN\"]'::jsonb", nullable=False)
     service_charge_taxable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Pay later: the order goes to the kitchen first and is paid at pickup / on delivery. Off by default.
+    pay_at_pickup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    cash_on_delivery_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    pay_later_max_order: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("100.00"), server_default="100.00", nullable=False)
+    pay_later_first_order_prepaid: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     # What a signed-in staff member (not an admin) may do at the POS without a manager's PIN. Admins can do all of it.
     pos_staff_permissions: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=lambda: {"void": False, "comp": False, "refund": False, "discount_max_pct": 10},

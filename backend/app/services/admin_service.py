@@ -12,10 +12,11 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.realtime import kitchen_topic, publish, publish_order_change
 from app.core.storage import delete_owned_url
 from app.models.category import Category
-from app.models.enums import OrderStatus, PaymentStatus, TableStatus
+from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus, TableStatus
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
+from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.reservation import Reservation
@@ -472,6 +473,18 @@ class AdminService:
             raise NotFoundError("Restaurant not found")
         return RestaurantRead.model_validate(restaurant)
 
+    def mark_order_paid(self, order_id: int, restaurant_id: int, user: User) -> None:
+        """Staff took the money for a pay-later order away from a till (cash at the door, say) — close its payment."""
+        order = self.db.get(Order, order_id)
+        if order is None or order.restaurant_id != restaurant_id:
+            raise NotFoundError("Order not found")
+        payment = self.db.scalar(select(Payment).where(Payment.order_id == order.id, Payment.status == PaymentStatus.PENDING).order_by(Payment.id.desc()))
+        if not order.pay_later or payment is None or order.status == OrderStatus.CANCELLED:
+            raise AppError("This order isn't waiting for a payment")
+        payment.payment_method, payment.provider, payment.staff_user_id = PaymentMethod.CASH, "MANUAL", user.id
+        OrderService(self.db).settle_pay_later(order, payment, user_id=user.id)
+        self.db.commit()
+
     def tax_check(self, restaurant_id: int) -> TaxCheckRead:
         """Dry-run one $100 prepared-food sale at the restaurant's own address through whatever tax mode is live."""
         restaurant = self.restaurants.get_by_id(restaurant_id)
@@ -509,6 +522,8 @@ class AdminService:
                 raise AppError("Connect Stripe first — Stripe Tax runs on your own Stripe account")
             if not self.features.is_enabled(restaurant.id, "stripe_tax"):
                 raise AppError("Stripe Tax isn't enabled for this restaurant")
+        if (payload.get("pay_at_pickup_enabled") or payload.get("cash_on_delivery_enabled")) and not self.features.is_enabled(restaurant.id, "pay_later"):
+            raise AppError("Pay-later isn't enabled for this restaurant")
         if payload.get("tips_enabled") and not self.features.is_enabled(restaurant.id, "tips"):
             raise AppError("Tips aren't enabled for this restaurant")
         if payload.get("service_charge_rate") and not self.features.is_enabled(restaurant.id, "tips"):

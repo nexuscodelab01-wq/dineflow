@@ -22,6 +22,7 @@ from app.schemas.menu import MenuListResponse
 from app.schemas.pos import (
     AvailabilityRead,
     AvailabilityRequest,
+    AwaitingPaymentRead,
     OpenTableSessionsResponse,
     PinLoginRequest,
     PinLoginResponse,
@@ -136,6 +137,12 @@ def create_counter_order(data: PosOrderCreate, staff: CurrentPosStaff, service: 
         return service.create_counter_order(staff.device.restaurant_id, staff.user, data)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/orders/awaiting-payment", response_model=list[AwaitingPaymentRead], dependencies=POS_STAFF_GATE)
+def awaiting_payment(staff: CurrentPosStaff, service: Pos) -> list[AwaitingPaymentRead]:
+    """Online pay-at-pickup / cash-on-delivery orders still owing money — where the till takes it."""
+    return service.awaiting_payment(staff.device.restaurant_id)
 
 
 @router.post("/orders/{order_id}/pay-cash", status_code=204, dependencies=POS_STAFF_GATE)
