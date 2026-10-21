@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import QRCode from 'qrcode'
 import type { DevicePairResult, PosDevice } from '~/types/pos'
 import type { StaffMember } from '~/types/staff'
 import { fetchDevices, pairDevice, revokeDevice, setStaffPin } from '~/services/pos'
@@ -31,6 +32,7 @@ const label = ref('')
 const pairing = ref(false)
 const pairError = ref('')
 const justPaired = ref<DevicePairResult | null>(null)
+const pairQrCode = ref('')
 
 async function submitPair() {
   if (!admin.restaurantId || pairing.value || !label.value.trim()) return
@@ -38,6 +40,7 @@ async function submitPair() {
   pairError.value = ''
   try {
     justPaired.value = await pairDevice(admin.restaurantId, label.value.trim())
+    pairQrCode.value = await QRCode.toDataURL(justPaired.value.device_token, { margin: 1, width: 280, errorCorrectionLevel: 'M' })
     label.value = ''
     showForm.value = false
     await load()
@@ -132,13 +135,14 @@ async function submitPin(member: StaffMember) {
       </form>
 
       <div v-if="justPaired" class="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
-        <p class="font-semibold text-amber-900">"{{ justPaired.label }}" paired — shown once, copy it now:</p>
-        <p class="mt-1 text-xs text-amber-800">Enter this on the iPad's Pairing screen in the DineFlow POS app.</p>
-        <div class="mt-2 flex items-center gap-2">
+        <p class="font-semibold text-amber-900">"{{ justPaired.label }}" paired — shown once, use it now:</p>
+        <p class="mt-1 text-xs text-amber-800">Scan this on the iPad's Pairing screen in the DineFlow POS app (camera opens by default), or copy the code below if scanning isn't possible.</p>
+        <img v-if="pairQrCode" :src="pairQrCode" alt="Pairing QR code" class="mt-3 h-40 w-40 rounded-lg border border-amber-200 bg-white p-2">
+        <div class="mt-3 flex items-center gap-2">
           <code class="flex-1 break-all rounded-lg bg-white p-2 text-xs text-ink-muted">{{ justPaired.device_token }}</code>
           <button type="button" class="shrink-0 font-medium text-brand-700 hover:underline" @click="copyCode(justPaired.device_token)">Copy</button>
         </div>
-        <button type="button" class="mt-3 text-xs text-amber-800 hover:underline" @click="justPaired = null">Dismiss</button>
+        <button type="button" class="mt-3 text-xs text-amber-800 hover:underline" @click="justPaired = null; pairQrCode = ''">Dismiss</button>
       </div>
 
       <div v-if="loading" class="mt-6 h-32 animate-pulse rounded-2xl bg-brand-100/60" />

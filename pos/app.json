@@ -35,6 +35,13 @@
           "bluetoothPeripheralPermission": "DineFlow POS uses Bluetooth to connect to the card reader.",
           "bluetoothAlwaysUsagePermission": "DineFlow POS uses Bluetooth to connect to the card reader."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "DineFlow POS uses the camera to scan a device pairing QR code.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "extra": {

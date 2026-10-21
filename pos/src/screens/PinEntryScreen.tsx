@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../api/client';
 import { pinLogin } from '../api/pos';
 import { usePosStore } from '../state/store';
@@ -13,14 +13,6 @@ export default function PinEntryScreen() {
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
-  function press(key: string) {
-    if (busy) return;
-    if (key === 'del') return setPin((p) => p.slice(0, -1));
-    if (key === '') return;
-    if (pin.length >= 8) return;
-    setPin((p) => p + key);
-  }
 
   async function submit(currentPin: string) {
     if (!deviceToken || currentPin.length < 4) return;
@@ -38,13 +30,19 @@ export default function PinEntryScreen() {
   }
 
   function onPress(key: string) {
-    press(key);
-    const next = key === 'del' ? pin.slice(0, -1) : key === '' ? pin : pin + key;
-    if (key !== 'del' && key !== '' && next.length === 4) submit(next);
+    if (busy || key === '') return;
+    if (key === 'del') return setPin((p) => p.slice(0, -1));
+    if (pin.length >= 8) return;
+    const next = pin + key;
+    setPin(next);
+    if (next.length === 4) submit(next);
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.title}>Enter your PIN</Text>
       <View style={styles.dots}>
         {[0, 1, 2, 3].map((i) => (
@@ -52,7 +50,7 @@ export default function PinEntryScreen() {
         ))}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {busy && <ActivityIndicator style={{ marginBottom: 12 }} />}
+      {busy && <ActivityIndicator style={{ marginBottom: 8 }} />}
       <View style={styles.pad}>
         {KEYS.map((key, i) => (
           <TouchableOpacity
@@ -68,24 +66,28 @@ export default function PinEntryScreen() {
       <TouchableOpacity onPress={unpair} style={styles.unpair}>
         <Text style={styles.unpairText}>Unpair this device</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: '700', marginBottom: 24 },
-  dots: { flexDirection: 'row', gap: 16, marginBottom: 16 },
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: '#999' },
+  scrollContent: {
+    flexGrow: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
+    paddingVertical: 16, paddingHorizontal: 16,
+  },
+  title: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  dots: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: '#999' },
   dotFilled: { backgroundColor: '#2c6f53', borderColor: '#2c6f53' },
-  error: { color: '#c0392b', marginBottom: 12 },
-  pad: { flexDirection: 'row', flexWrap: 'wrap', width: 260, justifyContent: 'center' },
+  error: { color: '#c0392b', marginBottom: 8, fontSize: 13 },
+  // 3 columns, capped so this always fits a short landscape phone screen as well as an iPad.
+  pad: { flexDirection: 'row', flexWrap: 'wrap', width: 198, justifyContent: 'center' },
   key: {
-    width: 76, height: 76, margin: 6, borderRadius: 38, backgroundColor: '#f0f0f0',
+    width: 56, height: 56, margin: 5, borderRadius: 28, backgroundColor: '#f0f0f0',
     alignItems: 'center', justifyContent: 'center',
   },
   keyHidden: { backgroundColor: 'transparent' },
-  keyText: { fontSize: 26, fontWeight: '600' },
-  unpair: { marginTop: 32 },
-  unpairText: { color: '#999', fontSize: 13 },
+  keyText: { fontSize: 20, fontWeight: '600' },
+  unpair: { marginTop: 14 },
+  unpairText: { color: '#999', fontSize: 12 },
 });
