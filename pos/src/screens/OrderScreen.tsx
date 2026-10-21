@@ -31,6 +31,7 @@ export default function OrderScreen({ navigation }: Props) {
   const clearCart = usePosStore((s) => s.clearCart);
   const setTimeEntry = usePosStore((s) => s.setTimeEntry);
   const isTill = usePosStore((s) => s.deviceKind) !== 'HANDHELD';
+  const controlsEnabled = usePosStore((s) => s.controlsEnabled);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
@@ -180,6 +181,11 @@ export default function OrderScreen({ navigation }: Props) {
               </TouchableOpacity>
             </>
           )}
+          {controlsEnabled && (
+            <TouchableOpacity onPress={() => navigation.navigate('RecentPayments')}>
+              <Text style={styles.headerLink}>Refunds</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleClockOut}>
             <Text style={styles.headerLink}>Clock out</Text>
           </TouchableOpacity>
@@ -263,6 +269,11 @@ export default function OrderScreen({ navigation }: Props) {
           <Text style={styles.tabBarText}>
             Table {selectedTable.table_number} — {selectedTable.rounds} round{selectedTable.rounds === 1 ? '' : 's'} · {money(selectedTable.total)} on the tab
           </Text>
+          {controlsEnabled && (
+            <TouchableOpacity style={styles.tabBarSecondary} onPress={() => navigation.navigate('TabDetail', { sessionId: selectedTable.session_id })}>
+              <Text style={styles.tabBarSecondaryText}>Edit tab</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.tabBarButton, Number(selectedTable.total) <= 0 && styles.tabBarButtonDisabled]}
             disabled={Number(selectedTable.total) <= 0}
@@ -443,6 +454,8 @@ const styles = StyleSheet.create({
   tabBarButton: { backgroundColor: '#2c6f53', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16 },
   tabBarButtonDisabled: { opacity: 0.4 },
   tabBarButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  tabBarSecondary: { borderWidth: 1, borderColor: '#2c6f53', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
+  tabBarSecondaryText: { color: '#2c6f53', fontWeight: '600' },
   body: { flex: 1, flexDirection: 'row' },
   menuColumn: { flex: 2, padding: 12 },
   searchInput: {

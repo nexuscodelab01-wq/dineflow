@@ -14,14 +14,15 @@ type RequestOptions = {
   token?: string | null;
   body?: unknown;
   params?: Record<string, string | number>;
+  headers?: Record<string, string>;
 };
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', token, body, params } = options;
+  const { method = 'GET', token, body, params, headers: extraHeaders } = options;
   const query = params
     ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : '';
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 

@@ -14,6 +14,7 @@ export type PinLoginResponse = {
   currency: string;
   country: string;
   tips_enabled: boolean;
+  controls_enabled: boolean;
   expires_in: number;
 };
 
@@ -140,4 +141,33 @@ export type TimeEntryRead = {
 
 export type ApiErrorBody = {
   detail?: string;
+};
+
+export type ControlKind = 'VOID' | 'COMP' | 'DISCOUNT' | 'REFUND';
+export type ControlAction = 'void' | 'comp' | 'discount' | 'refund';
+export type Reason = { code: string; label: string };
+export type Reasons = Record<ControlKind, Reason[]>;
+
+export type AdjustmentResult = { adjustment_id: number; amount: string; order_total: string | null };
+
+export type TabItem = {
+  item_id: number | null;
+  name: string;
+  quantity: number;
+  line_total: string;
+  discount_amount: string;
+  special_instructions: string | null;
+  options: string[];
+};
+export type TabRound = { order_id: number; order_number: string; round_no: number | null; status: string; total: string; items: TabItem[] };
+export type TabDetail = { session_id: number; table_number: string; rounds: TabRound[]; total: string };
+
+export type RecentPayment = {
+  kind: 'ORDER' | 'TAB';
+  id: number;
+  label: string;
+  amount: string;
+  method: string;
+  paid_at: string;
+  refundable: boolean;
 };

@@ -15,6 +15,12 @@ import type {
   ShiftRead,
   TablePaymentRead,
   TimeEntryRead,
+  AdjustmentResult,
+  ControlAction,
+  ControlKind,
+  Reasons,
+  RecentPayment,
+  TabDetail,
 } from './types';
 
 export function pinLogin(deviceToken: string, pin: string) {
@@ -106,4 +112,43 @@ export function clockOut(posSessionToken: string, cashUp?: { countedCash: string
     method: 'POST', token: posSessionToken,
     body: cashUp ? { counted_cash: cashUp.countedCash, cash_tips: cashUp.cashTips } : undefined,
   });
+}
+
+// ---- POS controls: voids, comps, discounts, refunds, manager approval --------------------------------
+
+type ControlFields = { reason_code: string; note?: string };
+
+export function fetchReasons(token: string) {
+  return apiFetch<Reasons>('/pos/reasons', { token });
+}
+
+/** A manager types their own PIN to approve one action; returns a short-lived token to send with it. */
+export function authorizeAction(token: string, pin: string, action: ControlAction) {
+  return apiFetch<{ token: string; approver: string; expires_in: number }>('/pos/authorize', { method: 'POST', token, body: { pin, action } });
+}
+
+export function fetchTab(token: string, sessionId: number) {
+  return apiFetch<TabDetail>(`/pos/table-sessions/${sessionId}`, { token });
+}
+
+export function fetchRecentPayments(token: string) {
+  return apiFetch<RecentPayment[]>('/pos/recent-payments', { token });
+}
+
+/** One entry point for every controlled action, so the approval retry is the same everywhere. */
+export function runControl(
+  token: string,
+  kind: ControlKind,
+  target: { type: 'item' | 'order' | 'tab'; id: number },
+  fields: ControlFields & { percent?: string; quantity?: number },
+  override?: string,
+) {
+  const verb = kind.toLowerCase();
+  const path =
+    kind === 'REFUND'
+      ? target.type === 'tab' ? `/pos/table-sessions/${target.id}/refund` : `/pos/orders/${target.id}/refund`
+      : target.type === 'item' ? `/pos/order-items/${target.id}/${verb}`
+      : target.type === 'order' ? `/pos/orders/${target.id}/discount`
+      : `/pos/table-sessions/${target.id}/discount`;
+  return apiFetch<AdjustmentResult>(path, { method: 'POST', token, body: fields, headers: override ? { 'X-Manager-Override': override } : undefined });
 }
