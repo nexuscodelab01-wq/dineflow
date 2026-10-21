@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.models.audit_log import AuditLog
 from app.models.cash_movement import CashMovement
-from app.models.device import Device
+from app.models.device import HANDHELD, Device
 from app.models.enums import CashMovementKind, PaymentMethod, PaymentStatus
 from app.models.payment import Payment
 from app.models.shift import CLOSED, OPEN, Shift
@@ -60,6 +60,8 @@ class ShiftService:
 
     def open_shift(self, device: Device, staff_user: User, starting_float: Decimal) -> ShiftRead:
         FeatureService(self.db).require(device.restaurant_id, FEATURE)
+        if device.kind == HANDHELD:
+            raise AppError("A handheld has no cash drawer, so it doesn't open a shift")
         if self.current_shift_id(device.id) is not None:
             raise ConflictError("This till already has an open shift")
         try:

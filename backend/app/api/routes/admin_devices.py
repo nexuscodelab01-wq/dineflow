@@ -30,7 +30,7 @@ Pos = Annotated[PosService, Depends(get_pos_service)]
 def pair_device(data: DevicePairRequest, restaurant_id: RestaurantId, admin: AdminUser, service: Pos) -> DevicePairResponse:
     """Pair a new POS device (an iPad). The returned device_token is shown once — it's the pairing
     code the iPad is given, and there's no way to retrieve it again after this response."""
-    return service.pair_device(restaurant_id, data.label, admin)
+    return service.pair_device(restaurant_id, data.label, admin, data.kind)
 
 
 @router.get("", response_model=list[DeviceRead])

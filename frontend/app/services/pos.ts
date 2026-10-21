@@ -1,14 +1,14 @@
-import type { DevicePairResult, PosDevice } from '~/types/pos'
+import type { DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
 import { apiFetch } from '~/services/http'
 
 export function fetchDevices(restaurantId: number) {
   return apiFetch<PosDevice[]>(`/api/v1/admin/devices?restaurant_id=${restaurantId}`)
 }
 
-export function pairDevice(restaurantId: number, label: string) {
+export function pairDevice(restaurantId: number, label: string, kind: DeviceKind = 'TILL') {
   return apiFetch<DevicePairResult>(`/api/v1/admin/devices?restaurant_id=${restaurantId}`, {
     method: 'POST',
-    body: JSON.stringify({ label }),
+    body: JSON.stringify({ label, kind }),
   })
 }
 

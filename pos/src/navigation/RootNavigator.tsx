@@ -38,6 +38,7 @@ export default function RootNavigator() {
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const shift = usePosStore((s) => s.shift);
   const shiftChecked = usePosStore((s) => s.shiftChecked);
+  const deviceKind = usePosStore((s) => s.deviceKind);
   const timeEntry = usePosStore((s) => s.timeEntry);
   const timeEntryChecked = usePosStore((s) => s.timeEntryChecked);
   const loadDevice = usePosStore((s) => s.loadDevice);
@@ -64,6 +65,18 @@ export default function RootNavigator() {
     );
   }
 
+  const orderStack = (
+    <>
+      <Stack.Screen name="Order" component={OrderScreen} />
+      <Stack.Screen name="CashTender" component={CashTenderScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="CardTender" component={CardTenderScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="TableTender" component={TableTenderScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="TableCardTender" component={TableCardTenderScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="CloseShift" component={CloseShiftScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="CashMovement" component={CashMovementScreen} options={{ presentation: 'modal' }} />
+    </>
+  );
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -75,20 +88,15 @@ export default function RootNavigator() {
           <Stack.Screen name="Loading" component={Loading} />
         ) : !timeEntry ? (
           <Stack.Screen name="ClockIn" component={ClockInScreen} />
+        ) : deviceKind === 'HANDHELD' ? (
+          // A server's handheld has no cash drawer, so no float gate: straight to ordering.
+          orderStack
         ) : !shiftChecked ? (
           <Stack.Screen name="Loading" component={Loading} />
         ) : !shift ? (
           <Stack.Screen name="OpenShift" component={OpenShiftScreen} />
         ) : (
-          <>
-            <Stack.Screen name="Order" component={OrderScreen} />
-            <Stack.Screen name="CashTender" component={CashTenderScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="CardTender" component={CardTenderScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="TableTender" component={TableTenderScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="TableCardTender" component={TableCardTenderScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="CloseShift" component={CloseShiftScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="CashMovement" component={CashMovementScreen} options={{ presentation: 'modal' }} />
-          </>
+          orderStack
         )}
       </Stack.Navigator>
     </NavigationContainer>

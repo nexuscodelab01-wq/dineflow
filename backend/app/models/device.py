@@ -23,12 +23,18 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+TILL = "TILL"  # a fixed register: mandatory shift + starting float, Z-report at close
+HANDHELD = "HANDHELD"  # carried by a server: no drawer, so no float gate (cash is attributed per person)
+
+
 class Device(TimestampMixin, Base):
     __tablename__ = "devices"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(100), nullable=False)
+    # What the device is *for*, not its form factor: whether it owns a cash drawer. Existing devices are tills.
+    kind: Mapped[str] = mapped_column(String(10), default=TILL, server_default=TILL, nullable=False)
     paired_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

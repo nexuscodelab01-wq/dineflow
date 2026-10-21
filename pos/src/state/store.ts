@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { fetchCurrentShift, fetchCurrentTimeEntry } from '../api/pos';
-import type { ShiftRead, TimeEntryRead } from '../api/types';
+import type { DeviceKind, ShiftRead, TimeEntryRead } from '../api/types';
 
 const DEVICE_TOKEN_KEY = 'dineflow_pos_device_token';
 
@@ -23,6 +23,9 @@ type PosState = {
   // Short-lived, in-memory only — never persisted. Re-entering a PIN after an app restart is the point.
   posSessionToken: string | null;
   staffName: string | null;
+  // Device-level, learned at PIN login (the backend knows, the device token doesn't carry it). Survives a
+  // staff switch like `shift` does; only matters after login, which is when every gate that reads it runs.
+  deviceKind: DeviceKind | null;
   cart: CartLine[];
   // A shift is scoped to this device, not the current PIN session — it survives a staff switch, so it's
   // always re-fetched fresh from the backend rather than inferred client-side (avoids staleness if the
@@ -38,7 +41,7 @@ type PosState = {
   loadDevice: () => Promise<void>;
   pair: (token: string) => Promise<void>;
   unpair: () => Promise<void>;
-  loginWithPin: (token: string, staffName: string) => void;
+  loginWithPin: (token: string, staffName: string, deviceKind: DeviceKind) => void;
   logoutPin: () => void;
   loadShift: () => Promise<void>;
   setShift: (shift: ShiftRead | null) => void;
@@ -56,6 +59,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   deviceReady: false,
   posSessionToken: null,
   staffName: null,
+  deviceKind: null,
   cart: [],
   shift: null,
   shiftChecked: false,
@@ -75,12 +79,12 @@ export const usePosStore = create<PosState>((set, get) => ({
   unpair: async () => {
     await SecureStore.deleteItemAsync(DEVICE_TOKEN_KEY);
     set({
-      deviceToken: null, posSessionToken: null, staffName: null, cart: [],
+      deviceToken: null, posSessionToken: null, staffName: null, deviceKind: null, cart: [],
       shift: null, shiftChecked: false, timeEntry: null, timeEntryChecked: false,
     });
   },
 
-  loginWithPin: (token: string, staffName: string) => set({ posSessionToken: token, staffName }),
+  loginWithPin: (token: string, staffName: string, deviceKind: DeviceKind) => set({ posSessionToken: token, staffName, deviceKind }),
 
   // Switching staff: just drop the old session token client-side. It's short-lived and stateless
   // server-side, so there's nothing to "log out" on the backend — see pos_service.py's design notes.

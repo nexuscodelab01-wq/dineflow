@@ -28,6 +28,7 @@ export default function OrderScreen({ navigation }: Props) {
   const setCartLineNote = usePosStore((s) => s.setCartLineNote);
   const clearCart = usePosStore((s) => s.clearCart);
   const setTimeEntry = usePosStore((s) => s.setTimeEntry);
+  const isTill = usePosStore((s) => s.deviceKind) !== 'HANDHELD';
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
@@ -162,12 +163,16 @@ export default function OrderScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.staffName}>{staffName}</Text>
         <View style={styles.headerLinks}>
-          <TouchableOpacity onPress={() => navigation.navigate('CashMovement')}>
-            <Text style={styles.headerLink}>Cash in/out</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('CloseShift')}>
-            <Text style={styles.headerLink}>End shift</Text>
-          </TouchableOpacity>
+          {isTill && (
+            <>
+              <TouchableOpacity onPress={() => navigation.navigate('CashMovement')}>
+                <Text style={styles.headerLink}>Cash in/out</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('CloseShift')}>
+                <Text style={styles.headerLink}>End shift</Text>
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity onPress={handleClockOut}>
             <Text style={styles.headerLink}>Clock out</Text>
           </TouchableOpacity>

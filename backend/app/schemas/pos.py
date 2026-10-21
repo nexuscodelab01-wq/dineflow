@@ -2,25 +2,31 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas.table_session import OpenSessionRead
 
+DeviceKind = Literal["TILL", "HANDHELD"]
+
 
 class DevicePairRequest(BaseModel):
     label: str = Field(min_length=1, max_length=100)
+    kind: DeviceKind = "TILL"
 
 
 class DevicePairResponse(BaseModel):
     device_id: int
     label: str
+    kind: str
     device_token: str  # shown once — this is the pairing code the iPad is given
 
 
 class DeviceRead(BaseModel):
     id: int
     label: str
+    kind: str
     paired_by_label: str | None
     revoked_at: datetime | None
     last_seen_at: datetime | None
@@ -34,6 +40,7 @@ class PinLoginRequest(BaseModel):
 class PinLoginResponse(BaseModel):
     pos_session_token: str
     staff_name: str
+    device_kind: str
     expires_in: int  # seconds
 
 

@@ -4,9 +4,13 @@ export type DevicePairResponse = {
   device_token: string;
 };
 
+// TILL owns a cash drawer (mandatory shift + float); HANDHELD is carried by a server and has none.
+export type DeviceKind = 'TILL' | 'HANDHELD';
+
 export type PinLoginResponse = {
   pos_session_token: string;
   staff_name: string;
+  device_kind: DeviceKind;
   expires_in: number;
 };
 

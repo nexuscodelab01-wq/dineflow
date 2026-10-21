@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { DevicePairResult, PosDevice } from '~/types/pos'
+import type { DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
 import type { StaffMember } from '~/types/staff'
 import { fetchDevices, pairDevice, revokeDevice, setStaffPin } from '~/services/pos'
 import { fetchStaff } from '~/services/staff'
@@ -29,6 +29,7 @@ onMounted(async () => {
 
 const showForm = ref(false)
 const label = ref('')
+const kind = ref<DeviceKind>('TILL')
 const pairing = ref(false)
 const pairError = ref('')
 const justPaired = ref<DevicePairResult | null>(null)
@@ -39,9 +40,10 @@ async function submitPair() {
   pairing.value = true
   pairError.value = ''
   try {
-    justPaired.value = await pairDevice(admin.restaurantId, label.value.trim())
+    justPaired.value = await pairDevice(admin.restaurantId, label.value.trim(), kind.value)
     pairQrCode.value = await QRCode.toDataURL(justPaired.value.device_token, { margin: 1, width: 280, errorCorrectionLevel: 'M' })
     label.value = ''
+    kind.value = 'TILL'
     showForm.value = false
     await load()
   }
@@ -130,6 +132,12 @@ async function submitPin(member: StaffMember) {
         <label class="block text-sm font-medium">Label
           <input v-model="label" required class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Front counter iPad">
         </label>
+        <label class="block text-sm font-medium">Used as
+          <select v-model="kind" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            <option value="TILL">Till — has a cash drawer</option>
+            <option value="HANDHELD">Handheld — a server walks the floor with it</option>
+          </select>
+        </label>
         <AppButton type="submit" :disabled="pairing">{{ pairing ? 'Pairing…' : 'Pair device' }}</AppButton>
         <p v-if="pairError" class="w-full text-sm text-red-600" role="alert">{{ pairError }}</p>
       </form>
@@ -152,6 +160,7 @@ async function submitPin(member: StaffMember) {
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-semibold text-ink">{{ device.label }}</span>
+              <span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900">{{ device.kind === 'HANDHELD' ? 'Handheld' : 'Till' }}</span>
               <span v-if="device.revoked_at" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Revoked</span>
               <span v-else class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Active</span>
             </div>

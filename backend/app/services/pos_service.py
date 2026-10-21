@@ -28,7 +28,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.audit_log import AuditLog
-from app.models.device import Device
+from app.models.device import TILL, Device
 from app.models.enums import OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.order import Order
 from app.models.order_status_history import OrderStatusHistory
@@ -58,20 +58,20 @@ class PosService:
 
     # ------------------------------------------------------------------ pairing (admin-facing)
 
-    def pair_device(self, restaurant_id: int, label: str, admin: User) -> DevicePairResponse:
-        device = Device(restaurant_id=restaurant_id, label=label, paired_by_user_id=admin.id)
+    def pair_device(self, restaurant_id: int, label: str, admin: User, kind: str = TILL) -> DevicePairResponse:
+        device = Device(restaurant_id=restaurant_id, label=label, kind=kind, paired_by_user_id=admin.id)
         self.db.add(device)
         self.db.flush()
-        self.db.add(AuditLog(restaurant_id=restaurant_id, actor_user_id=admin.id, actor_label=admin.email, action="device.paired", target=label))
+        self.db.add(AuditLog(restaurant_id=restaurant_id, actor_user_id=admin.id, actor_label=admin.email, action="device.paired", target=label, details={"kind": kind}))
         self.db.commit()
         token = create_device_token(device.id, restaurant_id)
-        return DevicePairResponse(device_id=device.id, label=device.label, device_token=token)
+        return DevicePairResponse(device_id=device.id, label=device.label, kind=device.kind, device_token=token)
 
     def list_devices(self, restaurant_id: int) -> list[DeviceRead]:
         devices = self.db.scalars(select(Device).where(Device.restaurant_id == restaurant_id).order_by(Device.created_at.desc())).all()
         return [
             DeviceRead(
-                id=d.id, label=d.label, paired_by_label=d.paired_by.email if d.paired_by else None,
+                id=d.id, label=d.label, kind=d.kind, paired_by_label=d.paired_by.email if d.paired_by else None,
                 revoked_at=d.revoked_at, last_seen_at=d.last_seen_at, created_at=d.created_at,
             )
             for d in devices
@@ -117,7 +117,9 @@ class PosService:
         self.db.add(AuditLog(restaurant_id=device.restaurant_id, actor_user_id=user.id, actor_label=user.email, action="pos.pin_login", target=f"device:{device.id}"))
         self.db.commit()
         token = create_pos_session_token(device.id, user.id, device.restaurant_id)
-        return PinLoginResponse(pos_session_token=token, staff_name=user.first_name, expires_in=POS_SESSION_MINUTES * 60)
+        return PinLoginResponse(
+            pos_session_token=token, staff_name=user.first_name, device_kind=device.kind, expires_in=POS_SESSION_MINUTES * 60,
+        )
 
     # ------------------------------------------------------------------ counter orders
 
