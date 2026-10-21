@@ -117,8 +117,11 @@ class PosService:
         self.db.add(AuditLog(restaurant_id=device.restaurant_id, actor_user_id=user.id, actor_label=user.email, action="pos.pin_login", target=f"device:{device.id}"))
         self.db.commit()
         token = create_pos_session_token(device.id, user.id, device.restaurant_id)
+        restaurant = self.db.get(Restaurant, device.restaurant_id)
         return PinLoginResponse(
-            pos_session_token=token, staff_name=user.first_name, device_kind=device.kind, expires_in=POS_SESSION_MINUTES * 60,
+            pos_session_token=token, staff_name=user.first_name, device_kind=device.kind,
+            currency=restaurant.currency if restaurant else "usd", country=restaurant.country if restaurant else "US",
+            expires_in=POS_SESSION_MINUTES * 60,
         )
 
     # ------------------------------------------------------------------ counter orders

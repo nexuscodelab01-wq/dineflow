@@ -58,10 +58,8 @@ class StripeConnectService:
                 "dashboard": "full",
                 # Stripe requires identity.country before it will accept the merchant configuration (it
                 # determines which regulatory requirements apply) — found the hard way, in testing.
-                # DineFlow has no Restaurant.country field yet (only address/city/postal_code), so this
-                # is hardcoded to the one country every demo/seed restaurant is in today. Add a real
-                # Restaurant.country field and use it here before onboarding a restaurant outside the US.
-                "identity": {"country": "US"},
+                # Fixed for the life of the account, which is why Restaurant.country locks once connected.
+                "identity": {"country": restaurant.country},
                 "configuration": {"merchant": {"capabilities": {"card_payments": {"requested": True}}}},
                 "defaults": {"responsibilities": {"fees_collector": "stripe", "losses_collector": "stripe"}},
             }

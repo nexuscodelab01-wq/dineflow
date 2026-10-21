@@ -15,6 +15,7 @@ from app.core.hours import (
     validate_closures,
     validate_opening_hours,
 )
+from app.core.locale import SUPPORTED_COUNTRIES, SUPPORTED_CURRENCIES
 from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
 from app.schemas.order import OrderRead
@@ -302,6 +303,8 @@ class RestaurantSettingsUpdate(BaseModel):
     dine_in_enabled: bool | None = None
     tax_rate: Decimal | None = Field(default=None, ge=0, le=1)
     delivery_fee: Decimal | None = Field(default=None, ge=0)
+    country: str | None = None
+    currency: str | None = None
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
     # Guest booking policy — staff can still book outside these limits for private events or corrections.
     # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).
@@ -324,6 +327,26 @@ class RestaurantSettingsUpdate(BaseModel):
     max_orders_per_slot: int | None = Field(default=None, ge=1, le=100)
     scheduled_order_days_ahead: int | None = Field(default=None, ge=0, le=60)
     scheduled_order_lead_minutes: int | None = Field(default=None, ge=0, le=480)
+
+    @field_validator("country")
+    @classmethod
+    def _check_country(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().upper()
+        if value not in SUPPORTED_COUNTRIES:
+            raise ValueError(f"Country must be one of: {', '.join(sorted(SUPPORTED_COUNTRIES))}")
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def _check_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().lower()
+        if value not in SUPPORTED_CURRENCIES:
+            raise ValueError(f"Currency must be one of: {', '.join(sorted(SUPPORTED_CURRENCIES))}")
+        return value
 
     @field_validator("logo_url")
     @classmethod

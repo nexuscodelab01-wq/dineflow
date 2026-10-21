@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.hours import to_local
+from app.core.locale import format_money
 from app.jobs.queue import cancel_by_dedupe_key, enqueue
 
 logger = logging.getLogger(__name__)
@@ -100,12 +101,12 @@ def notify_order_placed(db: Session, restaurant, order, lines: list[dict[str, An
             text_lines.append(f"    Note: {line['instructions']}")
             item_html += f'<div style="font-size:13px">Note: {escape(line["instructions"])}</div>'
         html_items.append(f'<li style="margin-bottom:8px">{item_html}</li>')
-    text_lines += ["", f"Total: ${order.total}", "", f"Track your order: {track}", "", f"— {restaurant.name}"]
+    text_lines += ["", f"Total: {format_money(order.total, restaurant.currency)}", "", f"Track your order: {track}", "", f"— {restaurant.name}"]
 
     body = (
         f"<p>Hi {escape(order.customer_name)}, thanks! Your {escape(type_label.lower())} order <strong>{escape(order.order_number)}</strong> is confirmed.</p>"
         f'<ul style="padding-left:18px;margin:16px 0">{"".join(html_items)}</ul>'
-        f'<p style="font-size:16px"><strong>Total: ${escape(str(order.total))}</strong></p>'
+        f'<p style="font-size:16px"><strong>Total: {escape(format_money(order.total, restaurant.currency))}</strong></p>'
         f'<p><a href="{escape(track, quote=True)}" style="display:inline-block;background:{_brand_color(restaurant)};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none">Track your order</a></p>'
     )
     _queue_email(db, restaurant, order.customer_email, subject, "\n".join(text_lines), _layout(restaurant, "Order confirmed", body), f"email:order:{order.id}:placed")

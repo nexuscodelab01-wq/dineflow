@@ -88,6 +88,13 @@ def test_onboarding_an_unknown_restaurant_is_a_clean_404(db: Session, fake_strip
         StripeConnectService(db).onboarding_link(999999)
 
 
+def test_the_connected_account_is_created_in_the_restaurants_own_country(db: Session, fake_stripe_client):
+    restaurant = _restaurant(db, country="CA")
+    db.commit()
+    StripeConnectService(db).onboarding_link(restaurant.id)
+    assert _FakeStripeClient.last_instance.v2.core.accounts.create_calls[0]["identity"] == {"country": "CA"}
+
+
 def test_creates_a_v2_full_dashboard_account_with_stripe_collecting_fees_and_losses(db: Session, fake_stripe_client):
     restaurant = _restaurant(db, email="owner@connect-test.demo")
     db.commit()

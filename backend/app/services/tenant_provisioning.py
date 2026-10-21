@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError, ConflictError
 from app.core.hours import valid_timezone
 from app.core.images import InvalidImage, process_image
+from app.core.locale import COUNTRY_CURRENCY
 from app.core.security import hash_password
 from app.core.stations import CATEGORY_STATIONS, DEFAULT_STATION
 from app.core.storage import get_storage, tenant_prefix
@@ -104,6 +105,7 @@ def provision_tenant(
     logo: bytes | None = None,
     template: str = "generic",
     timezone: str = "UTC",
+    country: str = "US",
     custom_domain: str | None = None,
     owner_name: str = "Owner",
     branding: bool = True,
@@ -122,6 +124,9 @@ def provision_tenant(
         raise AppError("Secondary colour must look like #1a7f5a")
     if not valid_timezone(timezone):
         raise AppError(f"'{timezone}' is not a known timezone (e.g. 'America/Los_Angeles', 'Europe/London', 'UTC')")
+    country = country.strip().upper()
+    if country not in COUNTRY_CURRENCY:
+        raise AppError(f"Country must be one of: {', '.join(COUNTRY_CURRENCY)}")
     if db.scalar(select(Restaurant.id).where(Restaurant.slug == slug)) is not None:
         raise ConflictError(f"A restaurant with slug '{slug}' already exists")
     custom_domain = (custom_domain or "").strip().lower() or None
@@ -141,7 +146,7 @@ def provision_tenant(
         name=name, slug=slug, order_prefix=order_prefix(name), primary_color=color.lower() if color else None,
         secondary_color=secondary_color.lower() if secondary_color else None,
         opening_hours=HOURS, timezone=timezone, custom_domain=custom_domain,
-        tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
+        country=country, currency=COUNTRY_CURRENCY[country], tax_rate=Decimal("0.0800"), delivery_fee=Decimal("3.99"),
     )
     db.add(restaurant)
     db.flush()

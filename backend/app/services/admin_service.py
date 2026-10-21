@@ -474,6 +474,12 @@ class AdminService:
         payload = data.model_dump(exclude_unset=True)
         if "custom_domain" in payload and payload["custom_domain"] != restaurant.custom_domain:
             restaurant.domain_verified_at = None  # a changed domain needs verifying again
+        if restaurant.stripe_account_id:
+            # The connected account's country is fixed at creation and charges are direct charges in this
+            # currency, so changing either after onboarding would make Stripe reject or convert.
+            for field in ("country", "currency"):
+                if field in payload and payload[field] != getattr(restaurant, field):
+                    raise AppError(f"The {field} can't be changed once Stripe is connected")
         for key, value in payload.items():
             setattr(restaurant, key, value)
         if restaurant.max_party_size is not None and restaurant.max_party_size < restaurant.min_party_size:

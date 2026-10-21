@@ -105,6 +105,8 @@ class Restaurant(TimestampMixin, Base):
     # ISO 4217 code, lowercase (as Stripe expects it), e.g. "usd", "gbp". One currency per restaurant —
     # multi-currency within a single restaurant is out of scope (see ROADMAP's i18n note).
     currency: Mapped[str] = mapped_column(String(3), default="usd", server_default="usd", nullable=False)
+    # ISO 3166-1 alpha-2 (see app/core/locale.py). Fixed on the Stripe account once onboarded.
+    country: Mapped[str] = mapped_column(String(2), default="US", server_default="US", nullable=False)
     # Stripe Connect (Express account). Null until the owner completes onboarding from Settings.
     # charges_enabled is kept in sync by the account.updated webhook, not read live from Stripe on every
     # request — see app/api/routes/webhooks.py.

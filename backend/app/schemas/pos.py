@@ -41,6 +41,8 @@ class PinLoginResponse(BaseModel):
     pos_session_token: str
     staff_name: str
     device_kind: str
+    currency: str = "usd"
+    country: str = "US"
     expires_in: int  # seconds
 
 
