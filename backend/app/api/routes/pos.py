@@ -34,7 +34,14 @@ from app.schemas.shift import (
     ShiftRead,
     ShiftReportRead,
 )
-from app.schemas.table_session import RoundCreate, SessionRoundRead, TablePaymentRead
+from app.schemas.table_session import (
+    OpenSessionRead,
+    RestaurantTableRead,
+    RoundCreate,
+    SeatTableRequest,
+    SessionRoundRead,
+    TablePaymentRead,
+)
 from app.schemas.time_entry import TimeEntryRead
 from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
@@ -81,6 +88,23 @@ def pin_login(data: PinLoginRequest, device: CurrentDevice, service: Pos) -> Pin
 def open_table_sessions(device: CurrentDevice, db: Annotated[Session, Depends(get_db)]) -> OpenTableSessionsResponse:
     sessions = TableSessionService(db).open_sessions(device.device.restaurant_id)
     return OpenTableSessionsResponse(sessions=sessions)
+
+
+@router.get("/tables", response_model=list[RestaurantTableRead], dependencies=POS_GATE)
+def list_tables(device: CurrentDevice, db: Annotated[Session, Depends(get_db)]) -> list[RestaurantTableRead]:
+    """Every active table, for the POS's "pick a table to seat" view — device-only, just viewing the
+    floor doesn't need to know who's using the till."""
+    return TableSessionService(db).list_tables(device.device.restaurant_id)
+
+
+@router.post("/tables/{table_id}/seat", response_model=OpenSessionRead, dependencies=POS_STAFF_GATE)
+def seat_table(table_id: int, data: SeatTableRequest, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> OpenSessionRead:
+    """Staff seat a walk-in directly from the POS — no QR scan. Returns the same shape
+    /pos/table-sessions/open already does, so the RN app's open-sessions list/UI needs no new type."""
+    try:
+        return TableSessionService(db).open_for_staff(table_id, staff.device.restaurant_id, data.party_size)
+    except AppError as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.post("/table-sessions/{session_id}/orders", response_model=SessionRoundRead, dependencies=POS_STAFF_GATE)

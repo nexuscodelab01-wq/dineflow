@@ -42,6 +42,7 @@ from app.schemas.table_session import (
     JoinResponse,
     OpenSessionRead,
     QrTableRead,
+    RestaurantTableRead,
     RoundCreate,
     ServiceRequestStaffRead,
     SessionItemRead,
@@ -129,6 +130,24 @@ class TableSessionService:
             if won_the_race is None:
                 raise  # truly shouldn't happen: the insert conflicted with a row that then isn't there
             return won_the_race
+
+    def open_for_staff(self, table_id: int, restaurant_id: int, party_size: int | None) -> OpenSessionRead:
+        """Staff seat a walk-in directly from the POS — no QR scan involved. Gated on "pos", not
+        qr_table_ordering, since this is a POS action independent of whether guest self-ordering is on.
+        Idempotent like _open_session itself: tapping "Seat" on a table that already has a tab just
+        returns it rather than erroring — the same "two people reach for the same table" tolerance the
+        guest-QR path already has."""
+        FeatureService(self.db).require(restaurant_id, "pos")
+        table = self._table(table_id, restaurant_id)
+        if not table.is_active:
+            raise AppError("That table is out of service")
+        session = self._open_session(table)
+        if table.status != TableStatus.OCCUPIED:
+            table.status = TableStatus.OCCUPIED  # mirrors what transfer() already does for its target table
+        if party_size is not None and session.party_size is None:
+            session.party_size = party_size
+        self.db.commit()
+        return self._open_session_read(session)
 
     # ------------------------------------------------------------------ the guest's view
 
@@ -269,18 +288,22 @@ class TableSessionService:
             select(TableSession).options(selectinload(TableSession.table))
             .where(TableSession.restaurant_id == restaurant_id, TableSession.state == OPEN).order_by(TableSession.opened_at)
         ).all())
-        out = []
-        for s in sessions:
-            guests = self.db.scalar(select(func.count()).select_from(SessionGuest).where(SessionGuest.session_id == s.id)) or 0
-            rounds = self.db.execute(select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(
-                Order.table_session_id == s.id, Order.status.notin_(CLOSED_STATUSES))).one()
-            asked = list(self.db.scalars(select(ServiceRequest.kind).where(
-                ServiceRequest.table_session_id == s.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
-            out.append(OpenSessionRead(
-                session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
-                guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked,
-            ))
-        return out
+        return [self._open_session_read(s) for s in sessions]
+
+    def _open_session_read(self, s: TableSession) -> OpenSessionRead:
+        guest_rows = self.db.scalar(select(func.count()).select_from(SessionGuest).where(SessionGuest.session_id == s.id)) or 0
+        # party_size is only set when staff seated a walk-in (open_for_staff) — no one scanned, so
+        # there's no SessionGuest row to count. The guest-QR path never sets party_size, so this
+        # falls straight back to the live SessionGuest count exactly as before.
+        guests = s.party_size if s.party_size is not None else guest_rows
+        rounds = self.db.execute(select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(
+            Order.table_session_id == s.id, Order.status.notin_(CLOSED_STATUSES))).one()
+        asked = list(self.db.scalars(select(ServiceRequest.kind).where(
+            ServiceRequest.table_session_id == s.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
+        return OpenSessionRead(
+            session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
+            guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked,
+        )
 
     def close_session(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
         """End the tab: every guest pass stops working, the table goes to cleaning and its QR code is replaced,
@@ -575,3 +598,16 @@ class TableSessionService:
         if table is None or table.restaurant_id != restaurant_id:
             raise NotFoundError("Table not found")
         return table
+
+    def list_tables(self, restaurant_id: int) -> list[RestaurantTableRead]:
+        """Every active table, for the POS's "pick a table to seat" view — status isn't used to decide
+        seating eligibility (open_for_staff only cares whether a session is already OPEN for that table,
+        same as the guest-QR path), so this stays a thin, permissive list rather than a floor-plan join."""
+        tables = self.db.scalars(
+            select(RestaurantTable).where(RestaurantTable.restaurant_id == restaurant_id, RestaurantTable.is_active.is_(True))
+            .order_by(RestaurantTable.table_number)
+        ).all()
+        return [
+            RestaurantTableRead(table_id=t.id, table_number=t.table_number, zone=t.zone, capacity=t.capacity)
+            for t in tables
+        ]

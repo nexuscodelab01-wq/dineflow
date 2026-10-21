@@ -57,6 +57,13 @@ export type OpenTableSessionsResponse = {
   sessions: OpenSession[];
 };
 
+export type RestaurantTableRow = {
+  table_id: number;
+  table_number: string;
+  zone: string | null;
+  capacity: number;
+};
+
 export type PosOrderItem = {
   menu_item_id: number;
   quantity: number;

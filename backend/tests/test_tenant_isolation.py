@@ -79,6 +79,7 @@ POS = {
     ("POST", "/pos/table-sessions/{session_id}/pay-cash"),
     ("GET", "/pos/time-entries/current"), ("POST", "/pos/time-entries/clock-in"),
     ("POST", "/pos/time-entries/clock-out"),
+    ("GET", "/pos/tables"), ("POST", "/pos/tables/{table_id}/seat"),
 }
 # Platform-only.
 PLATFORM = {

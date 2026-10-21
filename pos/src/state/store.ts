@@ -6,10 +6,14 @@ import type { ShiftRead, TimeEntryRead } from '../api/types';
 const DEVICE_TOKEN_KEY = 'dineflow_pos_device_token';
 
 export type CartLine = {
+  // Identifies this specific line, not the menu item — two lines for the same item with different
+  // notes must stay separate (see addToCart), so menuItemId alone can no longer be a unique key.
+  lineId: string;
   menuItemId: number;
   name: string;
   price: number;
   quantity: number;
+  note?: string;
 };
 
 type PosState = {
@@ -40,9 +44,10 @@ type PosState = {
   setShift: (shift: ShiftRead | null) => void;
   loadTimeEntry: () => Promise<void>;
   setTimeEntry: (entry: TimeEntryRead | null) => void;
-  addToCart: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
-  removeFromCart: (menuItemId: number) => void;
-  decrementCartLine: (menuItemId: number) => void;
+  addToCart: (line: Omit<CartLine, 'quantity' | 'lineId'>, quantity?: number) => void;
+  removeFromCart: (lineId: string) => void;
+  decrementCartLine: (lineId: string) => void;
+  setCartLineNote: (lineId: string, note: string) => void;
   clearCart: () => void;
 };
 
@@ -110,25 +115,36 @@ export const usePosStore = create<PosState>((set, get) => ({
 
   addToCart: (line, quantity = 1) =>
     set((state) => {
-      const existing = state.cart.find((l) => l.menuItemId === line.menuItemId);
+      // Two lines for the same item with different notes must stay separate — matched on
+      // (menuItemId, note), not menuItemId alone.
+      const existing = state.cart.find((l) => l.menuItemId === line.menuItemId && l.note === line.note);
       if (existing) {
         return {
           cart: state.cart.map((l) =>
-            l.menuItemId === line.menuItemId ? { ...l, quantity: l.quantity + quantity } : l,
+            l.lineId === existing.lineId ? { ...l, quantity: l.quantity + quantity } : l,
           ),
         };
       }
-      return { cart: [...state.cart, { ...line, quantity }] };
+      const lineId = `${line.menuItemId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      return { cart: [...state.cart, { ...line, lineId, quantity }] };
     }),
 
-  removeFromCart: (menuItemId) =>
-    set((state) => ({ cart: state.cart.filter((l) => l.menuItemId !== menuItemId) })),
+  removeFromCart: (lineId) =>
+    set((state) => ({ cart: state.cart.filter((l) => l.lineId !== lineId) })),
 
-  decrementCartLine: (menuItemId) =>
+  decrementCartLine: (lineId) =>
     set((state) => ({
       cart: state.cart
-        .map((l) => (l.menuItemId === menuItemId ? { ...l, quantity: l.quantity - 1 } : l))
+        .map((l) => (l.lineId === lineId ? { ...l, quantity: l.quantity - 1 } : l))
         .filter((l) => l.quantity > 0),
+    })),
+
+  // Editing an existing line's note does not re-merge it with another line that happens to end up with
+  // the same note — a deliberate simplification, not a bug: avoids silently combining two things staff
+  // kept separate on purpose.
+  setCartLineNote: (lineId, note) =>
+    set((state) => ({
+      cart: state.cart.map((l) => (l.lineId === lineId ? { ...l, note: note || undefined } : l)),
     })),
 
   clearCart: () => set({ cart: [] }),

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -29,6 +29,10 @@ class TableSession(Base):
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Set only when staff seat a walk-in (no one scanned, so there's no SessionGuest row to count) — see
+    # TableSessionService.open_for_staff. A guest's own QR join leaves this NULL; guest count there comes
+    # from counting SessionGuest rows instead, same as always.
+    party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     table: Mapped["RestaurantTable"] = relationship("RestaurantTable")
 

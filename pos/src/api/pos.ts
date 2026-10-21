@@ -3,12 +3,14 @@ import type {
   CashMovementKind,
   Category,
   MenuListResponse,
+  OpenSession,
   OpenTableSessionsResponse,
   PinLoginResponse,
   PosCardIntentRead,
   PosConnectionTokenResponse,
   PosOrderItem,
   PosOrderRead,
+  RestaurantTableRow,
   ShiftReportRead,
   ShiftRead,
   TablePaymentRead,
@@ -32,6 +34,16 @@ export function fetchMenu(restaurantId: number) {
 
 export function fetchOpenTableSessions(deviceToken: string) {
   return apiFetch<OpenTableSessionsResponse>('/pos/table-sessions/open', { token: deviceToken });
+}
+
+export function fetchTables(deviceToken: string) {
+  return apiFetch<RestaurantTableRow[]>('/pos/tables', { token: deviceToken });
+}
+
+export function seatTable(posSessionToken: string, tableId: number, partySize?: number) {
+  return apiFetch<OpenSession>(`/pos/tables/${tableId}/seat`, {
+    method: 'POST', token: posSessionToken, body: { party_size: partySize ?? null },
+  });
 }
 
 export function createCounterOrder(posSessionToken: string, items: PosOrderItem[], notes?: string) {

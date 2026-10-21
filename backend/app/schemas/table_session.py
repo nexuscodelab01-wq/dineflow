@@ -102,6 +102,17 @@ class OpenSessionRead(BaseModel):
     requests: list[str] = Field(default_factory=list)
 
 
+class RestaurantTableRead(BaseModel):
+    table_id: int
+    table_number: str
+    zone: str | None
+    capacity: int
+
+
+class SeatTableRequest(BaseModel):
+    party_size: int | None = Field(default=None, ge=1, le=50)
+
+
 class RequestCreate(BaseModel):
     kind: Literal["WAITER", "BILL"]
 
