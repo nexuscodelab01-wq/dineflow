@@ -199,7 +199,7 @@ class PosControlService:
         payment = self.db.scalar(select(Payment).where(Payment.order_id == order.id, Payment.status == PaymentStatus.COMPLETED).order_by(Payment.id.desc()))
         if payment is None:
             raise AppError("There is no completed payment on this order to refund")
-        return self._refund(staff, payment, order, None, reason, note, override)
+        return self._refund(staff, [payment], order, None, reason, note, override)
 
     def refund_session(self, staff: PosStaff, session_id: int, reason: str, note: str | None, override: str | None) -> AdjustmentResult:
         session = self.db.get(TableSession, session_id)
@@ -207,19 +207,21 @@ class PosControlService:
             raise NotFoundError("Session not found")
         if session.state != SESSION_CLOSED:
             raise AppError("Only a settled tab can be refunded")
-        payment = self.db.scalar(select(Payment).where(Payment.table_session_id == session.id, Payment.status == PaymentStatus.COMPLETED).order_by(Payment.id.desc()))
-        if payment is None:
+        payments = list(self.db.scalars(select(Payment).where(Payment.table_session_id == session.id, Payment.status == PaymentStatus.COMPLETED).order_by(Payment.id)))
+        if not payments:
             raise AppError("There is no completed payment on this tab to refund")
-        return self._refund(staff, payment, None, session, reason, note, override)
+        return self._refund(staff, payments, None, session, reason, note, override)
 
-    def _refund(self, staff: PosStaff, payment: Payment, order: Order | None, session: TableSession | None, reason: str, note: str | None, override: str | None) -> AdjustmentResult:
+    def _refund(self, staff: PosStaff, payments: list[Payment], order: Order | None, session: TableSession | None, reason: str, note: str | None, override: str | None) -> AdjustmentResult:
         self._check_reason(REFUND, reason, note)
         approver = self._approver(staff, "refund", override)
         restaurant = self._restaurant(staff.device.restaurant_id)
-        amount = payment.amount + payment.tip_amount
-        result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id)
-        if not result.success:
-            raise AppError(result.message or "The refund was declined")
+        amount = sum((p.amount + p.tip_amount for p in payments), Decimal("0.00"))
+        for payment in payments:  # a split tab has several payments; the whole tab comes back
+            result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id)
+            if not result.success:
+                raise AppError(result.message or "The refund was declined")
+        payment = payments[0]
         if order is not None:
             orders = [order]
         else:
@@ -234,7 +236,7 @@ class PosControlService:
             restaurant_id=restaurant.id, order_id=order.id if order else None, table_session_id=session.id if session else None,
             kind=REFUND, amount=amount, reason_code=reason, note=note, staff_user_id=staff.user.id, authorized_by_user_id=approver,
             shift_id=ShiftService(self.db).current_shift_id(staff.device.id), payment_method=payment.payment_method.value,
-            original_shift_id=payment.shift_id, detail={"payment_id": payment.id},
+            original_shift_id=payment.shift_id, detail={"payment_ids": [p.id for p in payments]},
         )
         self.db.add(adjustment)
         self._audit(staff, "pos.refund", f"payment:{payment.id}", {"amount": str(amount), "reason": reason, "approved_by": approver})
@@ -254,7 +256,12 @@ class PosControlService:
             ).order_by(Payment.id.desc()).limit(100)
         ).all()
         out: list[RecentPaymentRead] = []
+        tab_rows: dict[int, RecentPaymentRead] = {}
         for p in payments:
+            if p.table_session_id is not None and p.order_id is None and p.table_session_id in tab_rows:
+                row = tab_rows[p.table_session_id]  # another part-payment on the same tab: one row, summed
+                row.amount += p.amount + p.tip_amount
+                continue
             if p.order_id is not None:
                 order = self.db.get(Order, p.order_id)
                 label = f"Order {order.order_number}" if order else f"Order #{p.order_id}"
@@ -263,7 +270,10 @@ class PosControlService:
                 session = self.db.get(TableSession, p.table_session_id) if p.table_session_id else None
                 label = f"Table {session.table.table_number}" if session else "Tab"
                 kind, ident = "TAB", p.table_session_id or 0
-            out.append(RecentPaymentRead(kind=kind, id=ident, label=label, amount=p.amount + p.tip_amount, method=p.payment_method.value, paid_at=p.created_at, refundable=True))
+            row = RecentPaymentRead(kind=kind, id=ident, label=label, amount=p.amount + p.tip_amount, method=p.payment_method.value, paid_at=p.created_at, refundable=True)
+            out.append(row)
+            if kind == "TAB":
+                tab_rows[ident] = row
         return out
 
     def list_adjustments(self, restaurant_id: int, start: datetime, end: datetime) -> list[AdjustmentRead]:

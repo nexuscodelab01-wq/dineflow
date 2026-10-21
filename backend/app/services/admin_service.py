@@ -321,11 +321,17 @@ class AdminService:
         restaurant = self.restaurants.get_by_id(restaurant_id)
         lead_minutes = restaurant.scheduled_order_lead_minutes if restaurant else 30
         groups = self.orders.kitchen_orders(restaurant_id, lead_minutes=lead_minutes)
-        return KitchenBoard(
-            new_orders=[OrderRead.model_validate(o) for o in groups["new_orders"]],
-            preparing=[OrderRead.model_validate(o) for o in groups["preparing"]],
-            ready=[OrderRead.model_validate(o) for o in groups["ready"]],
-        )
+        def visible(orders: list[Order]) -> list[OrderRead]:
+            # A later course stays off the screen until staff fire it; a ticket with nothing to cook yet isn't shown.
+            out = []
+            for o in orders:
+                read = OrderRead.model_validate(o)
+                read.items = [i for i in read.items if not i.held]
+                if read.items or not o.items:  # hide a ticket only when everything on it is being held back
+                    out.append(read)
+            return out
+
+        return KitchenBoard(new_orders=visible(groups["new_orders"]), preparing=visible(groups["preparing"]), ready=visible(groups["ready"]))
 
     # Tables
     def list_tables(self, restaurant_id: int, include_inactive: bool = False) -> list[TableRead]:

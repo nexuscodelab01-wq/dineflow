@@ -21,6 +21,8 @@ class OrderItemCreate(BaseModel):
     quantity: int = Field(ge=1, le=50)
     modifier_option_ids: list[int] = Field(default_factory=list)
     special_instructions: str | None = Field(default=None, max_length=500)
+    # Staff rounds only: 1 fires now, 2+ are held until the course is fired. Ignored for customer orders.
+    course: int = Field(default=1, ge=1, le=4)
 
 
 class OrderCreate(BaseModel):
@@ -85,6 +87,8 @@ class OrderItemRead(BaseModel):
     special_instructions: str | None = None
     station: str = "KITCHEN"
     status: str = "NEW"
+    course: int = 1
+    held: bool = False
     ready_at: datetime | None = None
     allergens: list[str] = Field(default_factory=list)
     modifiers: list[OrderItemModifierRead] = Field(default_factory=list)

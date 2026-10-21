@@ -21,9 +21,7 @@ from app.schemas.pos_control import (
     RefundRequest,
     VoidRequest,
 )
-from app.schemas.table_session import SessionRead
 from app.services.pos_control_service import PosControlService
-from app.services.table_session_service import TableSessionService
 
 GATE = [Depends(requires_feature_for_pos_staff("pos")), Depends(requires_feature_for_pos_staff("pos_controls"))]
 router = APIRouter(prefix="/pos", dependencies=GATE)
@@ -53,13 +51,6 @@ def reasons(_: CurrentPosStaff, service: Service) -> ReasonsRead:
 def authorize(data: AuthorizeRequest, staff: CurrentPosStaff, service: Service) -> AuthorizeRead:
     """A manager enters their own PIN to approve one action for the person holding the device."""
     return _run(lambda: service.authorize(staff.device, data.pin, data.action))
-
-
-@router.get("/table-sessions/{session_id}", response_model=SessionRead)
-def tab_detail(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> SessionRead:
-    """A tab with its rounds and lines (and their ids), for the staff view where lines are voided or comped."""
-    tables = TableSessionService(db)
-    return _run(lambda: tables.view(tables.staff_session(session_id, staff.device.restaurant_id)))
 
 
 @router.post("/order-items/{item_id}/void", response_model=AdjustmentResult)

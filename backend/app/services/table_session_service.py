@@ -48,6 +48,7 @@ from app.schemas.table_session import (
     SessionItemRead,
     SessionRead,
     SessionRoundRead,
+    SplitRequest,
     TableInfo,
     TablePaymentRead,
     WaiterSessionRead,
@@ -137,7 +138,7 @@ class TableSessionService:
                 raise  # truly shouldn't happen: the insert conflicted with a row that then isn't there
             return won_the_race
 
-    def open_for_staff(self, table_id: int, restaurant_id: int, party_size: int | None) -> OpenSessionRead:
+    def open_for_staff(self, table_id: int, restaurant_id: int, party_size: int | None, tab_name: str | None = None) -> OpenSessionRead:
         """Staff seat a walk-in directly from the POS — no QR scan involved. Gated on "pos", not
         qr_table_ordering, since this is a POS action independent of whether guest self-ordering is on.
         Idempotent like _open_session itself: tapping "Seat" on a table that already has a tab just
@@ -152,6 +153,8 @@ class TableSessionService:
             table.status = TableStatus.OCCUPIED  # mirrors what transfer() already does for its target table
         if party_size is not None and session.party_size is None:
             session.party_size = party_size
+        if tab_name and tab_name.strip() and not session.tab_name:
+            session.tab_name = tab_name.strip()
         self.db.commit()
         return self._open_session_read(session)
 
@@ -165,6 +168,67 @@ class TableSessionService:
         if session.state != OPEN:
             raise UnauthorizedError("This table session has ended")
         return guest, session
+
+    # ------------------------------------------------------------------ what's owed (split payments)
+
+    def _paid(self, session_id: int) -> Decimal:
+        return Decimal(self.db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.table_session_id == session_id, Payment.status == PaymentStatus.COMPLETED)) or 0)
+
+    def _balance(self, session: TableSession) -> Decimal:
+        total = Decimal(self.db.scalar(select(func.coalesce(func.sum(Order.total), 0)).where(
+            Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES))) or 0)
+        return max(total - self._paid(session.id), Decimal("0.00"))
+
+    @staticmethod
+    def _amount_due(item: OrderItem, order: Order) -> Decimal:
+        """What paying for just this line costs: the line, its tax, and its share of the round's service charge."""
+        share = (order.service_charge * item.line_total / order.subtotal) if order.subtotal > 0 else Decimal(0)
+        return (item.line_total + item.tax_amount + share).quantize(Decimal("0.01"))
+
+    def _split_amount(self, session: TableSession, split: SplitRequest | None) -> tuple[Decimal, list[OrderItem]]:
+        """The amount one payment covers (never more than is owed) and, for "just these items", the lines it pays for."""
+        balance = self._balance(session)
+        if balance <= 0:
+            raise AppError("There is nothing left to pay on this tab")
+        split = split or SplitRequest()
+        items: list[OrderItem] = []
+        if split.mode == "FULL":
+            amount = balance
+        elif split.mode == "EVEN":
+            parts = split.parts_remaining or 1
+            amount = balance if parts <= 1 else (balance / parts).quantize(Decimal("0.01"))
+        elif split.mode == "AMOUNT":
+            if split.amount is None:
+                raise AppError("Enter an amount")
+            amount = split.amount.quantize(Decimal("0.01"))
+        else:
+            if not split.item_ids:
+                raise AppError("Choose at least one item")
+            items = list(self.db.scalars(
+                select(OrderItem).join(Order, Order.id == OrderItem.order_id).options(selectinload(OrderItem.order)).where(
+                    Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES), OrderItem.id.in_(split.item_ids),
+                )
+            ))
+            if len(items) != len(set(split.item_ids)):
+                raise AppError("One of those items isn't on this tab")
+            if any(i.paid_payment_id is not None for i in items):
+                raise AppError("One of those items has already been paid for")
+            amount = min(sum((self._amount_due(i, i.order) for i in items), Decimal("0.00")), balance)
+        if amount < Decimal("0.01"):
+            raise AppError("That is too small an amount to take")
+        if amount > balance:
+            raise AppError(f"That is more than the {balance} still owed")
+        return amount, items
+
+    def _settle_session(self, session: TableSession, restaurant_id: int, staff_user_id: int | None) -> bool:
+        """After a payment lands: close the tab if nothing is left owing, otherwise leave it open for the next part."""
+        self.db.flush()
+        if self._balance(session) <= 0:
+            self.close_session(session.id, restaurant_id, staff_user_id)  # commits
+            return True
+        self.db.commit()
+        return False
 
     def view(self, session: TableSession) -> SessionRead:
         table = session.table
@@ -181,17 +245,20 @@ class TableSessionService:
                 items=[
                     SessionItemRead(
                         item_id=i.id, name=i.item_name, quantity=i.quantity, line_total=i.line_total, discount_amount=i.discount_amount,
+                        course=i.course, held=i.held, paid=i.paid_payment_id is not None, amount_due=self._amount_due(i, o),
                         special_instructions=i.special_instructions, options=[m.option_name for m in i.modifiers],
                     ) for i in o.items
                 ],
             ) for o in orders
         ]
         total = sum((o.total for o in orders if o.status not in CLOSED_STATUSES), Decimal("0.00"))
+        paid = self._paid(session.id)
         requests = list(self.db.scalars(select(ServiceRequest.kind).where(
             ServiceRequest.table_session_id == session.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
         return SessionRead(
             session_id=session.id, restaurant_id=session.restaurant_id, restaurant_name=restaurant.name,
             table_number=table.table_number, guests=[n for n in names.values() if n], rounds=rounds, total=total,
+            paid=paid, balance=max(total - paid, Decimal("0.00")), tab_name=session.tab_name,
             requests=requests, stripe_account_id=restaurant.stripe_account_id,
             stripe_charges_enabled=restaurant.stripe_charges_enabled,
         )
@@ -241,7 +308,7 @@ class TableSessionService:
                 client_token=client_token, notes=data.notes,
             )
             orders.orders.add(order)
-            subtotal = orders._add_lines(order, data.items, items_by_id)
+            subtotal = orders._add_lines(order, data.items, items_by_id, honor_courses=staff_user is not None)
             service_charge = service_charge_for(restaurant, OrderType.DINE_IN, subtotal)
             tax = price_order_tax(
                 self.db, restaurant, order, taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
@@ -311,7 +378,8 @@ class TableSessionService:
             ServiceRequest.table_session_id == s.id, ServiceRequest.state == REQUEST_OPEN).order_by(ServiceRequest.id)))
         return OpenSessionRead(
             session_id=s.id, table_id=s.table_id, table_number=s.table.table_number, opened_at=s.opened_at,
-            guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked,
+            guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked, tab_name=s.tab_name,
+            balance=max(Decimal(rounds[1]) - self._paid(s.id), Decimal("0.00")),
         )
 
     def close_session(self, session_id: int, restaurant_id: int, staff_user_id: int | None, *, paid: bool = True) -> None:
@@ -347,9 +415,9 @@ class TableSessionService:
         FeatureService(self.db).require(restaurant.id, FEATURE)
         if session.state != OPEN:
             raise AppError("This table has already been closed")
-        total = self.view(session).total
+        total = self._balance(session)
         if total <= Decimal("0.00"):
-            raise AppError("There is nothing on your table's tab yet")
+            raise AppError("There is nothing left to pay on your table's tab")
         in_flight = self.db.scalar(
             select(Payment.id).where(
                 Payment.table_session_id == session.id,
@@ -380,13 +448,15 @@ class TableSessionService:
         if intent.status == PaymentStatus.COMPLETED:
             # The mock provider settles synchronously — same reasoning as OrderService.create_order.
             payment.status = PaymentStatus.COMPLETED
-            self.close_session(session.id, session.restaurant_id, staff_user_id=None)  # commits
-            return TablePaymentRead(closed=True)
+            closed = self._settle_session(session, session.restaurant_id, None)
+            return TablePaymentRead(closed=closed, balance=self._balance(session))
 
         self.db.commit()
-        return TablePaymentRead(client_secret=intent.client_secret)
+        return TablePaymentRead(client_secret=intent.client_secret, balance=self._balance(session))
 
-    def pay_by_card_at_pos(self, session_id: int, restaurant_id: int, staff_user_id: int, device_id: int | None = None) -> TablePaymentRead:
+    def pay_by_card_at_pos(
+        self, session_id: int, restaurant_id: int, staff_user_id: int, device_id: int | None = None, split: SplitRequest | None = None,
+    ) -> TablePaymentRead:
         """The Terminal (card-reader) equivalent of `mark_paid_cash` — staff-initiated from the POS, not
         the guest's own phone. Unlike `mark_paid_cash` (which marks COMPLETED outright, no Stripe
         involvement), this creates a real PaymentIntent and must branch on whether it settled
@@ -394,9 +464,7 @@ class TableSessionService:
         rather than `mark_paid_cash`'s always-COMPLETED shape."""
         session = self.staff_session(session_id, restaurant_id)  # 404s / refuses an already-closed one
         restaurant = self._restaurant(restaurant_id)
-        total = self.view(session).total
-        if total <= Decimal("0.00"):
-            raise AppError("There is nothing on this table's tab yet")
+        total, paying_items = self._split_amount(session, split)
         in_flight = self.db.scalar(
             select(Payment.id).where(
                 Payment.table_session_id == session.id,
@@ -425,15 +493,17 @@ class TableSessionService:
         )
         self.db.add(payment)
         self.db.flush()
+        for paid_item in paying_items:
+            paid_item.paid_payment_id = payment.id
 
         if intent.status == PaymentStatus.COMPLETED:
             # The mock provider settles synchronously — same reasoning as pay()/OrderService.create_order.
             payment.status = PaymentStatus.COMPLETED
-            self.close_session(session.id, restaurant_id, staff_user_id=staff_user_id)  # commits
-            return TablePaymentRead(closed=True)
+            closed = self._settle_session(session, restaurant_id, staff_user_id)
+            return TablePaymentRead(closed=closed, balance=self._balance(session))
 
         self.db.commit()
-        return TablePaymentRead(client_secret=intent.client_secret)
+        return TablePaymentRead(client_secret=intent.client_secret, balance=self._balance(session))
 
     def confirm_session_payment(self, payment: Payment) -> None:
         """Called from the payment_intent.succeeded webhook once a real (Stripe) session payment lands —
@@ -442,24 +512,28 @@ class TableSessionService:
         if session is None or session.state != OPEN:
             return  # already settled by an earlier delivery of this same event — nothing to do
         payment.status = PaymentStatus.COMPLETED
-        self.close_session(session.id, session.restaurant_id, staff_user_id=None)
+        self._settle_session(session, session.restaurant_id, payment.staff_user_id)
 
-    def mark_paid_cash(self, session_id: int, restaurant_id: int, staff_user_id: int | None, device_id: int | None = None) -> None:
+    def mark_paid_cash(
+        self, session_id: int, restaurant_id: int, staff_user_id: int | None, device_id: int | None = None, split: SplitRequest | None = None,
+    ) -> bool:
         """Staff records the tab as paid at the counter (cash, or a card on their own terminal) — no
         Stripe involvement. Closes the session the same way an online payment does. `device_id` is None
         for the non-POS (waiter/admin) caller — only a POS-initiated tender has a till shift to stamp."""
         session = self.staff_session(session_id, restaurant_id)  # 404s / refuses an already-closed one
-        total = self.view(session).total
-        if total <= Decimal("0.00"):
-            raise AppError("There is nothing on this table's tab yet")
+        total, paying_items = self._split_amount(session, split)
         restaurant = self._restaurant(restaurant_id)
-        self.db.add(Payment(
+        payment = Payment(
             table_session_id=session.id, order_id=None, restaurant_id=restaurant_id, amount=total,
             currency=restaurant.currency, status=PaymentStatus.COMPLETED, payment_method=PaymentMethod.CASH,
             provider="MANUAL", shift_id=ShiftService(self.db).current_shift_id(device_id),
             staff_user_id=staff_user_id,
-        ))
-        self.close_session(session_id, restaurant_id, staff_user_id)
+        )
+        self.db.add(payment)
+        self.db.flush()
+        for paid_item in paying_items:
+            paid_item.paid_payment_id = payment.id
+        return self._settle_session(session, restaurant_id, staff_user_id)
 
     def refund_tab(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
         """Refund a closed tab's payment in full (online card or cash — either way). API-level only for
@@ -471,17 +545,16 @@ class TableSessionService:
             raise NotFoundError("Session not found")
         if session.state != CLOSED:
             raise AppError("Only a closed tab can be refunded")
-        payment = self.db.scalar(
-            select(Payment)
-            .where(Payment.table_session_id == session.id, Payment.status == PaymentStatus.COMPLETED)
-            .order_by(Payment.id.desc())
-        )
-        if payment is None:
+        payments = list(self.db.scalars(
+            select(Payment).where(Payment.table_session_id == session.id, Payment.status == PaymentStatus.COMPLETED).order_by(Payment.id)
+        ))
+        if not payments:
             raise AppError("There is no completed payment on this tab to refund")
         restaurant = self.db.get(Restaurant, restaurant_id)
-        result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
-        if not result.success:
-            raise AppError(result.message or "Refund failed")
+        for payment in payments:  # a split tab has several; the whole tab comes back
+            result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
+            if not result.success:
+                raise AppError(result.message or "Refund failed")
         for refunded_order in self.db.scalars(select(Order).where(Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES))):
             reverse_paid_order(self.db, restaurant, refunded_order)
         self.db.commit()
@@ -608,6 +681,59 @@ class TableSessionService:
         publish(self.db, kitchen_topic(restaurant_id), "session.transferred", data)
         publish(self.db, session_topic(session.id), "session.transferred", data)
         self.db.commit()
+
+    def merge(self, session_id: int, into_session_id: int, restaurant_id: int) -> None:
+        """Fold one open tab into another (two parties joined up): every round, guest and open request moves across and
+        the emptied tab is closed. Neither may have been part-paid — mixing half-settled bills isn't worth the risk."""
+        if session_id == into_session_id:
+            raise AppError("Pick a different tab to merge into")
+        source = self.staff_session(session_id, restaurant_id)
+        target = self.staff_session(into_session_id, restaurant_id)
+        for s in (source, target):
+            if self.db.scalar(select(Payment.id).where(
+                Payment.table_session_id == s.id,
+                Payment.status.in_((PaymentStatus.COMPLETED, PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION)),
+            ).limit(1)) is not None:
+                raise AppError("A tab that is already being paid can't be merged")
+        offset = self.db.scalar(select(func.coalesce(func.max(Order.round_no), 0)).where(Order.table_session_id == target.id)) or 0
+        for order in self.db.scalars(select(Order).where(Order.table_session_id == source.id).order_by(Order.round_no, Order.id)):
+            offset += 1
+            order.table_session_id, order.table_id, order.round_no = target.id, target.table_id, offset
+        self.db.execute(update(SessionGuest).where(SessionGuest.session_id == source.id).values(session_id=target.id))
+        self.db.execute(update(ServiceRequest).where(ServiceRequest.table_session_id == source.id).values(table_session_id=target.id, table_id=target.table_id))
+        if source.party_size:
+            target.party_size = (target.party_size or 0) + source.party_size
+        old_table = source.table
+        source.state = CLOSED
+        source.closed_at = datetime.now(UTC)
+        old_table.status = TableStatus.CLEANING
+        old_table.qr_token = secrets.token_urlsafe(16)
+        data = {"merged_from": source.id, "into": target.id}
+        publish(self.db, kitchen_topic(restaurant_id), "session.merged", data)
+        publish(self.db, session_topic(target.id), "session.merged", data)
+        publish(self.db, session_topic(source.id), "session.closed", {"table_id": old_table.id})
+        self.db.commit()
+
+    def fire_course(self, session_id: int, restaurant_id: int, course: int, staff_user_id: int | None) -> int:
+        """Send a held course to the kitchen. Returns how many dishes were released."""
+        session = self.staff_session(session_id, restaurant_id)
+        items = list(self.db.scalars(
+            select(OrderItem).join(Order, Order.id == OrderItem.order_id).where(
+                Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES), OrderItem.held.is_(True), OrderItem.course <= course,
+            )
+        ))
+        if not items:
+            raise AppError("Nothing is being held for that course")
+        order_ids = {i.order_id for i in items}
+        for item in items:
+            item.held = False
+        for order in self.db.scalars(select(Order).where(Order.id.in_(order_ids))):
+            if order.status == OrderStatus.READY:  # it was finished while this course was held back: there is cooking to do again
+                self.db.add(OrderStatusHistory(order_id=order.id, previous_status=order.status, new_status=OrderStatus.PREPARING, changed_by_user_id=staff_user_id, notes=f"Course {course} fired"))
+                order.status = OrderStatus.PREPARING
+            publish(self.db, kitchen_topic(restaurant_id), "order.created", {"order_id": order.id, "order_number": order.order_number})
+        self.db.commit()
+        return len(items)
 
     def _table(self, table_id: int, restaurant_id: int) -> RestaurantTable:
         table = self.db.get(RestaurantTable, table_id)

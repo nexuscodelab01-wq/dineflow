@@ -428,7 +428,7 @@ class OrderService:
                 order.order_number, payment.id, user_id, result.message,
             )
 
-    def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem]) -> Decimal:
+    def _add_lines(self, order: Order, lines, items_by_id: dict[int, MenuItem], *, honor_courses: bool = False) -> Decimal:
         """Add the ordered lines to `order` (checking availability and modifiers). Returns the subtotal.
 
         The confirmation email's line items are read back from what this writes (`order.items`), via
@@ -455,6 +455,9 @@ class OrderService:
                 special_instructions=line.special_instructions,
                 station=menu_item.station,
                 allergens=menu_item.allergens,
+                # Only a staff round may hold items back; a customer's request for "course 3" is ignored.
+                course=line.course if honor_courses else 1,
+                held=bool(honor_courses and line.course > 1),
             )
             self.db.add(order_item)
             self.db.flush()

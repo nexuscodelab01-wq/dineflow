@@ -33,6 +33,8 @@ class TableSession(Base):
     # TableSessionService.open_for_staff. A guest's own QR join leaves this NULL; guest count there comes
     # from counting SessionGuest rows instead, same as always.
     party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A name for the tab ("Mike at the bar") so a running tab is findable without a table number to go by.
+    tab_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
 
     table: Mapped["RestaurantTable"] = relationship("RestaurantTable")
 

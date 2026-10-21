@@ -36,6 +36,10 @@ class RoundCreate(BaseModel):
 
 class SessionItemRead(BaseModel):
     item_id: int | None = None
+    course: int = 1
+    held: bool = False
+    paid: bool = False  # settled already by a part-payment
+    amount_due: Decimal = Decimal("0.00")  # line + its tax + its share of any service charge: what paying "just this" costs
     name: str
     quantity: int
     line_total: Decimal
@@ -63,6 +67,9 @@ class SessionRead(BaseModel):
     guests: list[str]
     rounds: list[SessionRoundRead]
     total: Decimal  # everything ordered so far, excluding cancelled rounds
+    paid: Decimal = Decimal("0.00")  # part-payments already taken
+    balance: Decimal = Decimal("0.00")  # what is still owed
+    tab_name: str | None = None
     requests: list[str] = Field(default_factory=list)  # kinds the table has asked for and staff haven't answered yet
     # So the guest page can decide whether/how to offer "Pay now" — same information checkout.vue
     # already gets from the restaurant object.
@@ -77,6 +84,7 @@ class TablePaymentRead(BaseModel):
 
     client_secret: str | None = None
     closed: bool = False
+    balance: Decimal = Decimal("0.00")  # still owed after this payment (0 once the tab is settled)
 
 
 class MarkPaidRequest(BaseModel):
@@ -101,6 +109,8 @@ class OpenSessionRead(BaseModel):
     guests: int
     rounds: int
     total: Decimal
+    balance: Decimal = Decimal("0.00")
+    tab_name: str | None = None
     requests: list[str] = Field(default_factory=list)
 
 
@@ -113,6 +123,7 @@ class RestaurantTableRead(BaseModel):
 
 class SeatTableRequest(BaseModel):
     party_size: int | None = Field(default=None, ge=1, le=50)
+    tab_name: str | None = Field(default=None, max_length=60)
 
 
 class RequestCreate(BaseModel):
@@ -156,3 +167,29 @@ class WaiterTableRead(BaseModel):
 
 class TransferRequest(BaseModel):
     table_id: int
+
+
+class SplitRequest(BaseModel):
+    """How much of the tab one payment covers. FULL = everything still owed; EVEN = this payment's share when the
+    rest is being split `parts_remaining` ways; ITEMS = just these lines (with their tax); AMOUNT = a figure."""
+
+    mode: Literal["FULL", "EVEN", "ITEMS", "AMOUNT"] = "FULL"
+    amount: Decimal | None = Field(default=None, gt=0)
+    parts_remaining: int | None = Field(default=None, ge=1, le=50)
+    item_ids: list[int] | None = Field(default=None, min_length=1)
+
+
+class MoveTabRequest(BaseModel):
+    table_id: int
+
+
+class MergeTabRequest(BaseModel):
+    into_session_id: int
+
+
+class FireCourseRequest(BaseModel):
+    course: int = Field(ge=2, le=4)
+
+
+class FireCourseRead(BaseModel):
+    fired: int

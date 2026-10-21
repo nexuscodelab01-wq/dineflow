@@ -47,7 +47,7 @@ class KitchenService:
         order = self._order(order_id, restaurant_id)
         now = datetime.now(UTC)
         for item in order.items:
-            if item.status != READY and (station is None or item.station == station):
+            if not item.held and item.status != READY and (station is None or item.station == station):
                 item.status, item.ready_at = READY, now
         self._settle(order, user_id)
         self.db.commit()
@@ -55,7 +55,7 @@ class KitchenService:
     def _settle(self, order: Order, user_id: int | None) -> None:
         """Keep the order's own status in step with its dishes, and tell everyone who is watching."""
         previous = order.status
-        items = order.items
+        items = [i for i in order.items if not i.held]  # held courses aren't on the screen yet, so they can't block "ready"
         all_ready = bool(items) and all(i.status == READY for i in items)
         any_ready = any(i.status == READY for i in items)
         if all_ready:

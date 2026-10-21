@@ -23,13 +23,14 @@ from typing import Annotated
 
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.enums import OrderStatus, PaymentStatus
 from app.models.order import Order
+from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.restaurant import Restaurant
 from app.services.order_service import OrderService
@@ -133,6 +134,8 @@ def _handle_payment_failed(db: Session, intent: stripe.StripeObject) -> None:
     if payment is None or payment.status not in (PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION):
         return
     payment.status = PaymentStatus.FAILED
+    # A part-payment for specific items that fell through frees those items to be paid again.
+    db.execute(update(OrderItem).where(OrderItem.paid_payment_id == payment.id).values(paid_payment_id=None))
     # `intent` is a StripeObject (from stripe.Webhook.construct_event), not a plain dict — it supports
     # `[]` but not `.get()`. `last_payment_error` may legitimately be absent (e.g. the intent expired
     # rather than a card declining), so `[]` alone isn't safe either — hence `.to_dict()` first.

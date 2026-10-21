@@ -42,11 +42,17 @@ from app.schemas.shift import (
     ShiftReportRead,
 )
 from app.schemas.table_session import (
+    FireCourseRead,
+    FireCourseRequest,
+    MergeTabRequest,
+    MoveTabRequest,
     OpenSessionRead,
     RestaurantTableRead,
     RoundCreate,
     SeatTableRequest,
+    SessionRead,
     SessionRoundRead,
+    SplitRequest,
     TablePaymentRead,
 )
 from app.schemas.time_entry import TimeEntryRead
@@ -111,7 +117,7 @@ def seat_table(table_id: int, data: SeatTableRequest, staff: CurrentPosStaff, db
     """Staff seat a walk-in directly from the POS — no QR scan. Returns the same shape
     /pos/table-sessions/open already does, so the RN app's open-sessions list/UI needs no new type."""
     try:
-        return TableSessionService(db).open_for_staff(table_id, staff.device.restaurant_id, data.party_size)
+        return TableSessionService(db).open_for_staff(table_id, staff.device.restaurant_id, data.party_size, data.tab_name)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -162,24 +168,65 @@ def pay_card(order_id: int, staff: CurrentPosStaff, service: Pos) -> PosCardInte
 
 
 @router.post("/table-sessions/{session_id}/pay-card", response_model=TablePaymentRead, dependencies=POS_STAFF_GATE)
-def pos_table_pay_card(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> TablePaymentRead:
+def pos_table_pay_card(
+    session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)], split: SplitRequest | None = None,
+) -> TablePaymentRead:
     session = db.get(TableSession, session_id)
     if session is None or session.restaurant_id != staff.device.restaurant_id:
         raise raise_http_for_app_error(NotFoundError("Session not found"))
     try:
-        return TableSessionService(db).pay_by_card_at_pos(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id)
+        return TableSessionService(db).pay_by_card_at_pos(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id, split)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc
 
 
 @router.post("/table-sessions/{session_id}/pay-cash", status_code=204, dependencies=POS_STAFF_GATE)
-def pos_table_pay_cash(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+def pos_table_pay_cash(
+    session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)], split: SplitRequest | None = None,
+) -> None:
     """The cash-tender equivalent of pos_table_pay_card — was missing entirely until now, which meant a
     dine-in tab's cash could only be settled via the web admin, bypassing device_id/shift_id stamping
     and under-counting the till's Z-report. mark_paid_cash already does its own ownership/404 check via
     staff_session, so no redundant lookup here."""
     try:
-        TableSessionService(db).mark_paid_cash(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id)
+        TableSessionService(db).mark_paid_cash(session_id, staff.device.restaurant_id, staff.user.id, staff.device.id, split)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.get("/table-sessions/{session_id}", response_model=SessionRead, dependencies=POS_STAFF_GATE)
+def tab_detail(session_id: int, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> SessionRead:
+    """A tab with its rounds and lines (and their ids), for the staff view where lines are voided or comped."""
+    tables = TableSessionService(db)
+    try:
+        return tables.view(tables.staff_session(session_id, staff.device.restaurant_id))
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/move", status_code=204, dependencies=POS_STAFF_GATE)
+def pos_move_tab(session_id: int, data: MoveTabRequest, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+    """Move a party's tab to another table (they changed seats)."""
+    try:
+        TableSessionService(db).transfer(session_id, staff.device.restaurant_id, data.table_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/merge", status_code=204, dependencies=POS_STAFF_GATE)
+def pos_merge_tab(session_id: int, data: MergeTabRequest, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> None:
+    """Fold this tab into another open one."""
+    try:
+        TableSessionService(db).merge(session_id, data.into_session_id, staff.device.restaurant_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/table-sessions/{session_id}/fire", response_model=FireCourseRead, dependencies=POS_STAFF_GATE)
+def pos_fire_course(session_id: int, data: FireCourseRequest, staff: CurrentPosStaff, db: Annotated[Session, Depends(get_db)]) -> FireCourseRead:
+    """Send a held course to the kitchen."""
+    try:
+        return FireCourseRead(fired=TableSessionService(db).fire_course(session_id, staff.device.restaurant_id, data.course, staff.user.id))
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

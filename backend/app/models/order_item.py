@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,6 +40,11 @@ class OrderItem(Base):
     # Snapshots, like `station`: what this line was taxed as, and the tax charged on it, when ordered.
     tax_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Manual discount / comp already taken off this line (line_total is the net after it).
+    # Course firing: items past course 1 are held (kept off the kitchen screen) until staff fire that course.
+    course: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    held: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # The (split) payment that paid for this line — set when a guest pays "just my items" from a shared tab.
+    paid_payment_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False)
     tax_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0", nullable=False)
     status: Mapped[str] = mapped_column(String(10), default="NEW", server_default="NEW", nullable=False)
