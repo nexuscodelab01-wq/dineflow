@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     admin,
+    admin_adjustments,
     admin_devices,
     admin_shifts,
     admin_tips,
@@ -15,6 +16,7 @@ from app.api.routes import (
     orders,
     platform,
     pos,
+    pos_control,
     realtime,
     reservations,
     restaurants,
@@ -44,3 +46,5 @@ api_router.include_router(admin_devices.router, tags=["admin"])
 api_router.include_router(admin_shifts.router, tags=["admin"])
 api_router.include_router(admin_tips.router, tags=["admin"])
 api_router.include_router(pos.router, tags=["pos"])
+api_router.include_router(pos_control.router, tags=["pos"])
+api_router.include_router(admin_adjustments.router, tags=["admin"])

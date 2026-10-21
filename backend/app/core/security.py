@@ -105,6 +105,28 @@ def create_pos_session_token(device_id: int, staff_user_id: int, restaurant_id: 
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+OVERRIDE_MINUTES = 2
+
+
+def create_override_token(approver_id: int, device_id: int, restaurant_id: int, action: str) -> str:
+    """A manager typed their PIN to approve ONE kind of action on this device — good for a couple of minutes."""
+    payload = {
+        "sub": str(approver_id), "type": "pos_override", "device": device_id, "tenant": restaurant_id, "action": action,
+        "exp": datetime.now(UTC) + timedelta(minutes=OVERRIDE_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_override_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid or expired approval") from exc
+    if payload.get("type") != "pos_override":
+        raise ValueError("Invalid approval")
+    return payload
+
+
 def decode_pos_session_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])

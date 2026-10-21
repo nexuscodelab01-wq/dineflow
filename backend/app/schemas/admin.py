@@ -332,6 +332,7 @@ class RestaurantSettingsUpdate(BaseModel):
     service_charge_rate: Decimal | None = Field(default=None, ge=0, le=Decimal("0.5"))
     service_charge_order_types: list[str] | None = None
     service_charge_taxable: bool | None = None
+    pos_staff_permissions: dict[str, Any] | None = None
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
     # Guest booking policy — staff can still book outside these limits for private events or corrections.
     # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).
@@ -354,6 +355,16 @@ class RestaurantSettingsUpdate(BaseModel):
     max_orders_per_slot: int | None = Field(default=None, ge=1, le=100)
     scheduled_order_days_ahead: int | None = Field(default=None, ge=0, le=60)
     scheduled_order_lead_minutes: int | None = Field(default=None, ge=0, le=480)
+
+    @field_validator("pos_staff_permissions")
+    @classmethod
+    def _check_pos_permissions(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        pct = value.get("discount_max_pct", 0)
+        if not isinstance(pct, (int, float)) or not 0 <= pct <= 100:
+            raise ValueError("The staff discount ceiling must be between 0 and 100 percent")
+        return {"void": bool(value.get("void")), "comp": bool(value.get("comp")), "refund": bool(value.get("refund")), "discount_max_pct": pct}
 
     @field_validator("tip_presets")
     @classmethod

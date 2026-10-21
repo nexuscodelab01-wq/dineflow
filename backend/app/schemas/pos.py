@@ -44,6 +44,7 @@ class PinLoginResponse(BaseModel):
     currency: str = "usd"
     country: str = "US"
     tips_enabled: bool = False
+    controls_enabled: bool = False
     expires_in: int  # seconds
 
 

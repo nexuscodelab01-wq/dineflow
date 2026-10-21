@@ -39,6 +39,8 @@ class OrderItem(Base):
     # NEW until its station bumps it, then READY. Recall puts it back to NEW.
     # Snapshots, like `station`: what this line was taxed as, and the tax charged on it, when ordered.
     tax_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Manual discount / comp already taken off this line (line_total is the net after it).
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False)
     tax_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0", nullable=False)
     status: Mapped[str] = mapped_column(String(10), default="NEW", server_default="NEW", nullable=False)
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

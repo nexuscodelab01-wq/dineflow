@@ -33,7 +33,7 @@ def reverse_payment(payment: Payment, *, connected_account_id: str | None) -> Re
             return RefundResult(success=True)
         result = get_payment_provider().refund(
             provider_intent_id=payment.provider_intent_id,
-            amount=payment.amount,
+            amount=payment.amount + payment.tip_amount,  # a refund returns the tip too
             currency=payment.currency,
             connected_account_id=connected_account_id,
         )

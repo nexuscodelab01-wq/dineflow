@@ -25,7 +25,7 @@ is simply left NULL in that case. This keeps every existing POS order/payment te
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,7 @@ from app.models.audit_log import AuditLog
 from app.models.cash_movement import CashMovement
 from app.models.device import HANDHELD, Device
 from app.models.enums import CashMovementKind, PaymentMethod, PaymentStatus
+from app.models.order_adjustment import REFUND, OrderAdjustment
 from app.models.payment import Payment
 from app.models.shift import CLOSED, OPEN, Shift
 from app.models.user import User
@@ -101,7 +102,7 @@ class ShiftService:
         if shift.id != shift_id:
             raise NotFoundError("Shift not found")
         cash_total, card_total, order_count = self._totals(shift.id)
-        expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id)
+        expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id) - self._cash_refunds_out(shift.id)
         shift.state = CLOSED
         shift.closed_at = datetime.now(UTC)
         shift.closed_by_user_id = staff_user.id
@@ -130,7 +131,7 @@ class ShiftService:
         out = []
         for shift in shifts:
             cash_total, card_total, order_count = self._totals(shift.id)
-            expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id)
+            expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id) - self._cash_refunds_out(shift.id)
             variance = (shift.counted_cash - shift.cash_tips - expected_cash) if shift.counted_cash is not None else None
             out.append(ShiftReportRead(
                 shift_id=shift.id, opened_at=shift.opened_at, opened_by=shift.opened_by.first_name if shift.opened_by else None,
@@ -169,6 +170,14 @@ class ShiftService:
         return self.db.scalar(select(func.coalesce(func.sum(Payment.tip_amount), 0)).where(
             Payment.shift_id == shift_id, Payment.status == PaymentStatus.COMPLETED,
         )) or Decimal("0.00")
+
+    def _cash_refunds_out(self, shift_id: int) -> Decimal:
+        """Cash handed back from THIS drawer for sales rung in on an earlier shift. A refund of a sale from this same
+        shift needs no adjustment — that payment is no longer COMPLETED, so it already nets out of cash_total."""
+        return Decimal(self.db.scalar(select(func.coalesce(func.sum(OrderAdjustment.amount), 0)).where(
+            OrderAdjustment.shift_id == shift_id, OrderAdjustment.kind == REFUND, OrderAdjustment.payment_method == PaymentMethod.CASH.value,
+            or_(OrderAdjustment.original_shift_id.is_(None), OrderAdjustment.original_shift_id != shift_id),
+        )) or 0)
 
     def _cash_movements_net(self, shift_id: int) -> Decimal:
         rows = self.db.execute(

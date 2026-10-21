@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -122,6 +122,11 @@ class Restaurant(TimestampMixin, Base):
     service_charge_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal(0), server_default="0", nullable=False)
     service_charge_order_types: Mapped[list[str]] = mapped_column(JSONB, default=lambda: ["DINE_IN"], server_default="'[\"DINE_IN\"]'::jsonb", nullable=False)
     service_charge_taxable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # What a signed-in staff member (not an admin) may do at the POS without a manager's PIN. Admins can do all of it.
+    pos_staff_permissions: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=lambda: {"void": False, "comp": False, "refund": False, "discount_max_pct": 10},
+        server_default=text("""'{"void": false, "comp": false, "refund": false, "discount_max_pct": 10}'::jsonb"""), nullable=False,
+    )
     # The Stripe Terminal location + configuration that carry this restaurant's on-reader tipping settings.
     stripe_terminal_location_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     stripe_terminal_config_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

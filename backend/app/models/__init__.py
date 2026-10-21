@@ -15,6 +15,7 @@ from app.models.menu_item_modifier import MenuItemModifier
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
 from app.models.order import Order
+from app.models.order_adjustment import OrderAdjustment
 from app.models.order_item import OrderItem
 from app.models.order_item_modifier import OrderItemModifier
 from app.models.order_status_history import OrderStatusHistory
@@ -53,6 +54,7 @@ __all__ = [
     "MenuModifier",
     "MenuModifierOption",
     "Order",
+    "OrderAdjustment",
     "OrderItem",
     "OrderItemModifier",
     "OrderStatusHistory",

@@ -123,6 +123,7 @@ class PosService:
             pos_session_token=token, staff_name=user.first_name, device_kind=device.kind,
             currency=restaurant.currency if restaurant else "usd", country=restaurant.country if restaurant else "US",
             tips_enabled=bool(restaurant and restaurant.tips_enabled),
+            controls_enabled=FeatureService(self.db).is_enabled(device.restaurant_id, "pos_controls"),
             expires_in=POS_SESSION_MINUTES * 60,
         )
 

@@ -80,6 +80,10 @@ POS = {
     ("GET", "/pos/time-entries/current"), ("POST", "/pos/time-entries/clock-in"),
     ("POST", "/pos/time-entries/clock-out"),
     ("GET", "/pos/tables"), ("POST", "/pos/tables/{table_id}/seat"),
+    ("GET", "/pos/reasons"), ("POST", "/pos/authorize"), ("GET", "/pos/table-sessions/{session_id}"),
+    ("POST", "/pos/order-items/{item_id}/void"), ("POST", "/pos/order-items/{item_id}/comp"), ("POST", "/pos/order-items/{item_id}/discount"),
+    ("POST", "/pos/orders/{order_id}/discount"), ("POST", "/pos/table-sessions/{session_id}/discount"),
+    ("GET", "/pos/recent-payments"), ("POST", "/pos/orders/{order_id}/refund"), ("POST", "/pos/table-sessions/{session_id}/refund"),
 }
 # Platform-only.
 PLATFORM = {

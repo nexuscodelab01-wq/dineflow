@@ -180,7 +180,7 @@ class TableSessionService:
                 ordered_by=names.get(o.session_guest_id) if o.session_guest_id else "Staff", created_at=o.created_at,
                 items=[
                     SessionItemRead(
-                        name=i.item_name, quantity=i.quantity, line_total=i.line_total,
+                        item_id=i.id, name=i.item_name, quantity=i.quantity, line_total=i.line_total, discount_amount=i.discount_amount,
                         special_instructions=i.special_instructions, options=[m.option_name for m in i.modifiers],
                     ) for i in o.items
                 ],

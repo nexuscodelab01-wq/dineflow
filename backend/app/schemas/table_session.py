@@ -35,9 +35,11 @@ class RoundCreate(BaseModel):
 
 
 class SessionItemRead(BaseModel):
+    item_id: int | None = None
     name: str
     quantity: int
     line_total: Decimal
+    discount_amount: Decimal = Decimal("0.00")
     special_instructions: str | None = None
     options: list[str] = Field(default_factory=list)
 
