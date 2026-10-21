@@ -23,6 +23,9 @@
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
+  "overrides": {
+    "unrs-resolver": "1.12.2"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
