@@ -5,10 +5,12 @@ import { ApiError } from '../api/client';
 import { payCash } from '../api/pos';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { useMoney } from '../utils/money';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CashTender'>;
 
 export default function CashTenderScreen({ route, navigation }: Props) {
+  const money = useMoney();
   const { orderId, orderNumber, total } = route.params;
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const [busy, setBusy] = useState(false);
@@ -32,7 +34,7 @@ export default function CashTenderScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.orderNumber}>Order {orderNumber}</Text>
-      <Text style={styles.total}>${Number(total).toFixed(2)}</Text>
+      <Text style={styles.total}>{money(total)}</Text>
 
       {paid ? (
         <>

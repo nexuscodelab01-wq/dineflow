@@ -11,6 +11,8 @@ export type PinLoginResponse = {
   pos_session_token: string;
   staff_name: string;
   device_kind: DeviceKind;
+  currency: string;
+  country: string;
   expires_in: number;
 };
 

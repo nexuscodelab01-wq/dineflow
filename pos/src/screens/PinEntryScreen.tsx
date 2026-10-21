@@ -20,7 +20,7 @@ export default function PinEntryScreen() {
     setError('');
     try {
       const result = await pinLogin(deviceToken, currentPin);
-      loginWithPin(result.pos_session_token, result.staff_name, result.device_kind);
+      loginWithPin(result.pos_session_token, result.staff_name, result.device_kind, result.currency, result.country);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not log in');
       setPin('');

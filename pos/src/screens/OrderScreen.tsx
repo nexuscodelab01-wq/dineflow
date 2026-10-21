@@ -5,6 +5,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ApiError } from '../api/client';
+import { useMoney } from '../utils/money';
 import { decodeJwtPayload } from '../api/jwt';
 import {
   clockOut, createCounterOrder, createTableOrder, fetchCategories, fetchMenu,
@@ -17,6 +18,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 type Props = NativeStackScreenProps<RootStackParamList, 'Order'>;
 
 export default function OrderScreen({ navigation }: Props) {
+  const money = useMoney();
   const deviceToken = usePosStore((s) => s.deviceToken);
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const staffName = usePosStore((s) => s.staffName);
@@ -254,7 +256,7 @@ export default function OrderScreen({ navigation }: Props) {
       {selectedTable && (
         <View style={styles.tabBar}>
           <Text style={styles.tabBarText}>
-            Table {selectedTable.table_number} — {selectedTable.rounds} round{selectedTable.rounds === 1 ? '' : 's'} · ${Number(selectedTable.total).toFixed(2)} on the tab
+            Table {selectedTable.table_number} — {selectedTable.rounds} round{selectedTable.rounds === 1 ? '' : 's'} · {money(selectedTable.total)} on the tab
           </Text>
           <TouchableOpacity
             style={[styles.tabBarButton, Number(selectedTable.total) <= 0 && styles.tabBarButtonDisabled]}
@@ -313,7 +315,7 @@ export default function OrderScreen({ navigation }: Props) {
                   onPress={() => addToCart({ menuItemId: item.id, name: item.name, price: Number(item.price) })}
                 >
                   <Text style={styles.menuItemName}>{item.name}</Text>
-                  <Text style={styles.menuItemPrice}>${Number(item.price).toFixed(2)}</Text>
+                  <Text style={styles.menuItemPrice}>{money(item.price)}</Text>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={<Text style={styles.empty}>No items match</Text>}
@@ -337,7 +339,7 @@ export default function OrderScreen({ navigation }: Props) {
               <View style={styles.cartLine}>
                 <View style={styles.cartLineInfo}>
                   <Text style={styles.cartLineText}>{item.name}</Text>
-                  <Text style={styles.cartLineText}>${(item.price * item.quantity).toFixed(2)}</Text>
+                  <Text style={styles.cartLineText}>{money(item.price * item.quantity)}</Text>
                 </View>
                 {item.note ? <Text style={styles.cartLineNote}>Note: {item.note}</Text> : null}
                 <View style={styles.cartLineControls}>
@@ -380,7 +382,7 @@ export default function OrderScreen({ navigation }: Props) {
           />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+            <Text style={styles.totalValue}>{money(total)}</Text>
           </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity

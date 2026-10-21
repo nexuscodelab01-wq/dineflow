@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ApiError } from '../api/client';
+import { useMoney } from '../utils/money';
 import { closeShift } from '../api/pos';
 import type { ShiftReportRead } from '../api/types';
 import { usePosStore } from '../state/store';
@@ -13,6 +14,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 type Props = NativeStackScreenProps<RootStackParamList, 'CloseShift'>;
 
 export default function CloseShiftScreen({ navigation }: Props) {
+  const money = useMoney();
   const shift = usePosStore((s) => s.shift);
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const setShift = usePosStore((s) => s.setShift);
@@ -45,15 +47,15 @@ export default function CloseShiftScreen({ navigation }: Props) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Shift closed</Text>
-        <View style={styles.row}><Text style={styles.label}>Expected cash</Text><Text style={styles.value}>${Number(report.expected_cash).toFixed(2)}</Text></View>
-        <View style={styles.row}><Text style={styles.label}>Counted cash</Text><Text style={styles.value}>${Number(report.counted_cash).toFixed(2)}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>Expected cash</Text><Text style={styles.value}>{money(report.expected_cash)}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>Counted cash</Text><Text style={styles.value}>{money(report.counted_cash ?? 0)}</Text></View>
         <View style={styles.row}>
           <Text style={styles.label}>Variance</Text>
           <Text style={[styles.value, variance === 0 ? styles.ok : styles.variance]}>
-            {variance > 0 ? '+' : ''}${variance.toFixed(2)}
+            {variance > 0 ? '+' : ''}{money(variance)}
           </Text>
         </View>
-        <View style={styles.row}><Text style={styles.label}>Card total</Text><Text style={styles.value}>${Number(report.card_total).toFixed(2)}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>Card total</Text><Text style={styles.value}>{money(report.card_total)}</Text></View>
         <View style={styles.row}><Text style={styles.label}>Orders</Text><Text style={styles.value}>{report.order_count}</Text></View>
         <TouchableOpacity style={styles.button} onPress={done}>
           <Text style={styles.buttonText}>Done</Text>

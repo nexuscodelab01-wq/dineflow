@@ -7,12 +7,14 @@ import { ApiError } from '../api/client';
 import { createTableCardIntent } from '../api/pos';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { useMoney } from '../utils/money';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TableCardTender'>;
 
 type Stage = 'connecting' | 'waiting_for_card' | 'processing' | 'paid' | 'error';
 
 export default function TableCardTenderScreen({ route, navigation }: Props) {
+  const money = useMoney();
   const { sessionId, tableNumber, total } = route.params;
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const [stage, setStage] = useState<Stage>('connecting');
@@ -111,7 +113,7 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.orderNumber}>Table {tableNumber}</Text>
-      <Text style={styles.total}>${Number(total).toFixed(2)}</Text>
+      <Text style={styles.total}>{money(total)}</Text>
 
       {stage === 'paid' ? (
         <>
