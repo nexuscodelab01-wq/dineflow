@@ -105,6 +105,15 @@ class StripePaymentProvider(PaymentProvider):
             return RefundResult(success=False, message=str(exc.user_message or exc))
         return RefundResult(success=True, provider_reference=refund.id)
 
+    def process_on_reader(self, *, provider_intent_id: str, reader_id: str, connected_account_id: str | None) -> RefundResult:
+        try:
+            self.client.v1.terminal.readers.process_payment_intent(
+                reader_id, {"payment_intent": provider_intent_id}, options={"stripe_account": connected_account_id},
+            )
+        except stripe.StripeError as exc:
+            return RefundResult(success=False, message=str(exc.user_message or exc))
+        return RefundResult(success=True)
+
     def cancel_intent(self, *, provider_intent_id: str, connected_account_id: str | None) -> RefundResult:
         try:
             self.client.v1.payment_intents.cancel(

@@ -61,7 +61,9 @@ def test_paying_settles_instantly_under_mock_and_closes_the_tab(world):
     sid = session_id_for(w, w.a)
 
     r = pay(w, sam)
-    assert r.status_code == 200 and r.json() == {"client_secret": None, "closed": True, "balance": "0.00"}
+    body = r.json()
+    assert r.status_code == 200 and (body["client_secret"], body["closed"], body["balance"]) == (None, True, "0.00")
+    assert body["payment_id"]  # lets a till follow a payment it started
 
     session = w.db.get(TableSession, sid)
     assert session.state == CLOSED

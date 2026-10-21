@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.enums import OrderStatus, PaymentStatus
+from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
@@ -133,15 +133,36 @@ def _handle_payment_failed(db: Session, intent: stripe.StripeObject) -> None:
     # COMPLETED or FAILED is a replayed or out-of-order delivery; leave it alone.
     if payment is None or payment.status not in (PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION):
         return
-    payment.status = PaymentStatus.FAILED
-    # A part-payment for specific items that fell through frees those items to be paid again.
-    db.execute(update(OrderItem).where(OrderItem.paid_payment_id == payment.id).values(paid_payment_id=None))
     # `intent` is a StripeObject (from stripe.Webhook.construct_event), not a plain dict — it supports
     # `[]` but not `.get()`. `last_payment_error` may legitimately be absent (e.g. the intent expired
     # rather than a card declining), so `[]` alone isn't safe either — hence `.to_dict()` first.
     last_error = intent.to_dict().get("last_payment_error") or {}
-    payment.failure_message = last_error.get("message") or "Payment failed"
+    _fail_payment(db, payment, last_error.get("message") or "Payment failed")
     # The order itself stays PENDING — the customer can retry with a new payment intent.
+    db.commit()
+
+
+def _fail_payment(db: Session, payment: Payment, message: str) -> None:
+    """A card attempt did not go through. A part-payment for specific items frees those items to be paid again; a
+    pay-later order goes back to waiting for its money (its placeholder row is what the card attempt used)."""
+    order = db.get(Order, payment.order_id) if payment.order_id else None
+    if order is not None and order.pay_later and order.status != OrderStatus.CANCELLED:
+        payment.status, payment.payment_method, payment.provider = PaymentStatus.PENDING, PaymentMethod.CASH, "MANUAL"
+        payment.provider_intent_id = payment.provider_reference = None
+    else:
+        payment.status = PaymentStatus.FAILED
+    payment.failure_message = message
+    db.execute(update(OrderItem).where(OrderItem.paid_payment_id == payment.id).values(paid_payment_id=None))
+
+
+def _handle_reader_action_failed(db: Session, reader: stripe.StripeObject) -> None:
+    """A smart reader gave up on a payment (cancelled on the device, card declined, timed out)."""
+    action = reader.to_dict().get("action") or {}
+    intent_id = (action.get("process_payment_intent") or {}).get("payment_intent")
+    payment = db.scalar(select(Payment).where(Payment.provider_intent_id == intent_id)) if intent_id else None
+    if payment is None or payment.status not in (PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION):
+        return
+    _fail_payment(db, payment, action.get("failure_message") or "The card reader couldn't finish the payment")
     db.commit()
 
 
@@ -160,4 +181,5 @@ def _handle_merchant_capability_status_updated(db: Session, notification) -> Non
 _HANDLERS = {
     "payment_intent.succeeded": _handle_payment_succeeded,
     "payment_intent.payment_failed": _handle_payment_failed,
+    "terminal.reader.action_failed": _handle_reader_action_failed,
 }

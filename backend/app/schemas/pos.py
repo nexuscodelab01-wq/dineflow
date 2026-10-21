@@ -23,10 +23,26 @@ class DevicePairResponse(BaseModel):
     device_token: str  # shown once — this is the pairing code the iPad is given
 
 
+class DevicePrinterRead(BaseModel):
+    host: str | None = None
+    port: int = 9100
+    cash_drawer: bool = False
+    auto_print: bool = False
+
+
+class DeviceUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=100)
+    printer_host: str | None = Field(default=None, max_length=100)
+    printer_port: int | None = Field(default=None, ge=1, le=65535)
+    cash_drawer: bool | None = None
+    auto_print: bool | None = None
+
+
 class DeviceRead(BaseModel):
     id: int
     label: str
     kind: str
+    printer: DevicePrinterRead = DevicePrinterRead()
     paired_by_label: str | None
     revoked_at: datetime | None
     last_seen_at: datetime | None
@@ -45,6 +61,7 @@ class PinLoginResponse(BaseModel):
     country: str = "US"
     tips_enabled: bool = False
     controls_enabled: bool = False
+    printer: DevicePrinterRead = DevicePrinterRead()
     expires_in: int  # seconds
 
 
@@ -79,6 +96,7 @@ class PosConnectionTokenRead(BaseModel):
 
 
 class PosCardIntentRead(BaseModel):
+    payment_id: int | None = None
     order_id: int
     status: str  # "CONFIRMED" (mock, settled synchronously) or "PENDING" (Stripe, webhook still pending)
     client_secret: str | None = None

@@ -42,7 +42,9 @@ from app.schemas.pos import (
     AvailabilityRead,
     AwaitingPaymentRead,
     DevicePairResponse,
+    DevicePrinterRead,
     DeviceRead,
+    DeviceUpdate,
     PinLoginResponse,
     PosCardIntentRead,
     PosCouponPreviewRead,
@@ -79,11 +81,33 @@ class PosService:
         devices = self.db.scalars(select(Device).where(Device.restaurant_id == restaurant_id).order_by(Device.created_at.desc())).all()
         return [
             DeviceRead(
-                id=d.id, label=d.label, kind=d.kind, paired_by_label=d.paired_by.email if d.paired_by else None,
+                id=d.id, label=d.label, kind=d.kind, printer=self._printer(d), paired_by_label=d.paired_by.email if d.paired_by else None,
                 revoked_at=d.revoked_at, last_seen_at=d.last_seen_at, created_at=d.created_at,
             )
             for d in devices
         ]
+
+    @staticmethod
+    def _printer(device: Device) -> DevicePrinterRead:
+        return DevicePrinterRead(host=device.printer_host, port=device.printer_port, cash_drawer=device.cash_drawer, auto_print=device.auto_print)
+
+    def update_device(self, restaurant_id: int, device_id: int, data: DeviceUpdate, admin: User) -> DeviceRead:
+        device = self.db.get(Device, device_id)
+        if device is None or device.restaurant_id != restaurant_id:
+            raise NotFoundError("Device not found")
+        changes = data.model_dump(exclude_unset=True)
+        if "printer_host" in changes:
+            changes["printer_host"] = (changes["printer_host"] or "").strip() or None
+        for key, value in changes.items():
+            if value is not None or key == "printer_host":
+                setattr(device, key, value)
+        self.db.add(AuditLog(restaurant_id=restaurant_id, actor_user_id=admin.id, actor_label=admin.email, action="device.updated", target=device.label, details={k: str(v) for k, v in changes.items()}))
+        self.db.commit()
+        return DeviceRead(
+            id=device.id, label=device.label, kind=device.kind, printer=self._printer(device),
+            paired_by_label=device.paired_by.email if device.paired_by else None,
+            revoked_at=device.revoked_at, last_seen_at=device.last_seen_at, created_at=device.created_at,
+        )
 
     def revoke_device(self, restaurant_id: int, device_id: int, admin: User) -> None:
         device = self.db.get(Device, device_id)
@@ -131,6 +155,7 @@ class PosService:
             currency=restaurant.currency if restaurant else "usd", country=restaurant.country if restaurant else "US",
             tips_enabled=bool(restaurant and restaurant.tips_enabled),
             controls_enabled=FeatureService(self.db).is_enabled(device.restaurant_id, "pos_controls"),
+            printer=self._printer(device),
             expires_in=POS_SESSION_MINUTES * 60,
         )
 
@@ -288,7 +313,9 @@ class PosService:
         OrderService(self.db).confirm_payment(order, payment, user_id=staff.id, notes="Cash tender at the POS")
         self.db.commit()
 
-    def create_counter_order_card_intent(self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None) -> PosCardIntentRead:
+    def create_counter_order_card_intent(
+        self, restaurant_id: int, order_id: int, staff: User, device_id: int | None = None, reader_id: str | None = None,
+    ) -> PosCardIntentRead:
         """Starts a card-present PaymentIntent for a counter order already created by
         create_counter_order. Unlike cash, a real (Stripe) payment is left PENDING here — the
         payment_intent.succeeded webhook's existing confirm_payment call is what actually confirms it,
@@ -339,8 +366,29 @@ class PosService:
             self.db.commit()
             return PosCardIntentRead(order_id=order.id, status=OrderStatus.CONFIRMED.value)
 
+        if reader_id and intent.provider_intent_id:
+            # Server-driven: the smart reader takes the card itself; the payment webhook finishes the sale.
+            sent = get_payment_provider().process_on_reader(
+                provider_intent_id=intent.provider_intent_id, reader_id=reader_id, connected_account_id=restaurant.stripe_account_id,
+            )
+            if not sent.success:
+                get_payment_provider().cancel_intent(provider_intent_id=intent.provider_intent_id, connected_account_id=restaurant.stripe_account_id)
+                self._release_failed_card_payment(order, payment, sent.message)
+                self.db.commit()
+                raise AppError(sent.message or "The card reader didn't respond — check it's on and connected")
         self.db.commit()
         return PosCardIntentRead(
-            order_id=order.id, status=OrderStatus.PENDING.value,
-            client_secret=intent.client_secret, provider_intent_id=intent.provider_intent_id,
+            order_id=order.id, status=OrderStatus.PENDING.value, payment_id=payment.id,
+            client_secret=None if reader_id else intent.client_secret, provider_intent_id=intent.provider_intent_id,
         )
+
+    @staticmethod
+    def _release_failed_card_payment(order: Order, payment: Payment, message: str | None) -> None:
+        """A card attempt that never started: a normal sale's payment is simply failed; a pay-later order goes back to
+        waiting for its money (its placeholder row is reused for the attempt, so restore it)."""
+        if order.pay_later:
+            payment.status, payment.payment_method, payment.provider = PaymentStatus.PENDING, PaymentMethod.CASH, "MANUAL"
+            payment.provider_intent_id = payment.provider_reference = None
+        else:
+            payment.status = PaymentStatus.FAILED
+        payment.failure_message = message

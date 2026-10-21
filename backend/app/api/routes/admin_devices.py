@@ -12,6 +12,7 @@ from app.schemas.pos import (
     DevicePairRequest,
     DevicePairResponse,
     DeviceRead,
+    DeviceUpdate,
     PinLoginRequest,
 )
 from app.services.pos_service import PosService
@@ -36,6 +37,15 @@ def pair_device(data: DevicePairRequest, restaurant_id: RestaurantId, admin: Adm
 @router.get("", response_model=list[DeviceRead])
 def list_devices(restaurant_id: RestaurantId, _: AdminUser, service: Pos) -> list[DeviceRead]:
     return service.list_devices(restaurant_id)
+
+
+@router.patch("/{device_id}", response_model=DeviceRead)
+def update_device(device_id: int, data: DeviceUpdate, restaurant_id: RestaurantId, admin: AdminUser, service: Pos) -> DeviceRead:
+    """Rename a device or set its receipt printer (network address, cash-drawer kick, auto-print)."""
+    try:
+        return service.update_device(restaurant_id, device_id, data, admin)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.post("/{device_id}/revoke", status_code=204)

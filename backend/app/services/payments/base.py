@@ -58,6 +58,12 @@ class PaymentProvider(ABC):
     ) -> RefundResult:
         """Refund a *completed* payment (in full — partial refunds aren't built yet)."""
 
+    def process_on_reader(self, *, provider_intent_id: str, reader_id: str, connected_account_id: str | None) -> RefundResult:
+        """Hand a card-present payment to a smart reader on the network (server-driven Terminal): the reader shows the
+        amount (and tip screen), takes the card and finishes the payment itself. A provider with no such concept just
+        reports success — its payments already settle without a reader."""
+        return RefundResult(success=True)
+
     @abstractmethod
     def cancel_intent(self, *, provider_intent_id: str, connected_account_id: str | None) -> RefundResult:
         """Cancel a payment that hasn't completed yet (still PENDING/REQUIRES_ACTION) — nothing to refund

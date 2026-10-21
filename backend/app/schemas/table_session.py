@@ -85,6 +85,7 @@ class TablePaymentRead(BaseModel):
     client_secret: str | None = None
     closed: bool = False
     balance: Decimal = Decimal("0.00")  # still owed after this payment (0 once the tab is settled)
+    payment_id: int | None = None  # to follow a payment that a reader is still taking
 
 
 class MarkPaidRequest(BaseModel):

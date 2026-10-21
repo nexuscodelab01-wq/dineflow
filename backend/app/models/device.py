@@ -12,7 +12,7 @@ and app/dependencies/pos.py. No expires_at: pairing is meant to last indefinitel
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -39,6 +39,12 @@ class Device(TimestampMixin, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A network receipt printer (ESC/POS over TCP, usually port 9100) this till prints to, and whether it kicks the
+    # cash drawer wired to it. With no host the till falls back to AirPrint / the share sheet.
+    printer_host: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    printer_port: Mapped[int] = mapped_column(Integer, default=9100, server_default="9100", nullable=False)
+    cash_drawer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    auto_print: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant")
     paired_by: Mapped["User | None"] = relationship("User", foreign_keys=[paired_by_user_id])

@@ -449,13 +449,14 @@ class TableSessionService:
             # The mock provider settles synchronously — same reasoning as OrderService.create_order.
             payment.status = PaymentStatus.COMPLETED
             closed = self._settle_session(session, session.restaurant_id, None)
-            return TablePaymentRead(closed=closed, balance=self._balance(session))
+            return TablePaymentRead(closed=closed, balance=self._balance(session), payment_id=payment.id)
 
         self.db.commit()
-        return TablePaymentRead(client_secret=intent.client_secret, balance=self._balance(session))
+        return TablePaymentRead(client_secret=intent.client_secret, balance=self._balance(session), payment_id=payment.id)
 
     def pay_by_card_at_pos(
         self, session_id: int, restaurant_id: int, staff_user_id: int, device_id: int | None = None, split: SplitRequest | None = None,
+        reader_id: str | None = None,
     ) -> TablePaymentRead:
         """The Terminal (card-reader) equivalent of `mark_paid_cash` — staff-initiated from the POS, not
         the guest's own phone. Unlike `mark_paid_cash` (which marks COMPLETED outright, no Stripe
@@ -500,10 +501,23 @@ class TableSessionService:
             # The mock provider settles synchronously — same reasoning as pay()/OrderService.create_order.
             payment.status = PaymentStatus.COMPLETED
             closed = self._settle_session(session, restaurant_id, staff_user_id)
-            return TablePaymentRead(closed=closed, balance=self._balance(session))
+            return TablePaymentRead(closed=closed, balance=self._balance(session), payment_id=payment.id)
 
+        if reader_id and intent.provider_intent_id:
+            sent = get_payment_provider().process_on_reader(
+                provider_intent_id=intent.provider_intent_id, reader_id=reader_id, connected_account_id=restaurant.stripe_account_id,
+            )
+            if not sent.success:
+                get_payment_provider().cancel_intent(provider_intent_id=intent.provider_intent_id, connected_account_id=restaurant.stripe_account_id)
+                payment.status = PaymentStatus.FAILED
+                payment.failure_message = sent.message
+                self.db.execute(update(OrderItem).where(OrderItem.paid_payment_id == payment.id).values(paid_payment_id=None))
+                self.db.commit()
+                raise AppError(sent.message or "The card reader didn't respond — check it's on and connected")
         self.db.commit()
-        return TablePaymentRead(client_secret=intent.client_secret, balance=self._balance(session))
+        return TablePaymentRead(
+            client_secret=None if reader_id else intent.client_secret, balance=self._balance(session), payment_id=payment.id,
+        )
 
     def confirm_session_payment(self, payment: Payment) -> None:
         """Called from the payment_intent.succeeded webhook once a real (Stripe) session payment lands —

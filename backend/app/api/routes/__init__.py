@@ -6,6 +6,7 @@ from app.api.routes import (
     admin,
     admin_adjustments,
     admin_devices,
+    admin_readers,
     admin_shifts,
     admin_tips,
     auth,
@@ -17,6 +18,8 @@ from app.api.routes import (
     platform,
     pos,
     pos_control,
+    pos_readers,
+    pos_receipts,
     realtime,
     reservations,
     restaurants,
@@ -47,4 +50,7 @@ api_router.include_router(admin_shifts.router, tags=["admin"])
 api_router.include_router(admin_tips.router, tags=["admin"])
 api_router.include_router(pos.router, tags=["pos"])
 api_router.include_router(pos_control.router, tags=["pos"])
+api_router.include_router(pos_receipts.router, tags=["pos"])
+api_router.include_router(pos_readers.router, tags=["pos"])
+api_router.include_router(admin_readers.router, tags=["admin"])
 api_router.include_router(admin_adjustments.router, tags=["admin"])
