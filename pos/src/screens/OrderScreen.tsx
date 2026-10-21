@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,10 +8,12 @@ import { ApiError } from '../api/client';
 import { useMoney } from '../utils/money';
 import { decodeJwtPayload } from '../api/jwt';
 import {
-  clockOut, createCounterOrder, createTableOrder, fetchCategories, fetchMenu,
-  fetchOpenTableSessions, fetchTables, seatTable,
+  clockOut, createCounterOrder, createTableOrder, fetchCategories, fetchPosMenu,
+  fetchOpenTableSessions, fetchTables, previewCoupon, seatTable, setItemAvailability,
 } from '../api/pos';
-import type { Category, MenuItem, OpenSession, RestaurantTableRow } from '../api/types';
+import type { Category, MenuItem, OpenSession, PosCustomer, RestaurantTableRow } from '../api/types';
+import CustomerSheet from '../components/CustomerSheet';
+import ModifierSheet from '../components/ModifierSheet';
 import { usePosStore } from '../state/store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -45,6 +47,12 @@ export default function OrderScreen({ navigation }: Props) {
   const [seatingTableId, setSeatingTableId] = useState<number | null>(null);
   const [partySize, setPartySize] = useState('');
   const [seating, setSeating] = useState(false);
+  const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
+  const [customer, setCustomer] = useState<PosCustomer | null>(null);
+  const [pickingCustomer, setPickingCustomer] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
+  const [couponError, setCouponError] = useState('');
   const [noteLineId, setNoteLineId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -54,12 +62,13 @@ export default function OrderScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!restaurantId) return;
-    fetchMenu(restaurantId)
-      .then((res) => setMenu(res.items.filter((i) => i.is_available)))
+    if (!posSessionToken) return;
+    fetchPosMenu(posSessionToken)
+      .then((res) => setMenu(res.items))
       .catch(() => setError('Could not load the menu'))
       .finally(() => setLoadingMenu(false));
     fetchCategories(restaurantId).then(setCategories).catch(() => {});
-  }, [restaurantId]);
+  }, [restaurantId, posSessionToken]);
 
   const visibleMenu = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -120,13 +129,16 @@ export default function OrderScreen({ navigation }: Props) {
     setSending(true);
     setError('');
     const items = cart.map((l) => ({
-      menu_item_id: l.menuItemId, quantity: l.quantity, modifier_option_ids: [],
+      menu_item_id: l.menuItemId, quantity: l.quantity, modifier_option_ids: l.modifierOptionIds ?? [],
       special_instructions: l.note || null,
     }));
     try {
       if (mode === 'counter') {
-        const order = await createCounterOrder(posSessionToken, items);
+        const order = await createCounterOrder(posSessionToken, items, undefined, { customerId: customer?.id, couponCode: coupon?.code });
         clearCart();
+        setCustomer(null);
+        setCoupon(null);
+        setCouponCode('');
         navigation.navigate('CashTender', { orderId: order.order_id, orderNumber: order.order_number, total: order.total });
       } else {
         await createTableOrder(posSessionToken, selectedSession as number, items);
@@ -137,6 +149,45 @@ export default function OrderScreen({ navigation }: Props) {
       setError(err instanceof ApiError ? err.message : 'Could not send the order');
     } finally {
       setSending(false);
+    }
+  }
+
+  // Tapping a dish with options opens the picker; a plain one goes straight in the cart.
+  function tapItem(item: MenuItem) {
+    if (!item.is_available) return;
+    if (item.has_modifiers) setModifierItem(item);
+    else addToCart({ menuItemId: item.id, name: item.name, price: Number(item.price) });
+  }
+
+  // Long-press 86's a dish (or brings it back) for every device and the web menu.
+  function toggleSoldOut(item: MenuItem) {
+    if (!posSessionToken) return;
+    const makeAvailable = !item.is_available;
+    Alert.alert(
+      makeAvailable ? `Bring back ${item.name}?` : `Mark ${item.name} sold out?`,
+      makeAvailable ? 'It will show on the menu again.' : 'It will be hidden from the web menu and blocked at every till.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: makeAvailable ? 'Bring back' : 'Sold out',
+          onPress: () => setItemAvailability(posSessionToken, item.id, makeAvailable)
+            .then(() => setMenu((cur) => cur.map((m) => (m.id === item.id ? { ...m, is_available: makeAvailable } : m))))
+            .catch((e) => setError(e instanceof ApiError ? e.message : 'Could not update the menu')),
+        },
+      ],
+    );
+  }
+
+  async function applyCoupon() {
+    if (!posSessionToken || !couponCode.trim()) return;
+    setCouponError('');
+    try {
+      const preview = await previewCoupon(posSessionToken, couponCode.trim(), total, customer?.id);
+      setCoupon({ code: preview.code, discount: Number(preview.discount) });
+      setCouponCode('');
+    } catch (err) {
+      setCoupon(null);
+      setCouponError(err instanceof ApiError ? err.message : "That code isn't valid");
     }
   }
 
@@ -173,6 +224,9 @@ export default function OrderScreen({ navigation }: Props) {
         <View style={styles.headerLinks}>
           {isTill && (
             <>
+              <TouchableOpacity onPress={() => navigation.navigate('XReport')}>
+                <Text style={styles.headerLink}>X-report</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => navigation.navigate('CashMovement')}>
                 <Text style={styles.headerLink}>Cash in/out</Text>
               </TouchableOpacity>
@@ -327,11 +381,12 @@ export default function OrderScreen({ navigation }: Props) {
               keyExtractor={(i) => String(i.id)}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => addToCart({ menuItemId: item.id, name: item.name, price: Number(item.price) })}
+                  style={[styles.menuItem, !item.is_available && styles.menuItemSoldOut]}
+                  onPress={() => tapItem(item)}
+                  onLongPress={() => toggleSoldOut(item)}
                 >
-                  <Text style={styles.menuItemName}>{item.name}</Text>
-                  <Text style={styles.menuItemPrice}>{money(item.price)}</Text>
+                  <Text style={styles.menuItemName}>{item.name}{item.has_modifiers ? ' ›' : ''}</Text>
+                  <Text style={styles.menuItemPrice}>{item.is_available ? money(item.price) : 'Sold out'}</Text>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={<Text style={styles.empty}>No items match</Text>}
@@ -357,6 +412,7 @@ export default function OrderScreen({ navigation }: Props) {
                   <Text style={styles.cartLineText}>{item.name}</Text>
                   <Text style={styles.cartLineText}>{money(item.price * item.quantity)}</Text>
                 </View>
+                {item.modifierLabels?.length ? <Text style={styles.cartLineNote}>{item.modifierLabels.join(', ')}</Text> : null}
                 {item.note ? <Text style={styles.cartLineNote}>Note: {item.note}</Text> : null}
                 <View style={styles.cartLineControls}>
                   <TouchableOpacity style={styles.qtyButton} onPress={() => decrementCartLine(item.lineId)}>
@@ -365,7 +421,7 @@ export default function OrderScreen({ navigation }: Props) {
                   <Text style={styles.qtyText}>{item.quantity}</Text>
                   <TouchableOpacity
                     style={styles.qtyButton}
-                    onPress={() => addToCart({ menuItemId: item.menuItemId, name: item.name, price: item.price, note: item.note })}
+                    onPress={() => addToCart({ menuItemId: item.menuItemId, name: item.name, price: item.price, note: item.note, modifierOptionIds: item.modifierOptionIds, modifierLabels: item.modifierLabels })}
                   >
                     <Text style={styles.qtyButtonText}>+</Text>
                   </TouchableOpacity>
@@ -396,6 +452,28 @@ export default function OrderScreen({ navigation }: Props) {
             )}
             ListEmptyComponent={<Text style={styles.empty}>Tap items to add them</Text>}
           />
+          {mode === 'counter' && cart.length > 0 && (
+            <View style={styles.extras}>
+              <View style={styles.extraRow}>
+                <Text style={styles.extraText}>{customer ? `${customer.name} · ${customer.points} pts` : 'No customer'}</Text>
+                <TouchableOpacity onPress={() => (customer ? setCustomer(null) : setPickingCustomer(true))}>
+                  <Text style={styles.extraAction}>{customer ? 'Remove' : 'Add customer'}</Text>
+                </TouchableOpacity>
+              </View>
+              {coupon ? (
+                <View style={styles.extraRow}>
+                  <Text style={styles.extraText}>{coupon.code} · −{money(coupon.discount)}</Text>
+                  <TouchableOpacity onPress={() => setCoupon(null)}><Text style={styles.extraAction}>Remove</Text></TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.extraRow}>
+                  <TextInput style={styles.couponInput} value={couponCode} onChangeText={setCouponCode} placeholder="Discount code" autoCapitalize="characters" autoCorrect={false} onSubmitEditing={applyCoupon} />
+                  <TouchableOpacity onPress={applyCoupon}><Text style={styles.extraAction}>Apply</Text></TouchableOpacity>
+                </View>
+              )}
+              {couponError ? <Text style={styles.error}>{couponError}</Text> : null}
+            </View>
+          )}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{money(total)}</Text>
@@ -410,6 +488,15 @@ export default function OrderScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </View>
+      {modifierItem && restaurantId && (
+        <ModifierSheet
+          item={modifierItem}
+          restaurantId={restaurantId}
+          onClose={() => setModifierItem(null)}
+          onAdd={(line) => addToCart({ menuItemId: modifierItem.id, name: modifierItem.name, ...line })}
+        />
+      )}
+      {pickingCustomer && <CustomerSheet onClose={() => setPickingCustomer(false)} onPick={setCustomer} />}
     </View>
   );
 }
@@ -471,8 +558,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', padding: 16,
     borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
   },
+  menuItemSoldOut: { opacity: 0.4 },
   menuItemName: { fontSize: 16 },
   menuItemPrice: { fontSize: 16, color: '#555' },
+  extras: { borderTopWidth: 1, borderTopColor: '#eee', paddingVertical: 8, gap: 6 },
+  extraRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  extraText: { fontSize: 14, color: '#444', flex: 1 },
+  extraAction: { color: '#2c6f53', fontWeight: '600', fontSize: 14 },
+  couponInput: { flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 14 },
   cartColumn: { flex: 1, padding: 12, borderLeftWidth: 1, borderLeftColor: '#eee' },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cartTitle: { fontSize: 16, fontWeight: '700' },

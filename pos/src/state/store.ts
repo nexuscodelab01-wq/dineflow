@@ -14,6 +14,9 @@ export type CartLine = {
   price: number;
   quantity: number;
   note?: string;
+  // Chosen modifier options (price already includes their adjustments). Part of what makes a line unique.
+  modifierOptionIds?: number[];
+  modifierLabels?: string[];
 };
 
 type PosState = {
@@ -132,7 +135,10 @@ export const usePosStore = create<PosState>((set, get) => ({
     set((state) => {
       // Two lines for the same item with different notes must stay separate — matched on
       // (menuItemId, note), not menuItemId alone.
-      const existing = state.cart.find((l) => l.menuItemId === line.menuItemId && l.note === line.note);
+      const sig = (ids?: number[]) => [...(ids ?? [])].sort((a, b) => a - b).join(',');
+      const existing = state.cart.find(
+        (l) => l.menuItemId === line.menuItemId && l.note === line.note && sig(l.modifierOptionIds) === sig(line.modifierOptionIds),
+      );
       if (existing) {
         return {
           cart: state.cart.map((l) =>

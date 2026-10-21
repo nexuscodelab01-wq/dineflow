@@ -13,6 +13,7 @@ import TableTenderScreen from '../screens/TableTenderScreen';
 import TableCardTenderScreen from '../screens/TableCardTenderScreen';
 import CloseShiftScreen from '../screens/CloseShiftScreen';
 import ClockOutScreen from '../screens/ClockOutScreen';
+import XReportScreen from '../screens/XReportScreen';
 import RecentPaymentsScreen from '../screens/RecentPaymentsScreen';
 import TabDetailScreen from '../screens/TabDetailScreen';
 import CashMovementScreen from '../screens/CashMovementScreen';
@@ -31,6 +32,7 @@ export type RootStackParamList = {
   TableCardTender: { sessionId: number; tableNumber: string; total: string };
   CloseShift: undefined;
   ClockOut: undefined;
+  XReport: undefined;
   TabDetail: { sessionId: number };
   RecentPayments: undefined;
   CashMovement: undefined;
@@ -81,6 +83,7 @@ export default function RootNavigator() {
       <Stack.Screen name="CloseShift" component={CloseShiftScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="TabDetail" component={TabDetailScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="RecentPayments" component={RecentPaymentsScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="XReport" component={XReportScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="ClockOut" component={ClockOutScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="CashMovement" component={CashMovementScreen} options={{ presentation: 'modal' }} />
     </>

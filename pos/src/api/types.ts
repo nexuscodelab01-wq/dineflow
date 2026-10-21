@@ -31,7 +31,22 @@ export type MenuItem = {
   is_vegetarian: boolean;
   is_spicy: boolean;
   is_popular: boolean;
+  has_modifiers?: boolean;
 };
+
+export type MenuModifierOption = { id: number; name: string; price_adjustment: string };
+export type MenuModifier = {
+  id: number;
+  name: string;
+  is_required: boolean;
+  min_selections: number;
+  max_selections: number;
+  options: MenuModifierOption[];
+};
+export type MenuItemDetail = MenuItem & { modifiers: MenuModifier[] };
+
+export type PosCustomer = { id: number; name: string; email: string | null; phone: string | null; points: number; is_vip: boolean };
+export type CouponPreview = { code: string; description: string | null; discount: string };
 
 export type MenuListResponse = {
   items: MenuItem[];

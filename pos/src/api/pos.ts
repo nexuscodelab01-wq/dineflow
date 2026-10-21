@@ -16,6 +16,10 @@ import type {
   TablePaymentRead,
   TimeEntryRead,
   AdjustmentResult,
+  CouponPreview,
+  MenuItemDetail,
+  MenuListResponse as PosMenuResponse,
+  PosCustomer,
   ControlAction,
   ControlKind,
   Reasons,
@@ -52,8 +56,13 @@ export function seatTable(posSessionToken: string, tableId: number, partySize?: 
   });
 }
 
-export function createCounterOrder(posSessionToken: string, items: PosOrderItem[], notes?: string) {
-  return apiFetch<PosOrderRead>('/pos/orders', { method: 'POST', token: posSessionToken, body: { items, notes } });
+export function createCounterOrder(
+  posSessionToken: string, items: PosOrderItem[], notes?: string, extras?: { customerId?: number; couponCode?: string },
+) {
+  return apiFetch<PosOrderRead>('/pos/orders', {
+    method: 'POST', token: posSessionToken,
+    body: { items, notes, customer_id: extras?.customerId, coupon_code: extras?.couponCode },
+  });
 }
 
 export function createTableOrder(posSessionToken: string, sessionId: number, items: PosOrderItem[], notes?: string) {
@@ -151,4 +160,36 @@ export function runControl(
       : target.type === 'order' ? `/pos/orders/${target.id}/discount`
       : `/pos/table-sessions/${target.id}/discount`;
   return apiFetch<AdjustmentResult>(path, { method: 'POST', token, body: fields, headers: override ? { 'X-Manager-Override': override } : undefined });
+}
+
+// ---- everyday till features ------------------------------------------------------------------------
+
+/** The whole menu for the till, sold-out dishes included so they can be brought back. */
+export function fetchPosMenu(token: string) {
+  return apiFetch<PosMenuResponse>('/pos/menu', { token });
+}
+
+export function fetchItemDetail(restaurantId: number, itemId: number) {
+  return apiFetch<MenuItemDetail>(`/menu/${itemId}`, { params: { restaurant_id: restaurantId } });
+}
+
+export function setItemAvailability(token: string, itemId: number, isAvailable: boolean) {
+  return apiFetch<{ item_id: number; is_available: boolean }>(`/pos/menu-items/${itemId}/availability`, {
+    method: 'POST', token, body: { is_available: isAvailable },
+  });
+}
+
+export function searchCustomers(token: string, q: string) {
+  return apiFetch<PosCustomer[]>('/pos/customers', { token, params: { q } });
+}
+
+export function previewCoupon(token: string, code: string, subtotal: number, customerId?: number) {
+  return apiFetch<CouponPreview>('/pos/coupons/preview', {
+    method: 'POST', token, body: { code, subtotal: subtotal.toFixed(2), customer_id: customerId },
+  });
+}
+
+/** X-report: where the till stands now; closes nothing. */
+export function fetchXReport(token: string) {
+  return apiFetch<ShiftReportRead>('/pos/shifts/current/report', { token });
 }
