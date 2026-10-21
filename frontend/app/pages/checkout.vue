@@ -186,7 +186,7 @@ watch(
           delivery_address: delivery ? { street: form.street, city: form.city, postal_code: form.postal_code, state: form.state || undefined } : undefined,
         })
         if (seq === quoteSeq) {
-          serverQuote.value = { subtotal: Number(q.subtotal), discount: Number(q.discount), tax: Number(q.tax), delivery_fee: Number(q.delivery_fee), total: Number(q.total) }
+          serverQuote.value = { subtotal: Number(q.subtotal), discount: Number(q.discount), tax: Number(q.tax), delivery_fee: Number(q.delivery_fee), service_charge: Number(q.service_charge), total: Number(q.total) }
         }
       }
       catch {
@@ -507,6 +507,7 @@ async function payNow() {
             <div v-if="totals.discount" class="flex justify-between text-emerald-700">
               <span>Discount</span><span>−{{ money(totals.discount) }}</span>
             </div>
+            <div v-if="totals.service_charge" class="flex justify-between"><span>Service charge</span><span>{{ money(totals.service_charge) }}</span></div>
             <div class="flex justify-between"><span>Tax<span v-if="quoting" class="text-ink-subtle"> (updating…)</span></span><span>{{ money(totals.tax) }}</span></div>
             <div v-if="totals.delivery_fee" class="flex justify-between"><span>Delivery</span><span>{{ money(totals.delivery_fee) }}</span></div>
             <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total) }}</span></div>

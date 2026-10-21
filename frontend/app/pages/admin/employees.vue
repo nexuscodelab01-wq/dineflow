@@ -56,7 +56,7 @@ onMounted(async () => {
     <ul v-else class="mt-6 space-y-3">
       <li v-for="row in rows" :key="row.user_id" class="rounded-2xl border border-brand-100 bg-surface-elevated p-4">
         <p class="font-semibold text-ink">{{ row.name }}</p>
-        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Cash</p>
             <p class="font-semibold text-ink">{{ money(Number(row.cash_total)) }}</p>
@@ -64,6 +64,10 @@ onMounted(async () => {
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Card</p>
             <p class="font-semibold text-ink">{{ money(Number(row.card_total)) }}</p>
+          </div>
+          <div v-if="Number(row.card_tips) || Number(row.cash_tips)">
+            <p class="text-xs uppercase tracking-wide text-ink-subtle">Tips (card · cash)</p>
+            <p class="font-semibold text-ink">{{ money(Number(row.card_tips)) }} · {{ money(Number(row.cash_tips)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Orders</p>

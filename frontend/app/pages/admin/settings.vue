@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Restaurant } from '~/types/menu'
+import { syncTerminalTipping } from '~/services/tips'
 import { fetchAdminSettings, runTaxCheck, startStripeOnboarding, updateAdminSettings, uploadGalleryImage, uploadLogo } from '~/services/admin'
 import { resolveMediaUrl } from '~/utils/media'
 import { DAYS, type Day, parseDay } from '~/utils/hours'
@@ -43,6 +44,12 @@ const form = reactive({
   state: '',
   tax_mode: 'FLAT' as 'FLAT' | 'STRIPE',
   default_tax_code: 'txcd_40060003',
+  tips_enabled: false,
+  tip_presets: [15, 20, 25] as number[],
+  tip_pool_mode: 'KEEP' as 'KEEP' | 'POOL_EQUAL' | 'POOL_HOURS',
+  service_charge_pct: '0',
+  service_charge_order_types: ['DINE_IN'] as string[],
+  service_charge_taxable: false,
   tax_rate: '',
   delivery_fee: '',
   reservation_buffer_minutes: 15,
@@ -119,6 +126,12 @@ onMounted(async () => {
       state: settings.value.state || '',
       tax_mode: settings.value.tax_mode || 'FLAT',
       default_tax_code: settings.value.default_tax_code || 'txcd_40060003',
+      tips_enabled: settings.value.tips_enabled ?? false,
+      tip_presets: [...(settings.value.tip_presets ?? [15, 20, 25])],
+      tip_pool_mode: settings.value.tip_pool_mode ?? 'KEEP',
+      service_charge_pct: String(Math.round(Number(settings.value.service_charge_rate ?? 0) * 10000) / 100),
+      service_charge_order_types: [...(settings.value.service_charge_order_types ?? ['DINE_IN'])],
+      service_charge_taxable: settings.value.service_charge_taxable ?? false,
       tax_rate: settings.value.tax_rate,
       delivery_fee: settings.value.delivery_fee,
       reservation_buffer_minutes: settings.value.reservation_buffer_minutes ?? 15,
@@ -278,6 +291,33 @@ async function connectStripe() {
   }
 }
 
+// Tips & service charge: flag-gated. Card tips are chosen on the reader itself; saving pushes the presets to Stripe.
+const tipsFlag = useFeature('tips')
+const syncingReader = ref(false)
+const readerMessage = ref('')
+async function syncReader() {
+  if (!admin.restaurantId) return
+  syncingReader.value = true
+  readerMessage.value = ''
+  try {
+    await save()
+    await syncTerminalTipping(admin.restaurantId)
+    readerMessage.value = form.tips_enabled ? 'Card readers updated — they will show the tip screen.' : 'Card readers updated — the tip screen is off.'
+  }
+  catch (err) {
+    readerMessage.value = err instanceof Error ? err.message : 'Could not update the readers'
+  }
+  finally {
+    syncingReader.value = false
+  }
+}
+const ORDER_TYPES = [
+  { key: 'DINE_IN', label: 'Dine-in' },
+  { key: 'COUNTER', label: 'Counter / POS' },
+  { key: 'PICKUP', label: 'Pickup' },
+  { key: 'DELIVERY', label: 'Delivery' },
+]
+
 // Stripe Tax: flag-gated, needs a connected Stripe account. The flat rate below stays as the fallback.
 const stripeTaxFlag = useFeature('stripe_tax')
 const taxCheck = ref<{ ok: boolean, message: string, rate_percent: string | null } | null>(null)
@@ -313,6 +353,7 @@ async function save() {
     settings.value = await updateAdminSettings(admin.restaurantId, {
       ...form,
       tax_rate: form.tax_rate,
+      service_charge_rate: String(Number(form.service_charge_pct || 0) / 100),
       delivery_fee: form.delivery_fee,
       // An emptied number input leaves the ref as '' rather than null.
       max_party_size: form.max_party_size === '' || form.max_party_size == null ? null : Number(form.max_party_size),
@@ -330,7 +371,7 @@ async function save() {
     })
     // Everything that formats money reads currency off these copies, so refresh them now rather than on reload.
     for (const r of [admin.restaurant, useRestaurantStore().current]) {
-      if (r && r.id === settings.value.id) Object.assign(r, { country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
+      if (r && r.id === settings.value.id) Object.assign(r, { tips_enabled: settings.value.tips_enabled, service_charge_rate: settings.value.service_charge_rate, service_charge_order_types: settings.value.service_charge_order_types, service_charge_taxable: settings.value.service_charge_taxable, country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
     }
     message.value = 'Settings saved'
   }
@@ -551,6 +592,44 @@ async function save() {
           </div>
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Flat tax rate (0.0875) — the fallback">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
+        </div>
+      </section>
+
+      <section v-if="tipsFlag" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
+        <h2 class="font-semibold">Tips &amp; service charge</h2>
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.tips_enabled" type="checkbox"> Ask for a tip on the card reader</label>
+          <div v-if="form.tips_enabled" class="grid grid-cols-3 gap-3">
+            <label v-for="(_, i) in form.tip_presets" :key="i" class="block text-sm">
+              <span class="text-ink-muted">Suggestion {{ i + 1 }} (%)</span>
+              <input v-model.number="form.tip_presets[i]" type="number" min="1" max="100" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+            </label>
+          </div>
+          <label class="block text-sm">
+            <span class="text-ink-muted">Who gets the tips</span>
+            <select v-model="form.tip_pool_mode" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+              <option value="KEEP">Each person keeps their own</option>
+              <option value="POOL_EQUAL">Pooled, split equally</option>
+              <option value="POOL_HOURS">Pooled, split by hours worked</option>
+            </select>
+          </label>
+          <div class="flex flex-wrap items-center gap-3">
+            <AppButton type="button" :disabled="syncingReader || !settings?.stripe_account_id" @click="syncReader">{{ syncingReader ? 'Updating…' : 'Save & update card readers' }}</AppButton>
+            <span v-if="!settings?.stripe_account_id" class="text-xs text-ink-subtle">Connect Stripe first.</span>
+            <span v-if="readerMessage" class="text-sm text-ink-muted">{{ readerMessage }}</span>
+          </div>
+        </div>
+        <div class="space-y-2 border-t border-brand-100 pt-4">
+          <label class="block text-sm">
+            <span class="text-ink-muted">Service charge (%) added to the bill — separate from tips</span>
+            <input v-model="form.service_charge_pct" type="number" min="0" max="50" step="0.01" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm sm:w-40">
+          </label>
+          <div class="flex flex-wrap gap-4 text-sm">
+            <label v-for="t in ORDER_TYPES" :key="t.key" class="flex items-center gap-2">
+              <input v-model="form.service_charge_order_types" type="checkbox" :value="t.key"> {{ t.label }}
+            </label>
+          </div>
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.service_charge_taxable" type="checkbox"> Charge sales tax on the service charge</label>
         </div>
       </section>
 

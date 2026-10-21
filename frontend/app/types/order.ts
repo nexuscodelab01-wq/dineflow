@@ -52,6 +52,7 @@ export type Order = {
   status: OrderStatus
   subtotal: string
   tax: string
+  service_charge?: string
   delivery_fee: string
   discount: string
   total: string

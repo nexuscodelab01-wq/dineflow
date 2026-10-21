@@ -16,7 +16,7 @@ export function fetchOrder(orderId: number) {
   return apiFetch<Order>(`/api/v1/orders/${orderId}`)
 }
 
-export type OrderQuote = { subtotal: string, discount: string, tax: string, delivery_fee: string, total: string }
+export type OrderQuote = { subtotal: string, discount: string, tax: string, delivery_fee: string, service_charge: string, total: string }
 
 /** Totals (with address-based tax) for the cart on screen — nothing is saved; the order is priced again when placed. */
 export function quoteOrder(payload: { restaurant_id: number, order_type: OrderType, items: OrderItemInput[], coupon_code?: string, delivery_address?: DeliveryAddressInput }) {

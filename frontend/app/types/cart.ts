@@ -21,6 +21,7 @@ export type CartTotals = {
   subtotal: number
   tax: number
   delivery_fee: number
+  service_charge?: number
   discount: number
   total: number
 }

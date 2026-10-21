@@ -68,7 +68,7 @@ function variance(shift: ShiftReportRead) {
             </p>
           </div>
         </div>
-        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-6">
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Starting float</p>
             <p class="font-semibold text-ink">{{ money(Number(shift.starting_float)) }}</p>
@@ -80,6 +80,10 @@ function variance(shift: ShiftReportRead) {
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Card</p>
             <p class="font-semibold text-ink">{{ money(Number(shift.card_total)) }}</p>
+          </div>
+          <div v-if="Number(shift.card_tips) || Number(shift.cash_tips)">
+            <p class="text-xs uppercase tracking-wide text-ink-subtle">Tips (card · cash)</p>
+            <p class="font-semibold text-ink">{{ money(Number(shift.card_tips)) }} · {{ money(Number(shift.cash_tips)) }}</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-ink-subtle">Orders</p>

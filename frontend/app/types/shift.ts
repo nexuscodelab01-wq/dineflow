@@ -11,6 +11,8 @@ export type ShiftReportRead = {
   expected_cash: string
   counted_cash: string | null
   variance: string | null
+  card_tips: string
+  cash_tips: string
 }
 
 export type EmployeeReportRow = {
@@ -21,4 +23,6 @@ export type EmployeeReportRow = {
   order_count: number
   hours_worked: string
   sales_per_labour_hour: string | null
+  card_tips: string
+  cash_tips: string
 }

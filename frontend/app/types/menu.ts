@@ -26,6 +26,13 @@ export type Restaurant = {
   /** FLAT = the tax_rate above; STRIPE = address-based tax from Stripe Tax (quoted by the server). */
   tax_mode?: 'FLAT' | 'STRIPE'
   default_tax_code?: string
+  tips_enabled?: boolean
+  tip_presets?: number[]
+  tip_pool_mode?: 'KEEP' | 'POOL_EQUAL' | 'POOL_HOURS'
+  /** Fraction, e.g. "0.1250". */
+  service_charge_rate?: string
+  service_charge_order_types?: string[]
+  service_charge_taxable?: boolean
   delivery_fee: string
   /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */
   reservation_buffer_minutes?: number

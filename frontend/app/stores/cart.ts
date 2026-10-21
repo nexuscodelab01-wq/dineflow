@@ -128,10 +128,14 @@ export const useCartStore = defineStore('cart', {
       const subtotal = this.lines.reduce((sum, line) => sum + line.unit_price * line.quantity, 0)
       const taxable = Math.max(subtotal - discount, 0)
       const taxRate = Number(restaurant.tax_rate)
-      const tax = Math.round(taxable * taxRate * 100) / 100
+      // Service charge: a percentage on the (post-discount) subtotal for the order types the restaurant picked.
+      const serviceRate = (restaurant.service_charge_order_types ?? []).includes(orderType) ? Number(restaurant.service_charge_rate ?? 0) : 0
+      const serviceCharge = Math.round(taxable * serviceRate * 100) / 100
+      const taxBase = taxable + (restaurant.service_charge_taxable ? serviceCharge : 0)
+      const tax = Math.round(taxBase * taxRate * 100) / 100
       const deliveryFee = orderType === 'DELIVERY' ? Number(restaurant.delivery_fee) : 0
-      const total = Math.round((taxable + tax + deliveryFee) * 100) / 100
-      return { subtotal, tax, delivery_fee: deliveryFee, discount, total }
+      const total = Math.round((taxable + tax + deliveryFee + serviceCharge) * 100) / 100
+      return { subtotal, tax, delivery_fee: deliveryFee, service_charge: serviceCharge, discount, total }
     },
 
     toOrderItems() {
