@@ -27,13 +27,25 @@ from app.models.user import User
 from app.repositories.menu import MenuRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
-from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
+from app.schemas.order import (
+    OrderCreate,
+    OrderListResponse,
+    OrderQuoteRead,
+    OrderQuoteRequest,
+    OrderRead,
+)
 from app.services.coupon_service import CouponService
 from app.services.feature_service import FeatureService
 from app.services.notifications import notify_order_placed
 from app.services.payments import get_payment_provider, reverse_payment
 from app.services.reservation_service import ReservationService
 from app.services.scheduling_service import SchedulingService
+from app.services.tax import (
+    address_location,
+    price_order_tax,
+    record_paid_order,
+    reverse_paid_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +158,7 @@ class OrderService:
                 street=data.delivery_address.street,
                 city=data.delivery_address.city,
                 postal_code=data.delivery_address.postal_code,
+                state=data.delivery_address.state,
                 delivery_instructions=data.delivery_address.delivery_instructions,
             )
             self.db.add(address)
@@ -165,7 +178,9 @@ class OrderService:
 
         delivery_fee = restaurant.delivery_fee if data.order_type == OrderType.DELIVERY else Decimal("0.00")
         taxable = max(subtotal - order.discount, Decimal("0.00"))
-        tax = (taxable * restaurant.tax_rate).quantize(Decimal("0.01"))
+        # Delivery is taxed where the food goes; everything else where the restaurant is.
+        location = address_location(restaurant, address) if data.order_type == OrderType.DELIVERY and data.delivery_address else None
+        tax = price_order_tax(self.db, restaurant, order, discount=order.discount, delivery_fee=delivery_fee, location=location).tax_total
         total = (taxable + tax + delivery_fee).quantize(Decimal("0.01"))
 
         order.subtotal = subtotal
@@ -250,6 +265,47 @@ class OrderService:
         result.client_secret = client_secret
         return result
 
+    def quote(self, data: OrderQuoteRequest, user: User) -> OrderQuoteRead:
+        """Totals for a cart exactly as `create_order` would price them, with nothing kept: the lines go through
+        the same validation and tax seam inside a savepoint that is always rolled back. Advisory — the order
+        placed afterwards is priced again by the server."""
+        ensure_customer_of(user, data.restaurant_id)
+        restaurant = self.restaurants.get_by_id(data.restaurant_id)
+        if restaurant is None:
+            raise NotFoundError("Restaurant not found")
+        if data.order_type == OrderType.DELIVERY and data.delivery_address is None:
+            raise AppError("Delivery address is required")
+        item_ids = [line.menu_item_id for line in data.items]
+        items_by_id = {item.id: item for item in self.menu.get_items_by_ids(item_ids, restaurant.id)}
+        if len(items_by_id) != len(set(item_ids)):
+            raise AppError("One or more menu items are invalid for this restaurant")
+
+        savepoint = self.db.begin_nested()
+        try:
+            order = Order(
+                user_id=user.id, restaurant_id=restaurant.id, order_number="QUOTE", order_type=data.order_type,
+                status=OrderStatus.PENDING, subtotal=Decimal("0.00"), tax=Decimal("0.00"), delivery_fee=Decimal("0.00"),
+                discount=Decimal("0.00"), total=Decimal("0.00"), customer_name="quote",
+            )
+            self.orders.add(order)
+            subtotal = self._add_lines(order, data.items, items_by_id)
+            discount = Decimal("0.00")
+            if data.coupon_code and self.features.is_enabled(restaurant.id, "coupons"):
+                _, discount = self.coupons.preview(restaurant.id, data.coupon_code, subtotal, user)
+            delivery_fee = restaurant.delivery_fee if data.order_type == OrderType.DELIVERY else Decimal("0.00")
+            location = None
+            if data.order_type == OrderType.DELIVERY and data.delivery_address:
+                a = data.delivery_address
+                location = address_location(restaurant, Address(street=a.street, city=a.city, postal_code=a.postal_code, state=a.state))
+            tax = price_order_tax(self.db, restaurant, order, discount=discount, delivery_fee=delivery_fee, location=location).tax_total
+            taxable = max(subtotal - discount, Decimal("0.00"))
+            return OrderQuoteRead(
+                subtotal=subtotal, discount=discount, tax=tax, delivery_fee=delivery_fee,
+                total=(taxable + tax + delivery_fee).quantize(Decimal("0.01")),
+            )
+        finally:
+            savepoint.rollback()
+
     def confirm_payment(self, order: Order, payment: Payment, *, user_id: int | None, notes: str) -> None:
         """Flip a PENDING order (and its payment) to CONFIRMED/COMPLETED and run the one-time side
         effects of a payment landing — the order-placed email and the kitchen publish. Called
@@ -268,6 +324,7 @@ class OrderService:
             )
         )
         restaurant = self.restaurants.get_by_id(order.restaurant_id)
+        record_paid_order(self.db, restaurant, order)
         # Queued in this same transaction: the email exists only if the order (and its confirmation) does.
         notify_order_placed(self.db, restaurant, order, _email_lines_from_order(order))
         # Delivered to kitchen screens only if this transaction commits.
@@ -283,6 +340,8 @@ class OrderService:
         cancel and this running). The caller commits."""
         restaurant = self.restaurants.get_by_id(payment.restaurant_id)
         result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
+        if result.success and payment.status == PaymentStatus.REFUNDED:
+            reverse_paid_order(self.db, restaurant, order)
         if not result.success:
             logger.warning(
                 "Payment reversal failed for order %s (payment %s, cancelled by user %s): %s",

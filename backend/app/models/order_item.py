@@ -37,6 +37,9 @@ class OrderItem(Base):
     # dish contained *when ordered*, not whatever the menu says now.
     allergens: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
     # NEW until its station bumps it, then READY. Recall puts it back to NEW.
+    # Snapshots, like `station`: what this line was taxed as, and the tax charged on it, when ordered.
+    tax_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0", nullable=False)
     status: Mapped[str] = mapped_column(String(10), default="NEW", server_default="NEW", nullable=False)
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

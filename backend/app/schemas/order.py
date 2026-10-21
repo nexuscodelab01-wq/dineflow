@@ -12,6 +12,7 @@ class DeliveryAddressCreate(BaseModel):
     street: str = Field(min_length=1, max_length=255)
     city: str = Field(min_length=1, max_length=100)
     postal_code: str = Field(min_length=1, max_length=20)
+    state: str | None = Field(default=None, max_length=3)  # US state / Canadian province — Stripe Tax uses it
     delivery_instructions: str | None = Field(default=None, max_length=500)
 
 
@@ -40,6 +41,24 @@ class OrderCreate(BaseModel):
     delivery_address: DeliveryAddressCreate | None = None
     delivery_instructions: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=1000)
+
+
+class OrderQuoteRequest(BaseModel):
+    """What the checkout page shows before the order exists: the same maths as placing it, nothing saved."""
+
+    restaurant_id: int
+    order_type: OrderType
+    items: list[OrderItemCreate] = Field(min_length=1)
+    coupon_code: str | None = Field(default=None, max_length=40)
+    delivery_address: DeliveryAddressCreate | None = None
+
+
+class OrderQuoteRead(BaseModel):
+    subtotal: Decimal
+    discount: Decimal
+    tax: Decimal
+    delivery_fee: Decimal
+    total: Decimal
 
 
 class OrderItemModifierRead(BaseModel):

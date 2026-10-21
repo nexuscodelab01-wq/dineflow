@@ -48,6 +48,7 @@ from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider
 from app.services.shift_service import ShiftService
+from app.services.tax import price_order_tax
 
 FEATURE = "pos"
 
@@ -149,7 +150,7 @@ class PosService:
             )
             orders.orders.add(order)
             subtotal = orders._add_lines(order, data.items, items_by_id)
-            tax = (subtotal * restaurant.tax_rate).quantize(Decimal("0.01"))
+            tax = price_order_tax(self.db, restaurant, order).tax_total
             total = (subtotal + tax).quantize(Decimal("0.01"))
             order.subtotal, order.tax, order.total = subtotal, tax, total
 

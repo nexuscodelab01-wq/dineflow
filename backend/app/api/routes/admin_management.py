@@ -54,7 +54,7 @@ from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
-from app.schemas.payments import StripeOnboardLink, StripeStatus
+from app.schemas.payments import StripeOnboardLink, StripeStatus, TaxCheckRead
 from app.schemas.reservation import (
     AdminAvailabilityResponse,
     AdminReservationCreate,
@@ -660,7 +660,7 @@ def list_table_sessions(_: StaffUser, restaurant_id: RestaurantId, service: Anno
 def close_table_session(session_id: int, user: StaffUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> None:
     """End a table's tab: guest passes stop working, the table goes to cleaning and its QR code is replaced."""
     try:
-        service.close_session(session_id, restaurant_id, user.id)
+        service.close_session(session_id, restaurant_id, user.id, paid=False)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -1132,6 +1132,18 @@ def update_settings(
 ) -> RestaurantRead:
     try:
         return service.update_settings(restaurant_id, data)
+    except NotFoundError as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/settings/tax-check", response_model=TaxCheckRead)
+def tax_check(
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> TaxCheckRead:
+    try:
+        return service.tax_check(restaurant_id)
     except NotFoundError as exc:
         raise raise_http_for_app_error(exc) from exc
 

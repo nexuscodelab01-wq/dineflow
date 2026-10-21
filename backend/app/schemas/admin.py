@@ -3,7 +3,7 @@
 import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -15,7 +15,7 @@ from app.core.hours import (
     validate_closures,
     validate_opening_hours,
 )
-from app.core.locale import SUPPORTED_COUNTRIES, SUPPORTED_CURRENCIES
+from app.core.locale import SUPPORTED_COUNTRIES, SUPPORTED_CURRENCIES, TAX_CODES
 from app.core.stations import STATIONS
 from app.models.enums import OrderStatus, OrderType, TableShape, TableStatus
 from app.schemas.order import OrderRead
@@ -69,6 +69,7 @@ class MenuItemCreate(BaseModel):
     def _check_image_url(cls, value: str | None) -> str | None:
         return _media_url(value)
     station: str = "KITCHEN"
+    tax_code: str | None = None
     is_available: bool = True
     preparation_time_minutes: int = Field(default=15, ge=1)
     is_vegetarian: bool = False
@@ -83,10 +84,21 @@ class MenuItemCreate(BaseModel):
     def _station(cls, value: str) -> str:
         return _check_station(value)
 
+    @field_validator("tax_code")
+    @classmethod
+    def _tax_code(cls, value: str | None) -> str | None:
+        return _check_tax_code(value)
+
     @field_validator("allergens")
     @classmethod
     def _allergens(cls, value: list[str]) -> list[str]:
         return _check_allergens(value)
+
+
+def _check_tax_code(value):
+    if value is not None and value not in TAX_CODES:
+        raise ValueError("Unknown tax category")
+    return value
 
 
 def _check_station(value):
@@ -114,6 +126,7 @@ class MenuItemUpdate(BaseModel):
     def _check_image_url(cls, value: str | None) -> str | None:
         return _media_url(value)
     station: str | None = None
+    tax_code: str | None = None
     is_available: bool | None = None
     preparation_time_minutes: int | None = Field(default=None, ge=1)
     is_vegetarian: bool | None = None
@@ -127,6 +140,11 @@ class MenuItemUpdate(BaseModel):
     @classmethod
     def _station(cls, value: str | None) -> str | None:
         return _check_station(value)
+
+    @field_validator("tax_code")
+    @classmethod
+    def _tax_code(cls, value: str | None) -> str | None:
+        return _check_tax_code(value)
 
     @field_validator("allergens")
     @classmethod
@@ -305,6 +323,9 @@ class RestaurantSettingsUpdate(BaseModel):
     delivery_fee: Decimal | None = Field(default=None, ge=0)
     country: str | None = None
     currency: str | None = None
+    state: str | None = Field(default=None, max_length=3)
+    tax_mode: Literal["FLAT", "STRIPE"] | None = None
+    default_tax_code: str | None = None
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
     # Guest booking policy — staff can still book outside these limits for private events or corrections.
     # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).
@@ -327,6 +348,17 @@ class RestaurantSettingsUpdate(BaseModel):
     max_orders_per_slot: int | None = Field(default=None, ge=1, le=100)
     scheduled_order_days_ahead: int | None = Field(default=None, ge=0, le=60)
     scheduled_order_lead_minutes: int | None = Field(default=None, ge=0, le=480)
+
+    @field_validator("default_tax_code")
+    @classmethod
+    def _check_default_tax_code(cls, value: str | None) -> str | None:
+        return _check_tax_code(value)
+
+    @field_validator("state")
+    @classmethod
+    def _check_state(cls, value: str | None) -> str | None:
+        value = (value or "").strip().upper()
+        return value or None
 
     @field_validator("country")
     @classmethod

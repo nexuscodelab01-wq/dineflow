@@ -107,6 +107,12 @@ class Restaurant(TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), default="usd", server_default="usd", nullable=False)
     # ISO 3166-1 alpha-2 (see app/core/locale.py). Fixed on the Stripe account once onboarded.
     country: Mapped[str] = mapped_column(String(2), default="US", server_default="US", nullable=False)
+    # US state / Canadian province (2-letter code) — Stripe Tax needs it to place the restaurant.
+    state: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    # FLAT = subtotal × tax_rate (always available); STRIPE = Stripe Tax by address (needs the `stripe_tax` flag
+    # and a connected account). Falls back to FLAT if Stripe is unreachable — see app/services/tax.
+    tax_mode: Mapped[str] = mapped_column(String(10), default="FLAT", server_default="FLAT", nullable=False)
+    default_tax_code: Mapped[str] = mapped_column(String(20), default="txcd_40060003", server_default="txcd_40060003", nullable=False)
     # Stripe Connect (Express account). Null until the owner completes onboarding from Settings.
     # charges_enabled is kept in sync by the account.updated webhook, not read live from Stripe on every
     # request — see app/api/routes/webhooks.py.

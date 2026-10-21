@@ -53,6 +53,9 @@ class RestaurantRead(BaseModel):
     is_active: bool
     currency: str = "usd"
     country: str = "US"
+    state: str | None = None
+    tax_mode: str = "FLAT"
+    default_tax_code: str = "txcd_40060003"
     # Whether this restaurant can actually take a real payment yet — not the internal Stripe account id,
     # just enough for the site to know "show a payment form" vs "online ordering isn't set up yet".
     stripe_charges_enabled: bool = False

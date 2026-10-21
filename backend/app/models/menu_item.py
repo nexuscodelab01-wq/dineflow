@@ -32,6 +32,8 @@ class MenuItem(TimestampMixin, Base):
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Which screen makes this dish: KITCHEN, BAR or DESSERT (see app/core/stations.py).
     station: Mapped[str] = mapped_column(String(20), default="KITCHEN", server_default="KITCHEN", nullable=False)
+    # Stripe Tax product code (see app/core/locale.TAX_CODES); null = the restaurant's default_tax_code.
+    tax_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     preparation_time_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     is_vegetarian: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -24,6 +24,7 @@ class Address(TimestampMixin, Base):
     street: Mapped[str] = mapped_column(String(255), nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
     postal_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    state: Mapped[str | None] = mapped_column(String(3), nullable=True)
     delivery_instructions: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped["User | None"] = relationship("User", back_populates="addresses")

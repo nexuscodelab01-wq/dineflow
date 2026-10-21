@@ -12,7 +12,13 @@ from app.core.rate_limit import rate_limit
 from app.core.realtime import order_topic
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
-from app.schemas.order import OrderCreate, OrderListResponse, OrderRead
+from app.schemas.order import (
+    OrderCreate,
+    OrderListResponse,
+    OrderQuoteRead,
+    OrderQuoteRequest,
+    OrderRead,
+)
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders")
@@ -35,6 +41,19 @@ def create_order(
 ) -> OrderRead:
     try:
         return service.create_order(data, user)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.post("/quote", response_model=OrderQuoteRead, dependencies=[rate_limit("order_quote", 120, 300)])
+def quote_order(
+    data: OrderQuoteRequest,
+    user: CurrentUser,
+    service: Annotated[OrderService, Depends(get_order_service)],
+) -> OrderQuoteRead:
+    """Totals (incl. address-based tax) for the cart on screen. Nothing is saved; the server prices the real order again."""
+    try:
+        return service.quote(data, user)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 

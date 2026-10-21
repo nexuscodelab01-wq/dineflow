@@ -59,7 +59,7 @@ AUTH = {("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/ref
         ("POST", "/auth/forgot-password"), ("POST", "/auth/reset-password"), ("POST", "/auth/change-password")}
 # Signed-in customer routes, always scoped to the caller's own tenant and rows.
 CUSTOMER = {
-    ("GET", "/orders"), ("POST", "/orders"), ("GET", "/orders/{order_id}"), ("GET", "/orders/{order_id}/stream"),
+    ("GET", "/orders"), ("POST", "/orders"), ("POST", "/orders/quote"), ("GET", "/orders/{order_id}"), ("GET", "/orders/{order_id}/stream"),
     ("GET", "/reservations/me"), ("POST", "/reservations/{reservation_id}/confirm"),
     ("POST", "/reservations/{reservation_id}/cancel"), ("POST", "/restaurants/{identifier}/reservations"),
     ("GET", "/reviews"), ("POST", "/reviews"), ("GET", "/reviews/eligible"),
@@ -223,6 +223,14 @@ def test_a_customer_cannot_order_from_another_restaurant(two):
     assert two.client.post(f"{API}/orders", headers=header(a.customer), json={**body, "restaurant_id": b.rid}).status_code == 403
     # Own restaurant, but naming Bravo's menu item:
     r = two.client.post(f"{API}/orders", headers=header(a.customer), json={**body, "restaurant_id": a.rid})
+    assert r.status_code == 400 and "invalid for this restaurant" in r.json()["detail"]
+
+
+def test_a_customer_cannot_quote_another_restaurants_cart(two):
+    a, b = two.a, two.b
+    body = {"order_type": "PICKUP", "items": [{"menu_item_id": b.item.id, "quantity": 1, "modifier_option_ids": []}]}
+    assert two.client.post(f"{API}/orders/quote", headers=header(a.customer), json={**body, "restaurant_id": b.rid}).status_code == 403
+    r = two.client.post(f"{API}/orders/quote", headers=header(a.customer), json={**body, "restaurant_id": a.rid})
     assert r.status_code == 400 and "invalid for this restaurant" in r.json()["detail"]
 
 

@@ -58,6 +58,9 @@ class Order(TimestampMixin, Base):
     )
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     tax: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Stripe Tax calculation behind `tax`, kept so the sale can be recorded (and reversed) as a tax transaction.
+    tax_calculation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tax_transaction_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
     discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

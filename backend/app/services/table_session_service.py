@@ -57,6 +57,7 @@ from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider, reverse_payment
 from app.services.shift_service import ShiftService
+from app.services.tax import price_order_tax, record_paid_order, reverse_paid_order
 
 FEATURE = "qr_table_ordering"
 CLOSED_STATUSES = {OrderStatus.CANCELLED}
@@ -236,7 +237,7 @@ class TableSessionService:
             )
             orders.orders.add(order)
             subtotal = orders._add_lines(order, data.items, items_by_id)
-            tax = (subtotal * restaurant.tax_rate).quantize(Decimal("0.01"))
+            tax = price_order_tax(self.db, restaurant, order).tax_total
             total = (subtotal + tax).quantize(Decimal("0.01"))
             if total > Decimal(str(settings.QR_MAX_ORDER_TOTAL)):
                 raise AppError("That round is too large to send from a table. Please ask a member of staff.")
@@ -305,7 +306,7 @@ class TableSessionService:
             guests=guests, rounds=rounds[0], total=Decimal(rounds[1]), requests=asked,
         )
 
-    def close_session(self, session_id: int, restaurant_id: int, staff_user_id: int | None) -> None:
+    def close_session(self, session_id: int, restaurant_id: int, staff_user_id: int | None, *, paid: bool = True) -> None:
         """End the tab: every guest pass stops working, the table goes to cleaning and its QR code is replaced,
         so a photo of the old code is worthless."""
         session = self.db.get(TableSession, session_id)
@@ -313,6 +314,11 @@ class TableSessionService:
             raise NotFoundError("Session not found")
         if session.state != OPEN:
             raise AppError("This session is already closed")
+        # The tab is settled: report each round to Stripe Tax (a no-op unless the restaurant uses it).
+        if paid:  # a staff close with no payment (walk-out, comp) owes no tax record
+            restaurant = self.db.get(Restaurant, restaurant_id)
+            for paid_order in self.db.scalars(select(Order).where(Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES))):
+                record_paid_order(self.db, restaurant, paid_order)
         session.state = CLOSED
         session.closed_at = datetime.now(UTC)
         session.closed_by_user_id = staff_user_id
@@ -468,6 +474,8 @@ class TableSessionService:
         result = reverse_payment(payment, connected_account_id=restaurant.stripe_account_id if restaurant else None)
         if not result.success:
             raise AppError(result.message or "Refund failed")
+        for refunded_order in self.db.scalars(select(Order).where(Order.table_session_id == session.id, Order.status.notin_(CLOSED_STATUSES))):
+            reverse_paid_order(self.db, restaurant, refunded_order)
         self.db.commit()
 
     # ------------------------------------------------------------------ calling the waiter / asking for the bill

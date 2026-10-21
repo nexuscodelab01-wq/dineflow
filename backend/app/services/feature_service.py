@@ -38,6 +38,7 @@ _DEFAULTS: dict[str, tuple[str, bool]] = {
     "coupons": ("Discount codes customers can apply at checkout", False),
     "scheduled_orders": ("Customers can order ahead for a later collection slot", False),
     "pos": ("Take orders from a staff-facing POS device", False),
+    "stripe_tax": ("Sales tax by address through Stripe Tax (US/Canada); the flat rate stays as the fallback", False),
 }
 
 

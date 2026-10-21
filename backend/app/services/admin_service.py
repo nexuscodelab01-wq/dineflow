@@ -56,12 +56,19 @@ from app.schemas.admin import (
 )
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
+from app.schemas.payments import TaxCheckRead
 from app.schemas.restaurant import RestaurantRead
 from app.services.feature_service import FeatureService
 from app.services.loyalty_service import LoyaltyService
 from app.services.menu_service import MenuService
 from app.services.order_service import OrderService
 from app.services.reservation_service import ReservationService
+from app.services.tax import (
+    TaxLine,
+    get_tax_calculator,
+    restaurant_location,
+    stripe_tax_active,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -465,6 +472,23 @@ class AdminService:
             raise NotFoundError("Restaurant not found")
         return RestaurantRead.model_validate(restaurant)
 
+    def tax_check(self, restaurant_id: int) -> TaxCheckRead:
+        """Dry-run one $100 prepared-food sale at the restaurant's own address through whatever tax mode is live."""
+        restaurant = self.restaurants.get_by_id(restaurant_id)
+        if restaurant is None:
+            raise NotFoundError("Restaurant not found")
+        line = [TaxLine(reference="check", amount=Decimal("100.00"), tax_code=restaurant.default_tax_code)]
+        quote = get_tax_calculator(self.db, restaurant).quote(
+            line, location=restaurant_location(restaurant), shipping=Decimal("0.00"), currency=restaurant.currency
+        )
+        if not stripe_tax_active(self.db, restaurant):
+            return TaxCheckRead(mode="FLAT", ok=True, rate_percent=quote.rate_percent, message="Using your flat tax rate.")
+        if quote.calculation_id is None:
+            return TaxCheckRead(mode="STRIPE", ok=False, message="Stripe Tax couldn't be reached or the address is incomplete — the flat rate is being used.")
+        if quote.not_collecting:
+            return TaxCheckRead(mode="STRIPE", ok=False, rate_percent=Decimal(0), message="Stripe isn't collecting tax here yet. Add a tax registration for your state or province in your Stripe Dashboard (Tax → Registrations).")
+        return TaxCheckRead(mode="STRIPE", ok=True, rate_percent=quote.rate_percent, message="Stripe Tax is working for your address.")
+
     def update_settings(self, restaurant_id: int, data: RestaurantSettingsUpdate) -> RestaurantRead:
         restaurant = self.restaurants.get_by_id(restaurant_id)
         if restaurant is None:
@@ -480,6 +504,11 @@ class AdminService:
             for field in ("country", "currency"):
                 if field in payload and payload[field] != getattr(restaurant, field):
                     raise AppError(f"The {field} can't be changed once Stripe is connected")
+        if payload.get("tax_mode") == "STRIPE":
+            if not restaurant.stripe_account_id:
+                raise AppError("Connect Stripe first — Stripe Tax runs on your own Stripe account")
+            if not self.features.is_enabled(restaurant.id, "stripe_tax"):
+                raise AppError("Stripe Tax isn't enabled for this restaurant")
         for key, value in payload.items():
             setattr(restaurant, key, value)
         if restaurant.max_party_size is not None and restaurant.max_party_size < restaurant.min_party_size:

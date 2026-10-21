@@ -60,6 +60,7 @@ class MenuService:
             is_spicy=item.is_spicy,
             is_popular=item.is_popular,
             station=item.station,
+            tax_code=item.tax_code,
             allergens=item.allergens,
         )
 
