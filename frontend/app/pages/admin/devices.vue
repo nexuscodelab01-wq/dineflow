@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
+import type { CardReader, DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
 import type { StaffMember } from '~/types/staff'
-import { fetchDevices, pairDevice, revokeDevice, setStaffPin } from '~/services/pos'
+import { fetchDevices, fetchReaders, pairDevice, registerReader, removeReader, revokeDevice, setStaffPin, updateDevicePrinter } from '~/services/pos'
 import { fetchStaff } from '~/services/staff'
 
 definePageMeta({ layout: 'admin', middleware: ['admin'] })
@@ -17,6 +17,72 @@ const loading = ref(true)
 async function load() {
   if (!admin.restaurantId) return
   ;[devices.value, staff.value] = await Promise.all([fetchDevices(admin.restaurantId), fetchStaff(admin.restaurantId)])
+  readers.value = await fetchReaders(admin.restaurantId).catch(() => [])
+}
+
+// ---- receipt printer per device ---------------------------------------------------------------------
+
+const printerFor = ref<number | null>(null)
+const printerForm = reactive({ host: '', port: 9100, cash_drawer: false, auto_print: false })
+const savingPrinter = ref(false)
+
+function editPrinter(device: PosDevice) {
+  printerFor.value = device.id
+  Object.assign(printerForm, { host: device.printer?.host ?? '', port: device.printer?.port ?? 9100, cash_drawer: device.printer?.cash_drawer ?? false, auto_print: device.printer?.auto_print ?? false })
+}
+
+async function savePrinter(device: PosDevice) {
+  if (!admin.restaurantId) return
+  savingPrinter.value = true
+  try {
+    await updateDevicePrinter(admin.restaurantId, device.id, { printer_host: printerForm.host.trim() || null, printer_port: Number(printerForm.port) || 9100, cash_drawer: printerForm.cash_drawer, auto_print: printerForm.auto_print })
+    printerFor.value = null
+    await load()
+    ui.success('Printer saved')
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not save the printer')
+  }
+  finally {
+    savingPrinter.value = false
+  }
+}
+
+// ---- smart card readers (WisePOS E / S700) -----------------------------------------------------------
+
+const readers = ref<CardReader[]>([])
+const readerCode = ref('')
+const readerLabel = ref('')
+const addingReader = ref(false)
+
+async function addReader() {
+  if (!admin.restaurantId || !readerCode.value.trim() || !readerLabel.value.trim()) return
+  addingReader.value = true
+  try {
+    await registerReader(admin.restaurantId, readerCode.value, readerLabel.value)
+    readerCode.value = ''
+    readerLabel.value = ''
+    await load()
+    ui.success('Reader added')
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not add that reader')
+  }
+  finally {
+    addingReader.value = false
+  }
+}
+
+async function dropReader(reader: CardReader) {
+  if (!admin.restaurantId) return
+  if (!await ui.confirm({ title: `Remove ${reader.label}?`, message: 'The till will stop offering it for card payments.', confirmLabel: 'Remove', destructive: true })) return
+  try {
+    await removeReader(admin.restaurantId, reader.id)
+    await load()
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not remove that reader')
+  }
 }
 
 onMounted(async () => {
@@ -169,15 +235,51 @@ async function submitPin(member: StaffMember) {
               <span v-if="device.last_seen_at"> · last used {{ new Date(device.last_seen_at).toLocaleString() }}</span>
             </p>
           </div>
-          <button
-            v-if="!device.revoked_at" type="button"
-            class="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
-            :disabled="revokingId === device.id" @click="revoke(device)"
-          >
-            {{ revokingId === device.id ? 'Revoking…' : 'Revoke' }}
-          </button>
+          <div v-if="!device.revoked_at" class="flex gap-2">
+            <button type="button" class="rounded-lg border border-brand-200 px-3 py-1.5 text-sm font-medium hover:bg-brand-50" @click="editPrinter(device)">
+              {{ device.printer?.host ? 'Printer: ' + device.printer.host : 'Set up printer' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+              :disabled="revokingId === device.id" @click="revoke(device)"
+            >
+              {{ revokingId === device.id ? 'Revoking…' : 'Revoke' }}
+            </button>
+          </div>
+          <form v-if="printerFor === device.id" class="mt-3 grid w-full gap-3 sm:grid-cols-2" @submit.prevent="savePrinter(device)">
+            <label class="block text-sm"><span class="text-ink-muted">Printer address (IP)</span>
+              <input v-model="printerForm.host" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="192.168.0.50 — blank to use AirPrint"></label>
+            <label class="block text-sm"><span class="text-ink-muted">Port</span>
+              <input v-model.number="printerForm.port" type="number" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>
+            <label class="flex items-center gap-2 text-sm"><input v-model="printerForm.cash_drawer" type="checkbox"> Cash drawer is plugged into this printer</label>
+            <label class="flex items-center gap-2 text-sm"><input v-model="printerForm.auto_print" type="checkbox"> Print a receipt after every sale</label>
+            <div class="flex gap-2 sm:col-span-2">
+              <AppButton type="submit" :disabled="savingPrinter">{{ savingPrinter ? 'Saving…' : 'Save printer' }}</AppButton>
+              <button type="button" class="text-sm text-ink-muted hover:underline" @click="printerFor = null">Cancel</button>
+            </div>
+          </form>
         </li>
       </ul>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="font-semibold">Card readers</h2>
+      <p class="text-sm text-ink-muted">Smart readers (Stripe WisePOS E or S700) on your network. The till sends the amount; the customer taps or inserts their card — and picks a tip — on the reader itself. Requires Stripe to be connected.</p>
+      <ul v-if="readers.length" class="mt-4 space-y-2">
+        <li v-for="reader in readers" :key="reader.id" class="flex items-center justify-between rounded-2xl border border-brand-100 bg-surface-elevated p-4">
+          <div>
+            <span class="font-semibold text-ink">{{ reader.label }}</span>
+            <span class="ml-2 text-xs text-ink-subtle">{{ reader.device_type }} · {{ reader.status }}</span>
+          </div>
+          <button type="button" class="text-sm text-red-700 hover:underline" @click="dropReader(reader)">Remove</button>
+        </li>
+      </ul>
+      <form class="mt-4 grid gap-3 sm:grid-cols-3" @submit.prevent="addReader">
+        <input v-model="readerCode" class="rounded-lg border px-3 py-2 text-sm" placeholder="Registration code from the reader">
+        <input v-model="readerLabel" class="rounded-lg border px-3 py-2 text-sm" placeholder="Name, e.g. Counter">
+        <AppButton type="submit" :disabled="addingReader">{{ addingReader ? 'Adding…' : 'Add reader' }}</AppButton>
+      </form>
     </section>
 
     <section class="mt-10">

@@ -1,4 +1,4 @@
-import type { DeviceKind, DevicePairResult, PosDevice } from '~/types/pos'
+import type { CardReader, DeviceKind, DevicePairResult, DevicePrinter, PosDevice } from '~/types/pos'
 import { apiFetch } from '~/services/http'
 
 export function fetchDevices(restaurantId: number) {
@@ -23,4 +23,27 @@ export function setStaffPin(restaurantId: number, membershipId: number, pin: str
     method: 'POST',
     body: JSON.stringify({ pin }),
   })
+}
+
+/** The device's receipt printer: a network address (ESC/POS, usually port 9100), cash-drawer kick, auto-print. */
+export function updateDevicePrinter(restaurantId: number, deviceId: number, printer: { printer_host: string | null, printer_port: number, cash_drawer: boolean, auto_print: boolean }) {
+  return apiFetch<PosDevice & { printer: DevicePrinter }>(`/api/v1/admin/devices/${deviceId}?restaurant_id=${restaurantId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(printer),
+  })
+}
+
+export function fetchReaders(restaurantId: number) {
+  return apiFetch<CardReader[]>(`/api/v1/admin/terminal/readers?restaurant_id=${restaurantId}`)
+}
+
+export function registerReader(restaurantId: number, registrationCode: string, label: string) {
+  return apiFetch<CardReader>(`/api/v1/admin/terminal/readers?restaurant_id=${restaurantId}`, {
+    method: 'POST',
+    body: JSON.stringify({ registration_code: registrationCode, label }),
+  })
+}
+
+export function removeReader(restaurantId: number, readerId: string) {
+  return apiFetch<void>(`/api/v1/admin/terminal/readers/${readerId}?restaurant_id=${restaurantId}`, { method: 'DELETE' })
 }

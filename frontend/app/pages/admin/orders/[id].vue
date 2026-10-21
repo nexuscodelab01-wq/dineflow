@@ -57,6 +57,10 @@ async function markPaid() {
   }
 }
 
+function printPage() {
+  window.print()
+}
+
 async function cancelOrder() {
   if (!admin.restaurantId || !order.value) return
   const paid = order.value.payments.some((p: { status: string }) => p.status === 'COMPLETED')
@@ -121,6 +125,7 @@ async function cancelOrder() {
           <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
         </p>
         <p v-if="order.payments.length" class="mt-4 text-sm text-ink-muted">Payment: {{ order.payments[0].status }}<span v-if="unpaidLater"> — to be paid {{ order.order_type === 'DELIVERY' ? 'on delivery' : 'at pickup' }}</span></p>
+        <button type="button" class="mt-3 mr-3 text-sm font-medium text-brand-700 hover:underline print:hidden" @click="printPage">Print</button>
         <AppButton v-if="unpaidLater" class="mt-3" :disabled="markingPaid" @click="markPaid">{{ markingPaid ? 'Saving…' : 'Mark paid (cash)' }}</AppButton>
         <p class="mt-4 font-semibold">Total: {{ money(Number(order.total)) }}</p>
       </section>
