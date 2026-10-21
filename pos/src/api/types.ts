@@ -13,6 +13,7 @@ export type PinLoginResponse = {
   device_kind: DeviceKind;
   currency: string;
   country: string;
+  tips_enabled: boolean;
   expires_in: number;
 };
 
@@ -121,6 +122,8 @@ export type ShiftReportRead = {
   expected_cash: string;
   counted_cash: string | null;
   variance: string | null;
+  card_tips: string;
+  cash_tips: string;
 };
 
 export type CashMovementKind = 'PAID_IN' | 'PAID_OUT';
@@ -129,6 +132,10 @@ export type TimeEntryRead = {
   id: number;
   clock_in_at: string;
   clock_out_at: string | null;
+  counted_cash: string | null;
+  cash_tips: string;
+  expected_cash: string;
+  variance: string | null;
 };
 
 export type ApiErrorBody = {

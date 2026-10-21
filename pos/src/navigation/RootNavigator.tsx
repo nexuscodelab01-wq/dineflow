@@ -12,6 +12,7 @@ import CardTenderScreen from '../screens/CardTenderScreen';
 import TableTenderScreen from '../screens/TableTenderScreen';
 import TableCardTenderScreen from '../screens/TableCardTenderScreen';
 import CloseShiftScreen from '../screens/CloseShiftScreen';
+import ClockOutScreen from '../screens/ClockOutScreen';
 import CashMovementScreen from '../screens/CashMovementScreen';
 import { usePosStore } from '../state/store';
 
@@ -27,6 +28,7 @@ export type RootStackParamList = {
   TableTender: { sessionId: number; tableNumber: string; total: string };
   TableCardTender: { sessionId: number; tableNumber: string; total: string };
   CloseShift: undefined;
+  ClockOut: undefined;
   CashMovement: undefined;
 };
 
@@ -73,6 +75,7 @@ export default function RootNavigator() {
       <Stack.Screen name="TableTender" component={TableTenderScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="TableCardTender" component={TableCardTenderScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="CloseShift" component={CloseShiftScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="ClockOut" component={ClockOutScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="CashMovement" component={CashMovementScreen} options={{ presentation: 'modal' }} />
     </>
   );

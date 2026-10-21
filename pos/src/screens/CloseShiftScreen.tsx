@@ -18,7 +18,9 @@ export default function CloseShiftScreen({ navigation }: Props) {
   const shift = usePosStore((s) => s.shift);
   const posSessionToken = usePosStore((s) => s.posSessionToken);
   const setShift = usePosStore((s) => s.setShift);
+  const tipsEnabled = usePosStore((s) => s.tipsEnabled);
   const [countedCash, setCountedCash] = useState('');
+  const [cashTips, setCashTips] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState<ShiftReportRead | null>(null);
@@ -29,7 +31,7 @@ export default function CloseShiftScreen({ navigation }: Props) {
     setBusy(true);
     setError('');
     try {
-      const result = await closeShift(posSessionToken, shift.shift_id, countedCash.trim());
+      const result = await closeShift(posSessionToken, shift.shift_id, countedCash.trim(), cashTips.trim() || '0');
       setReport(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not close the shift');
@@ -55,6 +57,12 @@ export default function CloseShiftScreen({ navigation }: Props) {
             {variance > 0 ? '+' : ''}{money(variance)}
           </Text>
         </View>
+        {Number(report.cash_tips) > 0 && (
+          <View style={styles.row}><Text style={styles.label}>Cash tips declared</Text><Text style={styles.value}>{money(report.cash_tips)}</Text></View>
+        )}
+        {Number(report.card_tips) > 0 && (
+          <View style={styles.row}><Text style={styles.label}>Card tips</Text><Text style={styles.value}>{money(report.card_tips)}</Text></View>
+        )}
         <View style={styles.row}><Text style={styles.label}>Card total</Text><Text style={styles.value}>{money(report.card_total)}</Text></View>
         <View style={styles.row}><Text style={styles.label}>Orders</Text><Text style={styles.value}>{report.order_count}</Text></View>
         <TouchableOpacity style={styles.button} onPress={done}>
@@ -79,6 +87,16 @@ export default function CloseShiftScreen({ navigation }: Props) {
           onSubmitEditing={submit}
           blurOnSubmit
         />
+        {tipsEnabled && (
+          <TextInput
+            style={styles.input}
+            value={cashTips}
+            onChangeText={setCashTips}
+            placeholder="Cash tips in the drawer (if any)"
+            keyboardType="decimal-pad"
+            returnKeyType="done"
+          />
+        )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <TouchableOpacity style={[styles.button, busy && styles.buttonDisabled]} onPress={submit} disabled={busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Close shift</Text>}

@@ -141,6 +141,11 @@ export default function OrderScreen({ navigation }: Props) {
 
   async function handleClockOut() {
     if (!posSessionToken) return;
+    // A handheld has no drawer to close, so its clock-out is where the server counts their cash.
+    if (!isTill) {
+      navigation.navigate('ClockOut');
+      return;
+    }
     try {
       await clockOut(posSessionToken);
       setTimeEntry(null); // the navigator falls back to ClockInScreen automatically

@@ -84,8 +84,8 @@ export function openShift(posSessionToken: string, startingFloat: string) {
   return apiFetch<ShiftRead>('/pos/shifts/open', { method: 'POST', token: posSessionToken, body: { starting_float: startingFloat } });
 }
 
-export function closeShift(posSessionToken: string, shiftId: number, countedCash: string) {
-  return apiFetch<ShiftReportRead>(`/pos/shifts/${shiftId}/close`, { method: 'POST', token: posSessionToken, body: { counted_cash: countedCash } });
+export function closeShift(posSessionToken: string, shiftId: number, countedCash: string, cashTips = '0') {
+  return apiFetch<ShiftReportRead>(`/pos/shifts/${shiftId}/close`, { method: 'POST', token: posSessionToken, body: { counted_cash: countedCash, cash_tips: cashTips } });
 }
 
 export function recordCashMovement(posSessionToken: string, shiftId: number, kind: CashMovementKind, amount: string, reason: string) {
@@ -100,6 +100,10 @@ export function clockIn(posSessionToken: string) {
   return apiFetch<TimeEntryRead>('/pos/time-entries/clock-in', { method: 'POST', token: posSessionToken });
 }
 
-export function clockOut(posSessionToken: string) {
-  return apiFetch<TimeEntryRead>('/pos/time-entries/clock-out', { method: 'POST', token: posSessionToken });
+/** A handheld server also sends their cash-up (cash on hand + the cash tips among it). */
+export function clockOut(posSessionToken: string, cashUp?: { countedCash: string; cashTips: string }) {
+  return apiFetch<TimeEntryRead>('/pos/time-entries/clock-out', {
+    method: 'POST', token: posSessionToken,
+    body: cashUp ? { counted_cash: cashUp.countedCash, cash_tips: cashUp.cashTips } : undefined,
+  });
 }

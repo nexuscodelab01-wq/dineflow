@@ -29,6 +29,8 @@ type PosState = {
   // The restaurant's currency/country, learned at PIN login for the same reason. Defaults until then.
   currency: string;
   country: string;
+  // Whether the card reader should show its tip screen (learned at PIN login).
+  tipsEnabled: boolean;
   cart: CartLine[];
   // A shift is scoped to this device, not the current PIN session — it survives a staff switch, so it's
   // always re-fetched fresh from the backend rather than inferred client-side (avoids staleness if the
@@ -44,7 +46,7 @@ type PosState = {
   loadDevice: () => Promise<void>;
   pair: (token: string) => Promise<void>;
   unpair: () => Promise<void>;
-  loginWithPin: (token: string, staffName: string, deviceKind: DeviceKind, currency: string, country: string) => void;
+  loginWithPin: (token: string, staffName: string, deviceKind: DeviceKind, currency: string, country: string, tipsEnabled: boolean) => void;
   logoutPin: () => void;
   loadShift: () => Promise<void>;
   setShift: (shift: ShiftRead | null) => void;
@@ -65,6 +67,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   deviceKind: null,
   currency: 'usd',
   country: 'US',
+  tipsEnabled: false,
   cart: [],
   shift: null,
   shiftChecked: false,
@@ -89,7 +92,7 @@ export const usePosStore = create<PosState>((set, get) => ({
     });
   },
 
-  loginWithPin: (token, staffName, deviceKind, currency, country) => set({ posSessionToken: token, staffName, deviceKind, currency, country }),
+  loginWithPin: (token, staffName, deviceKind, currency, country, tipsEnabled) => set({ posSessionToken: token, staffName, deviceKind, currency, country, tipsEnabled }),
 
   // Switching staff: just drop the old session token client-side. It's short-lived and stateless
   // server-side, so there's nothing to "log out" on the backend — see pos_service.py's design notes.

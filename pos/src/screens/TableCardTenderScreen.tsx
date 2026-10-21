@@ -17,6 +17,7 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
   const money = useMoney();
   const { sessionId, tableNumber, total } = route.params;
   const posSessionToken = usePosStore((s) => s.posSessionToken);
+  const tipsEnabled = usePosStore((s) => s.tipsEnabled);
   const [stage, setStage] = useState<Stage>('connecting');
   const [error, setError] = useState('');
   const connectedReader = useRef<Reader.Type | null>(null);
@@ -69,7 +70,7 @@ export default function TableCardTenderScreen({ route, navigation }: Props) {
         return;
       }
       setStage('processing');
-      const { error: processError } = await processPaymentIntent({ paymentIntent });
+      const { error: processError } = await processPaymentIntent({ paymentIntent, skipTipping: !tipsEnabled });
       if (processError) {
         setError(processError.message ?? 'The card was declined');
         setStage('error');
