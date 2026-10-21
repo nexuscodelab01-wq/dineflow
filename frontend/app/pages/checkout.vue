@@ -146,6 +146,16 @@ watch(orderType, (type) => {
 // Coupons: the code is checked here only so the customer can see what it's worth before paying.
 // The order endpoint works the discount out again from its own subtotal, so this is never the
 // number that's charged.
+// Pay at pickup / cash on delivery, where the restaurant offers it for this kind of order.
+const payLaterFlag = useFeature('pay_later')
+const payLater = ref(false)
+const payLaterOffered = computed(() => {
+  const r = restaurant.current
+  if (!payLaterFlag.value || !r) return false
+  return (orderType.value === 'PICKUP' && !!r.pay_at_pickup_enabled) || (orderType.value === 'DELIVERY' && !!r.cash_on_delivery_enabled)
+})
+watch(payLaterOffered, (offered) => { if (!offered) payLater.value = false })
+
 const couponsEnabled = useFeature('coupons')
 const couponCode = ref('')
 const appliedCoupon = ref<{ code: string, discount: number } | null>(null)
@@ -268,6 +278,7 @@ async function submitOrder() {
       customer_name: form.customer_name,
       customer_email: form.customer_email,
       customer_phone: form.customer_phone || undefined,
+      pay_later: payLater.value || undefined,
       coupon_code: appliedCoupon.value?.code,
       scheduled_for: whenMode.value === 'later' ? chosenSlot.value : undefined,
       reservation_id: orderType.value === 'DINE_IN' ? reservationId.value : undefined,
@@ -426,6 +437,23 @@ async function payNow() {
           </div>
         </section>
 
+        <section v-if="payLaterOffered" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
+          <h2 class="font-semibold text-ink">How would you like to pay?</h2>
+          <div class="mt-3 space-y-2 text-sm">
+            <label class="flex items-start gap-2"><input v-model="payLater" type="radio" :value="false" class="mt-1"> <span><strong>Pay online now</strong><span class="block text-ink-muted">Card, securely through Stripe.</span></span></label>
+            <label class="flex items-start gap-2">
+              <input v-model="payLater" type="radio" :value="true" class="mt-1">
+              <span>
+                <strong>{{ orderType === 'DELIVERY' ? 'Cash on delivery' : 'Pay when I pick up' }}</strong>
+                <span class="block text-ink-muted">
+                  The kitchen starts right away and you pay {{ orderType === 'DELIVERY' ? 'the driver' : 'at the counter' }}.
+                  Phone number required<span v-if="restaurant.current?.pay_later_first_order_prepaid">; your first order has to be paid online</span>.
+                </span>
+              </span>
+            </label>
+          </div>
+        </section>
+
         <section v-if="orderType === 'DELIVERY'" class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <h2 class="font-semibold text-ink">Delivery address</h2>
           <div class="mt-3 grid gap-3">
@@ -514,7 +542,7 @@ async function payNow() {
           </div>
           <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
           <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting" @click="submitOrder">
-            {{ submitting ? 'Placing order…' : 'Place order' }}
+            {{ submitting ? 'Placing order…' : payLater ? 'Place order — pay later' : 'Place order' }}
           </AppButton>
           <p v-else class="mt-4 text-center text-sm text-ink-subtle">Enter your card details on the left to finish.</p>
         </div>

@@ -50,6 +50,8 @@ export type Order = {
   /** Table name for dine-in orders. */
   table_number?: string | null
   status: OrderStatus
+  /** Placed to be paid at pickup / on delivery; its payment is still outstanding until staff take it. */
+  pay_later?: boolean
   subtotal: string
   tax: string
   service_charge?: string
@@ -97,6 +99,7 @@ export type OrderItemInput = {
 }
 
 export type CreateOrderPayload = {
+  pay_later?: boolean
   restaurant_id: number
   order_type: OrderType
   items: OrderItemInput[]

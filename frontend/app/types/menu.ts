@@ -33,6 +33,10 @@ export type Restaurant = {
   service_charge_rate?: string
   service_charge_order_types?: string[]
   service_charge_taxable?: boolean
+  pay_at_pickup_enabled?: boolean
+  cash_on_delivery_enabled?: boolean
+  pay_later_max_order?: string
+  pay_later_first_order_prepaid?: boolean
   pos_staff_permissions?: { void: boolean, comp: boolean, refund: boolean, discount_max_pct: number }
   delivery_fee: string
   /** Minutes a table is held free after a booking ends (reset time / slack for overstays). */

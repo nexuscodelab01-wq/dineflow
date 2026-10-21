@@ -50,6 +50,10 @@ const form = reactive({
   service_charge_pct: '0',
   service_charge_order_types: ['DINE_IN'] as string[],
   service_charge_taxable: false,
+  pay_at_pickup_enabled: false,
+  cash_on_delivery_enabled: false,
+  pay_later_max_order: '100',
+  pay_later_first_order_prepaid: true,
   pos_void: false,
   pos_comp: false,
   pos_refund: false,
@@ -136,6 +140,10 @@ onMounted(async () => {
       service_charge_pct: String(Math.round(Number(settings.value.service_charge_rate ?? 0) * 10000) / 100),
       service_charge_order_types: [...(settings.value.service_charge_order_types ?? ['DINE_IN'])],
       service_charge_taxable: settings.value.service_charge_taxable ?? false,
+      pay_at_pickup_enabled: settings.value.pay_at_pickup_enabled ?? false,
+      cash_on_delivery_enabled: settings.value.cash_on_delivery_enabled ?? false,
+      pay_later_max_order: settings.value.pay_later_max_order ?? '100',
+      pay_later_first_order_prepaid: settings.value.pay_later_first_order_prepaid ?? true,
       pos_void: settings.value.pos_staff_permissions?.void ?? false,
       pos_comp: settings.value.pos_staff_permissions?.comp ?? false,
       pos_refund: settings.value.pos_staff_permissions?.refund ?? false,
@@ -300,6 +308,7 @@ async function connectStripe() {
 }
 
 // Tips & service charge: flag-gated. Card tips are chosen on the reader itself; saving pushes the presets to Stripe.
+const payLaterFlag = useFeature('pay_later')
 const posControlsFlag = useFeature('pos_controls')
 const tipsFlag = useFeature('tips')
 const syncingReader = ref(false)
@@ -381,7 +390,7 @@ async function save() {
     })
     // Everything that formats money reads currency off these copies, so refresh them now rather than on reload.
     for (const r of [admin.restaurant, useRestaurantStore().current]) {
-      if (r && r.id === settings.value.id) Object.assign(r, { pos_staff_permissions: settings.value.pos_staff_permissions, tips_enabled: settings.value.tips_enabled, service_charge_rate: settings.value.service_charge_rate, service_charge_order_types: settings.value.service_charge_order_types, service_charge_taxable: settings.value.service_charge_taxable, country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
+      if (r && r.id === settings.value.id) Object.assign(r, { pay_at_pickup_enabled: settings.value.pay_at_pickup_enabled, cash_on_delivery_enabled: settings.value.cash_on_delivery_enabled, pay_later_first_order_prepaid: settings.value.pay_later_first_order_prepaid, pos_staff_permissions: settings.value.pos_staff_permissions, tips_enabled: settings.value.tips_enabled, service_charge_rate: settings.value.service_charge_rate, service_charge_order_types: settings.value.service_charge_order_types, service_charge_taxable: settings.value.service_charge_taxable, country: settings.value.country, currency: settings.value.currency, state: settings.value.state, tax_mode: settings.value.tax_mode, default_tax_code: settings.value.default_tax_code })
     }
     message.value = 'Settings saved'
   }
@@ -603,6 +612,18 @@ async function save() {
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Flat tax rate (0.0875) — the fallback">
           <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
+      </section>
+
+      <section v-if="payLaterFlag" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
+        <h2 class="font-semibold">Pay later</h2>
+        <p class="text-xs text-ink-subtle">Let returning customers order online and pay when they collect or on delivery. The kitchen starts straight away, so a no-show costs you food — these limits are your protection.</p>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.pay_at_pickup_enabled" type="checkbox"> Allow pay at pickup</label>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.cash_on_delivery_enabled" type="checkbox"> Allow cash on delivery</label>
+        <label class="flex items-center gap-2 text-sm"><input v-model="form.pay_later_first_order_prepaid" type="checkbox"> A customer's first order must be paid online</label>
+        <label class="block text-sm">
+          <span class="text-ink-muted">Largest order that can be paid later</span>
+          <input v-model="form.pay_later_max_order" type="number" min="1" step="1" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm sm:w-40">
+        </label>
       </section>
 
       <section v-if="posControlsFlag" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">

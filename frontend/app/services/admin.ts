@@ -74,6 +74,11 @@ export function updateOrderStatus(restaurantId: number, orderId: number, status:
   })
 }
 
+/** Cash taken for a pay-at-pickup / cash-on-delivery order, without a till. */
+export function markOrderPaid(restaurantId: number, orderId: number) {
+  return apiFetch<void>(q(restaurantId, `/orders/${orderId}/mark-paid`), { method: 'POST' })
+}
+
 export function fetchKitchenBoard(restaurantId: number) {
   return apiFetch<KitchenBoard>(q(restaurantId, '/kitchen'))
 }

@@ -91,7 +91,7 @@ watch(statusFilter, load)
             <td class="px-4 py-3">{{ order.customer_name }}</td>
             <td class="px-4 py-3">{{ order.order_type.replace('_', ' ') }}</td>
             <td class="px-4 py-3">{{ money(Number(order.total)) }}</td>
-            <td class="px-4 py-3"><StatusBadge :status="order.status" /></td>
+            <td class="px-4 py-3"><StatusBadge :status="order.status" /><span v-if="order.pay_later && order.status !== 'CANCELLED' && !order.payments?.some(p => p.status === 'COMPLETED')" class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Unpaid</span></td>
             <td class="px-4 py-3 text-ink-muted">{{ new Date(order.created_at).toLocaleString() }}</td>
           </tr>
         </tbody>

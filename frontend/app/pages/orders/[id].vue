@@ -88,6 +88,11 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <section v-if="order.pay_later && order.status !== 'CANCELLED' && !order.payments.some(p => p.status === 'COMPLETED')" class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
+        <p class="font-semibold">{{ money(Number(order.total)) }} to pay {{ order.order_type === 'DELIVERY' ? 'on delivery' : 'when you collect' }}</p>
+        <p class="mt-1">Your order is already being prepared. Just pay at the counter{{ order.order_type === 'DELIVERY' ? ' (or the driver)' : '' }} — cash or card.</p>
+      </section>
+
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6">
         <h2 class="font-semibold text-ink">Items</h2>
         <OrderItemList class="mt-4" :items="order.items" show-prices />
