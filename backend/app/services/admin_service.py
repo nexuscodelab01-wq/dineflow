@@ -509,6 +509,10 @@ class AdminService:
                 raise AppError("Connect Stripe first — Stripe Tax runs on your own Stripe account")
             if not self.features.is_enabled(restaurant.id, "stripe_tax"):
                 raise AppError("Stripe Tax isn't enabled for this restaurant")
+        if payload.get("tips_enabled") and not self.features.is_enabled(restaurant.id, "tips"):
+            raise AppError("Tips aren't enabled for this restaurant")
+        if payload.get("service_charge_rate") and not self.features.is_enabled(restaurant.id, "tips"):
+            raise AppError("Service charge isn't enabled for this restaurant")
         for key, value in payload.items():
             setattr(restaurant, key, value)
         if restaurant.max_party_size is not None and restaurant.max_party_size < restaurant.min_party_size:

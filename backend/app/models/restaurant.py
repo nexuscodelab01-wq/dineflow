@@ -113,6 +113,18 @@ class Restaurant(TimestampMixin, Base):
     # and a connected account). Falls back to FLAT if Stripe is unreachable — see app/services/tax.
     tax_mode: Mapped[str] = mapped_column(String(10), default="FLAT", server_default="FLAT", nullable=False)
     default_tax_code: Mapped[str] = mapped_column(String(20), default="txcd_40060003", server_default="txcd_40060003", nullable=False)
+    # Tips & service charge. Card tips are taken on the reader (Stripe Terminal tipping); presets are percentages.
+    tips_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    tip_presets: Mapped[list[int]] = mapped_column(JSONB, default=lambda: [15, 20, 25], server_default="'[15,20,25]'::jsonb", nullable=False)
+    # KEEP = each server keeps their own tips; POOL_EQUAL / POOL_HOURS share the pot (equally / by hours worked).
+    tip_pool_mode: Mapped[str] = mapped_column(String(12), default="KEEP", server_default="KEEP", nullable=False)
+    # A percentage added to the bill before payment (e.g. 0.1250); separate from tips. Applies to the order types listed.
+    service_charge_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal(0), server_default="0", nullable=False)
+    service_charge_order_types: Mapped[list[str]] = mapped_column(JSONB, default=lambda: ["DINE_IN"], server_default="'[\"DINE_IN\"]'::jsonb", nullable=False)
+    service_charge_taxable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # The Stripe Terminal location + configuration that carry this restaurant's on-reader tipping settings.
+    stripe_terminal_location_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stripe_terminal_config_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Stripe Connect (Express account). Null until the owner completes onboarding from Settings.
     # charges_enabled is kept in sync by the account.updated webhook, not read live from Stripe on every
     # request — see app/api/routes/webhooks.py.

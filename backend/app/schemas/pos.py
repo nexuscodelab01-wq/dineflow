@@ -43,6 +43,7 @@ class PinLoginResponse(BaseModel):
     device_kind: str
     currency: str = "usd"
     country: str = "US"
+    tips_enabled: bool = False
     expires_in: int  # seconds
 
 

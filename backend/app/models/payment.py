@@ -67,6 +67,9 @@ class Payment(TimestampMixin, Base):
     application_fee_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False
     )
+    # Tip taken on the card reader, on top of `amount` (the bill). Read back from the PaymentIntent's
+    # amount_details.tip.amount by the webhook; 0 when none. Cash tips are declared at shift close / clock-out.
+    tip_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False)
     # Set on a FAILED payment so staff (and the customer, on retry) can see why.
     failure_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

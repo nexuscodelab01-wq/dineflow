@@ -41,6 +41,8 @@ class Shift(Base):
     closed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     starting_float: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     counted_cash: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)  # set on close
+    # Cash tips the closer declared (they sit in the drawer but belong to staff, not the house).
+    cash_tips: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False)
 
     device: Mapped["Device"] = relationship("Device")
     opened_by: Mapped["User | None"] = relationship("User", foreign_keys=[opened_by_user_id])

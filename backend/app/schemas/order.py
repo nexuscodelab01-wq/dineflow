@@ -58,6 +58,7 @@ class OrderQuoteRead(BaseModel):
     discount: Decimal
     tax: Decimal
     delivery_fee: Decimal
+    service_charge: Decimal = Decimal("0.00")
     total: Decimal
 
 
@@ -116,6 +117,7 @@ class OrderRead(BaseModel):
     status: OrderStatus
     subtotal: Decimal
     tax: Decimal
+    service_charge: Decimal = Decimal("0.00")
     delivery_fee: Decimal
     discount: Decimal
     total: Decimal

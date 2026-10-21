@@ -326,6 +326,12 @@ class RestaurantSettingsUpdate(BaseModel):
     state: str | None = Field(default=None, max_length=3)
     tax_mode: Literal["FLAT", "STRIPE"] | None = None
     default_tax_code: str | None = None
+    tips_enabled: bool | None = None
+    tip_presets: list[int] | None = None
+    tip_pool_mode: Literal["KEEP", "POOL_EQUAL", "POOL_HOURS"] | None = None
+    service_charge_rate: Decimal | None = Field(default=None, ge=0, le=Decimal("0.5"))
+    service_charge_order_types: list[str] | None = None
+    service_charge_taxable: bool | None = None
     reservation_buffer_minutes: int | None = Field(default=None, ge=0, le=60)
     # Guest booking policy — staff can still book outside these limits for private events or corrections.
     # Capped at 20 to match the hard ceiling on party_size for an online booking (ReservationCreate).
@@ -348,6 +354,25 @@ class RestaurantSettingsUpdate(BaseModel):
     max_orders_per_slot: int | None = Field(default=None, ge=1, le=100)
     scheduled_order_days_ahead: int | None = Field(default=None, ge=0, le=60)
     scheduled_order_lead_minutes: int | None = Field(default=None, ge=0, le=480)
+
+    @field_validator("tip_presets")
+    @classmethod
+    def _check_tip_presets(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return None
+        if len(value) != 3 or any(not 0 < v <= 100 for v in value):
+            raise ValueError("Give exactly three tip percentages between 1 and 100")
+        return value
+
+    @field_validator("service_charge_order_types")
+    @classmethod
+    def _check_service_charge_types(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        unknown = set(value) - {"DINE_IN", "PICKUP", "DELIVERY", "COUNTER"}
+        if unknown:
+            raise ValueError(f"Unknown order type(s): {', '.join(sorted(unknown))}")
+        return sorted(set(value))
 
     @field_validator("default_tax_code")
     @classmethod

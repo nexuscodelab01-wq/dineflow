@@ -21,6 +21,7 @@ from app.schemas.analytics import (
 )
 from app.schemas.time_entry import EmployeeReportRow
 from app.services.time_entry_service import TimeEntryService
+from app.services.tip_service import TipService
 from app.utils.date_ranges import DateRangePreset, resolve_date_range
 
 
@@ -84,6 +85,9 @@ class AnalyticsService:
 
         totals = self.analytics.employee_totals(restaurant_id, start, end)
         hours = self.time_entries.hours_worked(restaurant_id, start, end)
+        tips = TipService(self.db)
+        card_tips = tips.card_tips(restaurant_id, start, end)
+        cash_tips = tips.cash_tips(restaurant_id, start, end)
 
         rows = []
         for row in totals:
@@ -94,6 +98,7 @@ class AnalyticsService:
                 user_id=row["user_id"], name=row["name"], cash_total=row["cash_total"],
                 card_total=row["card_total"], order_count=row["order_count"],
                 hours_worked=hours_worked, sales_per_labour_hour=sales_per_labour_hour,
+                card_tips=card_tips.get(row["user_id"], Decimal("0.00")), cash_tips=cash_tips.get(row["user_id"], Decimal("0.00")),
             ))
         return rows
 

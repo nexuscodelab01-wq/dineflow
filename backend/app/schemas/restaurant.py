@@ -56,6 +56,12 @@ class RestaurantRead(BaseModel):
     state: str | None = None
     tax_mode: str = "FLAT"
     default_tax_code: str = "txcd_40060003"
+    tips_enabled: bool = False
+    tip_presets: list[int] = [15, 20, 25]
+    tip_pool_mode: str = "KEEP"
+    service_charge_rate: Decimal = Decimal(0)
+    service_charge_order_types: list[str] = ["DINE_IN"]
+    service_charge_taxable: bool = False
     # Whether this restaurant can actually take a real payment yet — not the internal Stripe account id,
     # just enough for the site to know "show a payment form" vs "online ordering isn't set up yet".
     stripe_charges_enabled: bool = False

@@ -45,6 +45,7 @@ from app.services.tax import (
     price_order_tax,
     record_paid_order,
     reverse_paid_order,
+    service_charge_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -180,10 +181,15 @@ class OrderService:
         taxable = max(subtotal - order.discount, Decimal("0.00"))
         # Delivery is taxed where the food goes; everything else where the restaurant is.
         location = address_location(restaurant, address) if data.order_type == OrderType.DELIVERY and data.delivery_address else None
-        tax = price_order_tax(self.db, restaurant, order, discount=order.discount, delivery_fee=delivery_fee, location=location).tax_total
-        total = (taxable + tax + delivery_fee).quantize(Decimal("0.01"))
+        service_charge = service_charge_for(restaurant, data.order_type, taxable)
+        tax = price_order_tax(
+            self.db, restaurant, order, discount=order.discount, delivery_fee=delivery_fee, location=location,
+            taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
+        ).tax_total
+        total = (taxable + tax + delivery_fee + service_charge).quantize(Decimal("0.01"))
 
         order.subtotal = subtotal
+        order.service_charge = service_charge
         order.tax = tax
         order.delivery_fee = delivery_fee
         order.total = total
@@ -297,11 +303,15 @@ class OrderService:
             if data.order_type == OrderType.DELIVERY and data.delivery_address:
                 a = data.delivery_address
                 location = address_location(restaurant, Address(street=a.street, city=a.city, postal_code=a.postal_code, state=a.state))
-            tax = price_order_tax(self.db, restaurant, order, discount=discount, delivery_fee=delivery_fee, location=location).tax_total
             taxable = max(subtotal - discount, Decimal("0.00"))
+            service_charge = service_charge_for(restaurant, data.order_type, taxable)
+            tax = price_order_tax(
+                self.db, restaurant, order, discount=discount, delivery_fee=delivery_fee, location=location,
+                taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
+            ).tax_total
             return OrderQuoteRead(
-                subtotal=subtotal, discount=discount, tax=tax, delivery_fee=delivery_fee,
-                total=(taxable + tax + delivery_fee).quantize(Decimal("0.01")),
+                subtotal=subtotal, discount=discount, tax=tax, delivery_fee=delivery_fee, service_charge=service_charge,
+                total=(taxable + tax + delivery_fee + service_charge).quantize(Decimal("0.01")),
             )
         finally:
             savepoint.rollback()

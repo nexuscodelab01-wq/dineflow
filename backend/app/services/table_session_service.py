@@ -57,7 +57,12 @@ from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider, reverse_payment
 from app.services.shift_service import ShiftService
-from app.services.tax import price_order_tax, record_paid_order, reverse_paid_order
+from app.services.tax import (
+    price_order_tax,
+    record_paid_order,
+    reverse_paid_order,
+    service_charge_for,
+)
 
 FEATURE = "qr_table_ordering"
 CLOSED_STATUSES = {OrderStatus.CANCELLED}
@@ -237,11 +242,14 @@ class TableSessionService:
             )
             orders.orders.add(order)
             subtotal = orders._add_lines(order, data.items, items_by_id)
-            tax = price_order_tax(self.db, restaurant, order).tax_total
-            total = (subtotal + tax).quantize(Decimal("0.01"))
+            service_charge = service_charge_for(restaurant, OrderType.DINE_IN, subtotal)
+            tax = price_order_tax(
+                self.db, restaurant, order, taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
+            ).tax_total
+            total = (subtotal + tax + service_charge).quantize(Decimal("0.01"))
             if total > Decimal(str(settings.QR_MAX_ORDER_TOTAL)):
                 raise AppError("That round is too large to send from a table. Please ask a member of staff.")
-            order.subtotal, order.tax, order.total = subtotal, tax, total
+            order.subtotal, order.tax, order.service_charge, order.total = subtotal, tax, service_charge, total
 
             self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=staff_user.id if staff_user else None))
             order.status = OrderStatus.CONFIRMED  # paid at the end of the meal, so nothing to wait for

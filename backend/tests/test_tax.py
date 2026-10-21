@@ -191,7 +191,7 @@ def test_a_quote_matches_the_flat_maths_for_a_flat_restaurant(world):
     r = world.client.post(f"{API}/orders/quote", headers=header(world.a.customer), json={
         "restaurant_id": world.a.rid, "order_type": "PICKUP", "items": [{"menu_item_id": world.a.item.id, "quantity": 1, "modifier_option_ids": []}],
     })
-    assert r.json() == {"subtotal": "12.00", "discount": "0.00", "tax": "1.20", "delivery_fee": "0.00", "total": "13.20"}
+    assert r.json() == {"subtotal": "12.00", "discount": "0.00", "tax": "1.20", "delivery_fee": "0.00", "service_charge": "0.00", "total": "13.20"}
 
 
 def test_a_paid_sale_is_recorded_once_and_a_refund_reverses_it(stripe_tax):

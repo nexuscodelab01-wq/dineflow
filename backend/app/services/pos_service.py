@@ -48,7 +48,7 @@ from app.services.feature_service import FeatureService
 from app.services.order_service import OrderService
 from app.services.payments import get_payment_provider
 from app.services.shift_service import ShiftService
-from app.services.tax import price_order_tax
+from app.services.tax import price_order_tax, service_charge_for
 
 FEATURE = "pos"
 
@@ -122,6 +122,7 @@ class PosService:
         return PinLoginResponse(
             pos_session_token=token, staff_name=user.first_name, device_kind=device.kind,
             currency=restaurant.currency if restaurant else "usd", country=restaurant.country if restaurant else "US",
+            tips_enabled=bool(restaurant and restaurant.tips_enabled),
             expires_in=POS_SESSION_MINUTES * 60,
         )
 
@@ -150,9 +151,12 @@ class PosService:
             )
             orders.orders.add(order)
             subtotal = orders._add_lines(order, data.items, items_by_id)
-            tax = price_order_tax(self.db, restaurant, order).tax_total
-            total = (subtotal + tax).quantize(Decimal("0.01"))
-            order.subtotal, order.tax, order.total = subtotal, tax, total
+            service_charge = service_charge_for(restaurant, OrderType.COUNTER, subtotal)
+            tax = price_order_tax(
+                self.db, restaurant, order, taxable_service_charge=service_charge if restaurant.service_charge_taxable else Decimal("0.00"),
+            ).tax_total
+            total = (subtotal + tax + service_charge).quantize(Decimal("0.01"))
+            order.subtotal, order.tax, order.service_charge, order.total = subtotal, tax, service_charge, total
 
             self.db.add(OrderStatusHistory(order_id=order.id, previous_status=None, new_status=OrderStatus.PENDING, changed_by_user_id=staff.id))
             # Stays PENDING, nothing published — see module docstring. mark_counter_order_paid_cash

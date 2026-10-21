@@ -96,7 +96,7 @@ class ShiftService:
         ))
         self.db.commit()
 
-    def close_shift(self, device: Device, staff_user: User, shift_id: int, counted_cash: Decimal) -> ShiftReportRead:
+    def close_shift(self, device: Device, staff_user: User, shift_id: int, counted_cash: Decimal, cash_tips: Decimal = Decimal("0.00")) -> ShiftReportRead:
         shift = self._open_shift_or_error(device)
         if shift.id != shift_id:
             raise NotFoundError("Shift not found")
@@ -106,7 +106,9 @@ class ShiftService:
         shift.closed_at = datetime.now(UTC)
         shift.closed_by_user_id = staff_user.id
         shift.counted_cash = counted_cash
-        variance = counted_cash - expected_cash
+        shift.cash_tips = cash_tips
+        # Cash tips are in the drawer but aren't the house's: they don't count as a surplus.
+        variance = counted_cash - cash_tips - expected_cash
         self.db.add(AuditLog(
             restaurant_id=device.restaurant_id, actor_user_id=staff_user.id, actor_label=staff_user.email,
             action="pos.shift_closed", target=f"shift:{shift.id}",
@@ -118,6 +120,7 @@ class ShiftService:
             closed_at=shift.closed_at, closed_by=shift.closed_by.first_name if shift.closed_by else None,
             starting_float=shift.starting_float, cash_total=cash_total, card_total=card_total,
             order_count=order_count, expected_cash=expected_cash, counted_cash=counted_cash, variance=variance,
+            card_tips=self._card_tips(shift.id), cash_tips=cash_tips,
         )
 
     def list_shifts(self, restaurant_id: int) -> list[ShiftReportRead]:
@@ -128,12 +131,13 @@ class ShiftService:
         for shift in shifts:
             cash_total, card_total, order_count = self._totals(shift.id)
             expected_cash = shift.starting_float + cash_total + self._cash_movements_net(shift.id)
-            variance = (shift.counted_cash - expected_cash) if shift.counted_cash is not None else None
+            variance = (shift.counted_cash - shift.cash_tips - expected_cash) if shift.counted_cash is not None else None
             out.append(ShiftReportRead(
                 shift_id=shift.id, opened_at=shift.opened_at, opened_by=shift.opened_by.first_name if shift.opened_by else None,
                 closed_at=shift.closed_at, closed_by=shift.closed_by.first_name if shift.closed_by else None,
                 starting_float=shift.starting_float, cash_total=cash_total, card_total=card_total,
                 order_count=order_count, expected_cash=expected_cash, counted_cash=shift.counted_cash, variance=variance,
+                card_tips=self._card_tips(shift.id), cash_tips=shift.cash_tips,
             ))
         return out
 
@@ -160,6 +164,11 @@ class ShiftService:
             Payment.shift_id == shift_id, Payment.status == PaymentStatus.COMPLETED,
         )) or 0
         return cash_total, card_total, order_count
+
+    def _card_tips(self, shift_id: int) -> Decimal:
+        return self.db.scalar(select(func.coalesce(func.sum(Payment.tip_amount), 0)).where(
+            Payment.shift_id == shift_id, Payment.status == PaymentStatus.COMPLETED,
+        )) or Decimal("0.00")
 
     def _cash_movements_net(self, shift_id: int) -> Decimal:
         rows = self.db.execute(

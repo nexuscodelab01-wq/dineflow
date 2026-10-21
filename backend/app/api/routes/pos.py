@@ -43,6 +43,7 @@ from app.schemas.table_session import (
     TablePaymentRead,
 )
 from app.schemas.time_entry import TimeEntryRead
+from app.schemas.tips import CashUpRequest
 from app.services.payments import create_terminal_connection_token
 from app.services.pos_service import PosService
 from app.services.shift_service import ShiftService
@@ -199,7 +200,7 @@ def open_shift(data: ShiftOpenRequest, staff: CurrentPosStaff, service: Shifts) 
 @router.post("/shifts/{shift_id}/close", response_model=ShiftReportRead, dependencies=POS_STAFF_GATE)
 def close_shift(shift_id: int, data: ShiftCloseRequest, staff: CurrentPosStaff, service: Shifts) -> ShiftReportRead:
     try:
-        return service.close_shift(staff.device, staff.user, shift_id, data.counted_cash)
+        return service.close_shift(staff.device, staff.user, shift_id, data.counted_cash, data.cash_tips)
     except (AppError, NotFoundError) as exc:
         raise raise_http_for_app_error(exc) from exc
 
@@ -227,8 +228,9 @@ def clock_in(staff: CurrentPosStaff, service: TimeEntries) -> TimeEntryRead:
 
 
 @router.post("/time-entries/clock-out", response_model=TimeEntryRead, dependencies=POS_STAFF_GATE)
-def clock_out(staff: CurrentPosStaff, service: TimeEntries) -> TimeEntryRead:
+def clock_out(staff: CurrentPosStaff, service: TimeEntries, data: CashUpRequest | None = None) -> TimeEntryRead:
+    """Clock out. A handheld server also sends their cash-up (cash on hand + cash tips); a till user just clocks out."""
     try:
-        return service.clock_out(staff.device.restaurant_id, staff.user)
+        return service.clock_out(staff.device.restaurant_id, staff.user, data)
     except AppError as exc:
         raise raise_http_for_app_error(exc) from exc

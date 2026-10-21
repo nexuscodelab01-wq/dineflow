@@ -22,6 +22,8 @@ class ShiftRead(BaseModel):
 
 class ShiftCloseRequest(BaseModel):
     counted_cash: Decimal = Field(ge=0)
+    # Cash tips sitting in the drawer that belong to staff, not the house.
+    cash_tips: Decimal = Field(default=Decimal("0.00"), ge=0)
 
 
 class ShiftReportRead(BaseModel):
@@ -37,6 +39,8 @@ class ShiftReportRead(BaseModel):
     expected_cash: Decimal
     counted_cash: Decimal | None
     variance: Decimal | None
+    card_tips: Decimal = Decimal("0.00")
+    cash_tips: Decimal = Decimal("0.00")
 
 
 class CashMovementCreate(BaseModel):

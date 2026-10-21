@@ -31,6 +31,7 @@ from app.models.service_request import ServiceRequest
 from app.models.shift import Shift
 from app.models.table_session import SessionGuest, TableSession
 from app.models.time_entry import TimeEntry
+from app.models.tip_allocation import TipAllocation
 from app.models.user import User
 from app.models.waitlist_entry import WaitlistEntry
 
@@ -69,6 +70,7 @@ __all__ = [
     "Shift",
     "TableSession",
     "TimeEntry",
+    "TipAllocation",
     "User",
     "WaitlistEntry",
 ]

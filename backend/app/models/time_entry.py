@@ -5,9 +5,10 @@ then clock-out) — the same lifecycle shape `Shift` uses, not `CashMovement`'s 
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -35,6 +36,9 @@ class TimeEntry(Base):
     # Informational only (which till they happened to clock in from) — never used to scope anything.
     clock_in_device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
     clock_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A server's cash-up at clock-out (handhelds have no drawer): cash on hand, and the cash tips among it.
+    counted_cash: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    cash_tips: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), server_default="0.00", nullable=False)
 
     user: Mapped["User"] = relationship("User")
     clock_in_device: Mapped["Device | None"] = relationship("Device")

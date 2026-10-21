@@ -18,6 +18,7 @@ Stripe retries a webhook until it gets a 2xx, so every handler here is written t
 """
 
 import logging
+from decimal import Decimal
 from typing import Annotated
 
 import stripe
@@ -99,6 +100,11 @@ def _handle_payment_succeeded(db: Session, intent: stripe.StripeObject) -> None:
     if payment is None:
         logger.warning("payment_intent.succeeded for an unknown intent: %s", intent["id"])
         return
+    # An on-reader tip is added to the intent when the card is presented: the captured amount is then larger than
+    # the bill we created it for. Record the tip separately so Payment.amount stays "the bill".
+    tip = ((intent.to_dict().get("amount_details") or {}).get("tip") or {}).get("amount")
+    if tip:
+        payment.tip_amount = Decimal(tip) / 100
     if payment.table_session_id is not None:
         # A table-session payment — no single order to confirm, since every round on the tab is already
         # CONFIRMED the moment it was sent. Confirming here means settling the payment and closing the tab.

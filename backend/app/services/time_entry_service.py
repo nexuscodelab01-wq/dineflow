@@ -9,14 +9,17 @@ open when a report runs is excluded from that row's total (the hours aren't fina
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, ConflictError
+from app.models.enums import PaymentMethod, PaymentStatus
+from app.models.payment import Payment
 from app.models.time_entry import TimeEntry
 from app.models.user import User
 from app.schemas.time_entry import TimeEntryRead
+from app.schemas.tips import CashUpRequest
 from app.services.feature_service import FeatureService
 
 FEATURE = "pos"
@@ -44,11 +47,14 @@ class TimeEntryService:
         self.db.commit()
         return self._read(entry)
 
-    def clock_out(self, restaurant_id: int, user: User) -> TimeEntryRead:
+    def clock_out(self, restaurant_id: int, user: User, cash_up: CashUpRequest | None = None) -> TimeEntryRead:
         entry = self._open_entry(restaurant_id, user.id)
         if entry is None:
             raise AppError("Not clocked in")
         entry.clock_out_at = datetime.now(UTC)
+        if cash_up is not None:
+            entry.counted_cash = cash_up.counted_cash
+            entry.cash_tips = cash_up.cash_tips
         self.db.commit()
         return self._read(entry)
 
@@ -78,4 +84,15 @@ class TimeEntryService:
         ))
 
     def _read(self, entry: TimeEntry) -> TimeEntryRead:
-        return TimeEntryRead(id=entry.id, clock_in_at=entry.clock_in_at, clock_out_at=entry.clock_out_at)
+        until = entry.clock_out_at or datetime.now(UTC)
+        expected = self.db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.restaurant_id == entry.restaurant_id, Payment.staff_user_id == entry.user_id,
+            Payment.status == PaymentStatus.COMPLETED, Payment.payment_method == PaymentMethod.CASH,
+            Payment.created_at >= entry.clock_in_at, Payment.created_at <= until,
+        )) or Decimal("0.00")
+        expected = Decimal(expected)
+        variance = (entry.counted_cash - entry.cash_tips - expected) if entry.counted_cash is not None else None
+        return TimeEntryRead(
+            id=entry.id, clock_in_at=entry.clock_in_at, clock_out_at=entry.clock_out_at, counted_cash=entry.counted_cash,
+            cash_tips=entry.cash_tips, expected_cash=expected, variance=variance,
+        )
