@@ -4,6 +4,7 @@ import { StripeTerminalProvider } from '@stripe/stripe-terminal-react-native';
 import RootNavigator from './src/navigation/RootNavigator';
 import { fetchTerminalConnectionToken } from './src/api/pos';
 import { usePosStore } from './src/state/store';
+import TerminalInit from './src/components/TerminalInit';
 
 // Read via getState(), not a hook value — this function is created once at module load and must not
 // close over a stale posSessionToken if staff switches PIN mid-session.
@@ -18,6 +19,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StripeTerminalProvider logLevel="verbose" tokenProvider={fetchTokenProvider}>
+        <TerminalInit />
         <RootNavigator />
       </StripeTerminalProvider>
       <StatusBar style="auto" />
