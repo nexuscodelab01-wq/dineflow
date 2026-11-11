@@ -51,6 +51,35 @@ docker compose up --build            # development
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
+## Environments and deploys
+
+Two stacks, **never sharing anything**: production (`docker-compose.prod.yml`, `.env`) and QA (`docker-compose.qa.yml`, `.env.qa`, own server and `*.qa.dineflow.io` addresses). QA has its own database, secrets, Stripe *test* keys and `EMAIL_BACKEND=console`, so it cannot touch a restaurant's real data, email a real customer or take a real payment.
+
+### How a deploy keeps production data
+- The database lives in the named Docker volume `postgres_data`. `docker compose up --build` replaces the *containers* and leaves that volume alone. **Never run `docker compose down -v` on production** — `-v` is the one command that deletes the data.
+- Schema changes are migrations (`alembic/versions`), applied automatically when the backend starts (`docker-entrypoint.sh` → `alembic upgrade head`). They are written to **add** (new columns with defaults, new tables), so existing rows are untouched. If you ever need to rename or drop something, do it in two releases (add the new thing and use it → later, remove the old one) — never in one.
+- Uploaded files are in object storage (R2) in production, not in the container, so a rebuild doesn't lose them. (`STORAGE_BACKEND=s3` — check `.env` says so; `local` would keep them inside the container.)
+- `RUN_SEED` must be `false` (or unset) in production: the seed loads demo restaurants.
+- `scripts/deploy.sh prod` takes a fresh database backup **before** changing anything and stops if the backup fails. The nightly job (see Backups) is the second safety net.
+
+### The release flow
+1. Work lands on `main` → CI runs (lint, types, backend tests under both database roles, frontend tests and build, production image build).
+2. A green CI on `main` **deploys to QA automatically** (`.github/workflows/deploy.yml`, or run `scripts/deploy.sh qa` on the QA server). Try the change there: log in, run the flows you touched, check the migration applied (`alembic current` is printed at the end of the deploy).
+3. When QA looks right, deploy **the same commit** to production: GitHub → Actions → Deploy → Run workflow → `prod` (set `ref` to a tag or commit you saw on QA), or on the server `scripts/deploy.sh prod <ref>`. Give the GitHub `prod` environment required reviewers so it needs a second approval.
+4. Tag what went out (`git tag v1.4.0 && git push --tags`) so there is always a named version to go back to.
+
+### One-time setup
+- **QA server**: a small Linux box with Docker (a ~€5/month VPS is plenty), the repo cloned to `/opt/dineflow`, `cp .env.qa.example .env.qa` and fill it in (different secrets from production), then `scripts/deploy.sh qa`.
+- **DNS (Cloudflare)**: A records for `qa.dineflow.io`, `*.qa.dineflow.io` and `api.qa.dineflow.io` → the QA server. (`*.dineflow.io` does *not* cover `x.qa.dineflow.io`.) The same Cloudflare API token as production works for the certificates.
+- **Stripe test mode**: a separate webhook endpoint `https://api.qa.dineflow.io/api/v1/webhooks/stripe` (and the Connect one) with its own signing secrets in `.env.qa`.
+- **GitHub secrets**: `QA_HOST`, `QA_USER`, `QA_SSH_KEY`, `QA_PATH` and the `PROD_*` equivalents (an SSH key that can log in to each server). Until they exist the deploy jobs skip themselves.
+- QA starts with demo data (`RUN_SEED=true`, see `backend/app/db/seed.py`). Don't copy production's database into QA — it contains real customers' emails and password hashes. To test against realistic volumes, seed more demo data instead.
+
+### Rolling back
+A bad release is rolled back in two parts — the code and, only if needed, the data:
+1. **Code**: `scripts/deploy.sh prod <previous-tag-or-commit>`. Because migrations only add columns/tables, the previous code runs fine against the newer schema; most rollbacks stop here.
+2. **Data** (only if a migration or bug damaged rows): restore the backup the deploy took just before it (`backups/dineflow-<time>.sql.gz`) with `scripts/restore-db.sh` as described under Restoring — scratch database first, live only with `FORCE_LIVE=1`.
+
 ## Restarts and deploys
 Live streams (kitchen screens) are closed the instant the server gets a stop signal, so a deploy or a dev auto-reload never waits on an open tab; browsers reconnect by themselves. As a backstop uvicorn force-closes anything still open after `--timeout-graceful-shutdown` (5 s in development, `GRACEFUL_SHUTDOWN_SECONDS`, default 10 s, in production).
 

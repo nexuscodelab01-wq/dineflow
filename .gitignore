@@ -79,3 +79,6 @@ OUTSTANDING.md
 KIOSK-POS-ROADMAP.md
 COMMIT_PLAN.md
 Test.md
+
+# QA secrets (the .example file is the one that is committed)
+.env.qa

@@ -1,0 +1,110 @@
+# QA / staging stack: the same images as production, but its OWN database, files and secrets — so a change can be tried
+# for real (migrations included) before it goes near a restaurant's live data. Meant for a separate small server with
+# its own DNS (qa.dineflow.io, *.qa.dineflow.io, api.qa.dineflow.io); see docs/OPERATIONS.md → "Environments and deploys".
+#
+#   cp .env.qa.example .env.qa        # fill in the secrets (they must NOT be production's)
+#   docker compose -f docker-compose.qa.yml --env-file .env.qa up --build -d
+#
+# Nothing here is shared with production: different project name, containers, volumes and database.
+
+name: dineflow-qa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dineflow-postgres-qa
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dineflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.qa}
+      POSTGRES_DB: ${POSTGRES_DB:-dineflow}
+    volumes:
+      - qa_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dineflow} -d ${POSTGRES_DB:-dineflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - dineflow-qa
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: dineflow-backend-qa
+    restart: unless-stopped
+    env_file:
+      - .env.qa
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}
+      APP_DATABASE_URL: ${APP_DB_PASSWORD:+postgresql+psycopg://dineflow_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}}
+      # "staging", not "production": the production guard insists on live keys, but everything else behaves the same.
+      ENVIRONMENT: staging
+      RUN_SEED: ${RUN_SEED:-true}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - dineflow-qa
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:?Set NUXT_PUBLIC_API_URL in .env.qa}
+    container_name: dineflow-frontend-qa
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL}
+      NUXT_API_URL: ${NUXT_API_URL:-http://backend:8000}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      NUXT_PUBLIC_CONTACT_EMAIL: ${NUXT_PUBLIC_CONTACT_EMAIL:-}
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - dineflow-qa
+
+  caddy:
+    build:
+      context: ./caddy
+    container_name: dineflow-caddy-qa
+    restart: unless-stopped
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .env.qa}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile.qa:/etc/caddy/Caddyfile:ro
+      - qa_caddy_data:/data
+      - qa_caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - dineflow-qa
+
+volumes:
+  qa_postgres_data:
+  qa_caddy_data:
+  qa_caddy_config:
+
+networks:
+  dineflow-qa:
+    driver: bridge
