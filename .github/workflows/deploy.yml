@@ -1,6 +1,6 @@
 name: Deploy
 
-# Every green CI run on main deploys to QA automatically. Production is deliberate: run this workflow by hand
+# Every green CI run on main deploys to QA automatically (QA runs on the production server, see docs/OPERATIONS.md). Production is deliberate: run this workflow by hand
 # (Actions → Deploy → Run workflow → environment "prod") — and in GitHub → Settings → Environments, give the "prod"
 # environment required reviewers so it also needs a second click. Both only work once the secrets below exist; until
 # then the jobs skip themselves, so this file is safe to commit before the servers are ready.

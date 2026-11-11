@@ -16,8 +16,8 @@ REF="${2:-origin/main}"
 cd "$(dirname "$0")/.."
 
 case "$ENV_NAME" in
-  qa)   COMPOSE="docker compose -f docker-compose.qa.yml --env-file .env.qa"; COMPOSE_FILE=docker-compose.qa.yml ;;
-  prod) COMPOSE="docker compose -f docker-compose.prod.yml"; COMPOSE_FILE=docker-compose.prod.yml ;;
+  qa)   COMPOSE="docker compose -f docker-compose.qa.yml --env-file .env.qa"; COMPOSE_FILE=docker-compose.qa.yml; API=qa-backend ;;
+  prod) COMPOSE="docker compose -f docker-compose.prod.yml"; COMPOSE_FILE=docker-compose.prod.yml; API=backend ;;
   *) echo "usage: scripts/deploy.sh <qa|prod> [git-ref]" >&2; exit 2 ;;
 esac
 
@@ -43,16 +43,16 @@ $COMPOSE up --build -d
 
 echo "Waiting for the API to report ready (it runs migrations first)..."
 i=0
-until $COMPOSE exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=3)" >/dev/null 2>&1; do
+until $COMPOSE exec -T $API python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=3)" >/dev/null 2>&1; do
   i=$((i + 1))
   if [ "$i" -gt 40 ]; then
     echo "The API did not become ready. Recent logs:" >&2
-    $COMPOSE logs --tail=60 backend >&2
+    $COMPOSE logs --tail=60 $API >&2
     echo "Previous version was $BEFORE — see 'Rolling back' in docs/OPERATIONS.md." >&2
     exit 1
   fi
   sleep 5
 done
 
-echo "Database is at: $($COMPOSE exec -T backend alembic current 2>/dev/null | tail -1)"
+echo "Database is at: $($COMPOSE exec -T $API alembic current 2>/dev/null | tail -1)"
 echo "Deployed $AFTER to $ENV_NAME."

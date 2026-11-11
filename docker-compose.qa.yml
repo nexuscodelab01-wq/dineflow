@@ -1,19 +1,25 @@
-# QA / staging stack: the same images as production, but its OWN database, files and secrets — so a change can be tried
-# for real (migrations included) before it goes near a restaurant's live data. Meant for a separate small server with
-# its own DNS (qa.dineflow.io, *.qa.dineflow.io, api.qa.dineflow.io); see docs/OPERATIONS.md → "Environments and deploys".
+# QA / staging stack, run on the SAME server as production (no extra hosting to buy): the same images, but its OWN
+# database, files and secrets, so a change can be tried for real — migrations included — before it touches a restaurant's
+# live data. It has no proxy of its own: production's Caddy serves the qa. addresses (see caddy/Caddyfile) and reaches
+# these containers by name. See docs/OPERATIONS.md → "Environments and deploys".
 #
-#   cp .env.qa.example .env.qa        # fill in the secrets (they must NOT be production's)
+#   cp .env.qa.example .env.qa            # fill in the secrets (they must NOT be production's)
 #   docker compose -f docker-compose.qa.yml --env-file .env.qa up --build -d
 #
-# Nothing here is shared with production: different project name, containers, volumes and database.
+# Safety rails: separate project/containers/volumes/database; memory caps so QA can never starve production; and only the
+# QA web + API containers join production's network (the database stays on QA's private network, addressed by its own
+# unique name, so QA can never be pointed at production's database by accident).
 
 name: dineflow-qa
 
 services:
-  postgres:
+  # Service names are deliberately unique (qa-…): Docker registers a service's name as a DNS alias on every network it
+  # joins, and the shared edge network also holds production's "backend", "frontend" and "postgres".
+  qa-postgres:
     image: postgres:16-alpine
     container_name: dineflow-postgres-qa
     restart: unless-stopped
+    mem_limit: 384m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dineflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.qa}
@@ -26,19 +32,22 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - dineflow-qa
+      - qa
 
-  backend:
+  qa-backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
     container_name: dineflow-backend-qa
     restart: unless-stopped
+    mem_limit: 640m
     env_file:
       - .env.qa
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}
-      APP_DATABASE_URL: ${APP_DB_PASSWORD:+postgresql+psycopg://dineflow_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-dineflow}}
+      # "qa-postgres", never the bare word "postgres": the shared edge network also holds production's "postgres".
+      # (QA's database isn't on that network at all — only the web and API containers are.)
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dineflow}:${POSTGRES_PASSWORD}@qa-postgres:5432/${POSTGRES_DB:-dineflow}
+      APP_DATABASE_URL: ${APP_DB_PASSWORD:+postgresql+psycopg://dineflow_app:${APP_DB_PASSWORD}@qa-postgres:5432/${POSTGRES_DB:-dineflow}}
       # "staging", not "production": the production guard insists on live keys, but everything else behaves the same.
       ENVIRONMENT: staging
       RUN_SEED: ${RUN_SEED:-true}
@@ -46,7 +55,7 @@ services:
     expose:
       - "8000"
     depends_on:
-      postgres:
+      qa-postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=3)"]
@@ -55,9 +64,10 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - dineflow-qa
+      - qa
+      - edge
 
-  frontend:
+  qa-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
@@ -65,46 +75,31 @@ services:
         NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL:?Set NUXT_PUBLIC_API_URL in .env.qa}
     container_name: dineflow-frontend-qa
     restart: unless-stopped
+    mem_limit: 512m
     environment:
       HOST: 0.0.0.0
       PORT: 3000
       NUXT_PUBLIC_API_URL: ${NUXT_PUBLIC_API_URL}
-      NUXT_API_URL: ${NUXT_API_URL:-http://backend:8000}
+      # Server-side calls go to QA's own API by its unique name (production's frontend/backend share this network).
+      NUXT_API_URL: http://qa-backend:8000
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       NUXT_PUBLIC_CONTACT_EMAIL: ${NUXT_PUBLIC_CONTACT_EMAIL:-}
     expose:
       - "3000"
     depends_on:
-      - backend
+      - qa-backend
     networks:
-      - dineflow-qa
-
-  caddy:
-    build:
-      context: ./caddy
-    container_name: dineflow-caddy-qa
-    restart: unless-stopped
-    environment:
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .env.qa}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./caddy/Caddyfile.qa:/etc/caddy/Caddyfile:ro
-      - qa_caddy_data:/data
-      - qa_caddy_config:/config
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - dineflow-qa
+      - qa
+      - edge
 
 volumes:
   qa_postgres_data:
-  qa_caddy_data:
-  qa_caddy_config:
 
 networks:
-  dineflow-qa:
+  qa:
     driver: bridge
+  # Production's network, where its Caddy lives. Its real name is "<production project>_dineflow" — with the repo cloned
+  # to /opt/dineflow that's "dineflow_dineflow" (check: docker network ls). Override with EDGE_NETWORK in .env.qa.
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-dineflow_dineflow}

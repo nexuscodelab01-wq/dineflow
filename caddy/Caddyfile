@@ -17,3 +17,24 @@ api.dineflow.io {
 	}
 	reverse_proxy backend:8000
 }
+
+# ---- QA (docker-compose.qa.yml runs on this same server) -------------------------------------------------------------
+# A wildcard matches one label, so *.dineflow.io does not cover x.qa.dineflow.io: QA gets its own wildcard. DNS (Cloudflare,
+# "DNS only"): A records for qa, *.qa and api.qa pointing at this server. If the QA containers are stopped these hostnames
+# simply answer 502 — production is unaffected either way.
+
+qa.dineflow.io, *.qa.dineflow.io {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	# Keep search engines out of the test site.
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy qa-frontend:3000
+}
+
+api.qa.dineflow.io {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	reverse_proxy qa-backend:8000
+}
