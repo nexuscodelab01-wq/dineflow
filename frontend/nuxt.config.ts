@@ -38,6 +38,8 @@ export default defineNuxtConfig({
       // key for every restaurant — which connected account it acts on behalf of is set separately, per
       // checkout, via `stripeAccount`). Empty when payments aren't configured yet.
       stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+      // Shown on the platform's front page as a "get DineFlow" link; leave empty to hide it.
+      contactEmail: process.env.NUXT_PUBLIC_CONTACT_EMAIL || '',
     },
   },
 

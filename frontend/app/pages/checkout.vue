@@ -77,6 +77,10 @@ onMounted(async () => {
 // Ordering ahead: the slot list comes from the server (built from the restaurant's opening hours in
 // its own timezone), and the chosen slot is re-checked there when the order goes in.
 const scheduledOrdersEnabled = useFeature('scheduled_orders')
+// Eating in online means ordering against a booked table, so it only exists while reservations are on.
+const reservationsEnabled = useFeature('reservations')
+const orderTypes = computed<OrderType[]>(() => (reservationsEnabled.value ? ['PICKUP', 'DELIVERY', 'DINE_IN'] : ['PICKUP', 'DELIVERY']))
+watch(orderTypes, (types) => { if (!types.includes(orderType.value)) orderType.value = 'PICKUP' })
 const WHEN_MODES = [
   { value: 'asap', label: 'As soon as possible' },
   { value: 'later', label: 'Order ahead' },
@@ -390,7 +394,7 @@ async function payNow() {
           <h2 class="font-semibold text-ink">Order type</h2>
           <div class="mt-3 flex flex-wrap gap-2">
             <button
-              v-for="type in (['PICKUP', 'DELIVERY', 'DINE_IN'] as OrderType[])"
+              v-for="type in orderTypes"
               :key="type"
               class="rounded-lg px-3 py-2 text-sm font-medium"
               :class="orderType === type ? 'bg-brand-700 text-white' : 'bg-brand-100 text-brand-800'"

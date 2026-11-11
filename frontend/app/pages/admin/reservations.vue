@@ -26,7 +26,7 @@ import {
   toLocalInput,
 } from '~/utils/datetime'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'reservations' })
 
 type Mode = 'new' | 'walkin' | 'edit'
 type Filter = 'all' | 'upcoming' | 'seated' | 'done' | 'cancelled'

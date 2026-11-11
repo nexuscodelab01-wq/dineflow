@@ -2,7 +2,7 @@
 import type { LoyaltyAccount } from '~/types/loyalty'
 import { fetchMyLoyaltyAccount } from '~/services/loyalty'
 
-definePageMeta({ middleware: ['auth'] })
+definePageMeta({ middleware: ['auth'], feature: 'loyalty' })
 
 const loyaltyEnabled = useFeature('loyalty')
 const account = ref<LoyaltyAccount | null>(null)

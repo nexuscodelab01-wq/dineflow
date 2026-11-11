@@ -2,7 +2,7 @@
 import type { AdminLoyaltyAccount } from '~/types/loyalty'
 import { adjustLoyaltyPoints, fetchAdminLoyaltyAccounts } from '~/services/loyalty'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'loyalty' })
 
 const admin = useAdminStore()
 const ui = useUiStore()

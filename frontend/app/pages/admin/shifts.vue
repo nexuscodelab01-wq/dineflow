@@ -4,7 +4,7 @@ import { fetchShifts } from '~/services/shifts'
 import { formatWhen } from '~/utils/datetime'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'admin', middleware: ['admin'] })
+definePageMeta({ layout: 'admin', middleware: ['admin'], feature: 'pos' })
 
 const admin = useAdminStore()
 

@@ -4,16 +4,26 @@
 // restaurant themselves (login.vue etc. pass `restaurant.id` as optional). Never actually exercised
 // until the first real deploy off a real domain — every dev/test environment always has
 // DEFAULT_TENANT_SLUG set, so `restaurant.notFound` was never true there even on the bare domain.
-const TENANT_OPTIONAL = new Set(['/login', '/register', '/forgot-password', '/reset-password'])
+//
+// The bare domain itself (no restaurant) shows the platform's own front page at /welcome instead of an error.
+const TENANT_OPTIONAL = new Set(['/login', '/register', '/forgot-password', '/reset-password', '/welcome'])
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const restaurant = useRestaurantStore()
   await restaurant.load()
-  if (restaurant.notFound && !TENANT_OPTIONAL.has(to.path) && !to.path.startsWith('/platform')) {
-    return showError(createError({
-      statusCode: 404,
-      statusMessage: 'No restaurant lives at this address',
-      fatal: true,
-    }))
+
+  if (restaurant.notFound) {
+    if (to.path === '/') return navigateTo('/welcome')
+    if (!TENANT_OPTIONAL.has(to.path) && !to.path.startsWith('/platform')) {
+      return showError(createError({
+        statusCode: 404,
+        statusMessage: 'No restaurant lives at this address',
+        fatal: true,
+      }))
+    }
+    return
   }
+
+  // A restaurant's own site has no platform front page.
+  if (to.path === '/welcome') return navigateTo('/')
 })

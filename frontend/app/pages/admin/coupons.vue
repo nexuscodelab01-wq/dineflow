@@ -2,7 +2,7 @@
 import type { Coupon, CouponDiscountType } from '~/types/coupon'
 import { createCoupon, deleteCoupon, fetchCoupons, updateCoupon } from '~/services/coupons'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'coupons' })
 
 const admin = useAdminStore()
 const auth = useAuthStore()

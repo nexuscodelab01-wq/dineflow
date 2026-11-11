@@ -4,7 +4,7 @@ import type { EmployeeReportRow } from '~/types/shift'
 import { fetchEmployeeReport } from '~/services/employees'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'admin', middleware: ['admin'] })
+definePageMeta({ layout: 'admin', middleware: ['admin'], feature: 'pos' })
 
 const admin = useAdminStore()
 

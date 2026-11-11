@@ -15,6 +15,7 @@ function stubRestaurant(notFound: boolean) {
 
 describe('tenant.global middleware', () => {
   let showError: ReturnType<typeof vi.fn>
+  let navigateTo: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     vi.resetModules()
@@ -22,6 +23,8 @@ describe('tenant.global middleware', () => {
     vi.stubGlobal('defineNuxtRouteMiddleware', (fn: unknown) => fn)
     vi.stubGlobal('showError', showError)
     vi.stubGlobal('createError', (opts: unknown) => opts)
+    navigateTo = vi.fn((to: string) => `redirect:${to}`)
+    vi.stubGlobal('navigateTo', navigateTo)
   })
 
   afterEach(() => {
@@ -44,7 +47,7 @@ describe('tenant.global middleware', () => {
     expect(showError).not.toHaveBeenCalled()
   })
 
-  it.each(['/login', '/register', '/forgot-password', '/reset-password'])(
+  it.each(['/login', '/register', '/forgot-password', '/reset-password', '/welcome'])(
     'lets %s through even with no restaurant resolved (the platform admin login path)',
     async (path) => {
       await run(path, true)
@@ -55,5 +58,17 @@ describe('tenant.global middleware', () => {
   it('lets every /platform route through with no restaurant resolved', async () => {
     await run('/platform/features', true)
     expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('sends the bare domain\'s home page to the platform front page instead of an error', async () => {
+    const result = await run('/', true)
+    expect(navigateTo).toHaveBeenCalledWith('/welcome')
+    expect(result).toBe('redirect:/welcome')
+    expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the platform front page off a restaurant\'s own site', async () => {
+    await run('/welcome', false)
+    expect(navigateTo).toHaveBeenCalledWith('/')
   })
 })

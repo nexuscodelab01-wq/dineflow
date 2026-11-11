@@ -7,7 +7,7 @@ import type { AvailableTable, FloorTable } from '~/types/reservation'
 import { createReservation, fetchReservationAvailability } from '~/services/reservations'
 import { formatTimeRange, formatWhen, localInputToIso, roundUpToStep, toLocalInput } from '~/utils/datetime'
 
-definePageMeta({ layout: 'table', middleware: [] })
+definePageMeta({ layout: 'table', middleware: [], feature: 'reservations' })
 
 const auth = useAuthStore()
 const restaurant = useRestaurantStore()

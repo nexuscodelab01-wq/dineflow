@@ -4,7 +4,7 @@ import type { WaitlistEntry } from '~/types/reservation'
 import { fetchAdminTables } from '~/services/admin'
 import { addToWaitlist, cancelWaitlistEntry, fetchWaitlist, notifyWaitlistEntry, seatWaitlistEntry } from '~/services/reservations'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'reservations' })
 
 const admin = useAdminStore()
 const ui = useUiStore()

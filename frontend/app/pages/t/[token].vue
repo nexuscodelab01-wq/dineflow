@@ -12,7 +12,7 @@ import { addLine, changeQuantity, lineCount, subtotal, toRoundPayload, type Tabl
 import { clearPass, loadPass, savePass, type TablePass } from '~/utils/table-pass'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'table' })
+definePageMeta({ layout: 'table', feature: 'qr_table_ordering' })
 
 const route = useRoute()
 const restaurant = useRestaurantStore()

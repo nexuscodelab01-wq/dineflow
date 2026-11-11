@@ -3,7 +3,7 @@ import type { TipAllocation, TipReport } from '~/types/tips'
 import { fetchTipHistory, fetchTipReport, finalizeTips } from '~/services/tips'
 import { formatWhen } from '~/utils/datetime'
 
-definePageMeta({ layout: 'admin', middleware: ['admin'] })
+definePageMeta({ layout: 'admin', middleware: ['admin'], feature: 'tips' })
 
 const { money } = useMoney()
 const admin = useAdminStore()

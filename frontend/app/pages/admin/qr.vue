@@ -5,7 +5,7 @@ import { subscribeKitchen } from '~/services/realtime'
 import { closeSession, fetchOpenSessions, fetchQrTables, fetchServiceRequests, finishServiceRequest, rotateQr } from '~/services/table'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'qr_table_ordering' })
 
 const admin = useAdminStore()
 const auth = useAuthStore()

@@ -12,7 +12,7 @@ import { attentionQueue, attentionReasons, planTables, transferTargets } from '~
 import type { SseStatus } from '~/utils/sse'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'qr_table_ordering' })
 
 const admin = useAdminStore()
 const ui = useUiStore()

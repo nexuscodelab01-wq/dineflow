@@ -15,6 +15,7 @@ const restaurant = useRestaurantStore()
 const { status: openStatus, todayLabel } = useOpeningStatus()
 const current = computed(() => restaurant.current)
 const reviewsEnabled = useFeature('reviews')
+const reservationsEnabled = useFeature('reservations')
 
 // Structured data: the single highest-value SEO addition for a restaurant, and free given the data
 // already exists — a search engine can show hours, address and a "book a table" action directly.
@@ -208,7 +209,7 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
               Browse menu
             </NuxtLink>
             <NuxtLink
-              v-if="current?.dine_in_enabled"
+              v-if="current?.dine_in_enabled && reservationsEnabled"
               to="/reserve"
               class="inline-flex items-center rounded-full border px-7 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5"
               :class="heroSlides.length
@@ -436,7 +437,7 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
             Browse menu
           </NuxtLink>
           <NuxtLink
-            v-if="current?.dine_in_enabled"
+            v-if="current?.dine_in_enabled && reservationsEnabled"
             to="/reserve"
             class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-7 py-3 text-sm font-semibold text-white backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
           >

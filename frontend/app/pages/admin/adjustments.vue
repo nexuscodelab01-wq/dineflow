@@ -3,7 +3,7 @@ import type { Adjustment } from '~/types/adjustment'
 import { fetchAdjustments } from '~/services/adjustments'
 import { formatWhen } from '~/utils/datetime'
 
-definePageMeta({ layout: 'admin', middleware: ['admin'] })
+definePageMeta({ layout: 'admin', middleware: ['admin'], feature: 'pos_controls' })
 
 const { money } = useMoney()
 const admin = useAdminStore()

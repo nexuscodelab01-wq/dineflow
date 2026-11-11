@@ -17,7 +17,7 @@ import {
   toLocalInput,
 } from '~/utils/datetime'
 
-definePageMeta({ middleware: [] })
+definePageMeta({ middleware: [], feature: 'reservations' })
 
 const auth = useAuthStore()
 const restaurant = useRestaurantStore()

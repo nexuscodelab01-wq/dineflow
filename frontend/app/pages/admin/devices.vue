@@ -5,7 +5,7 @@ import type { StaffMember } from '~/types/staff'
 import { fetchDevices, fetchReaders, pairDevice, registerReader, removeReader, revokeDevice, simulateReaderTap, setStaffPin, updateDevicePrinter } from '~/services/pos'
 import { fetchStaff } from '~/services/staff'
 
-definePageMeta({ layout: 'admin', middleware: ['admin'] })
+definePageMeta({ layout: 'admin', middleware: ['admin'], feature: 'pos' })
 
 const admin = useAdminStore()
 const ui = useUiStore()

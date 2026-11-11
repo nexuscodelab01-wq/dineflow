@@ -3,6 +3,8 @@ import type { PublicReview } from '~/types/review'
 import type { EligibleVisit, Review } from '~/types/review'
 import { fetchEligibleVisits, fetchMyReviews, fetchPublicReviews, submitReview } from '~/services/reviews'
 
+definePageMeta({ feature: 'reviews' })
+
 // Public hub: anyone can browse every published review here (not just their own) — the same list
 // the home page teases a handful of. Signed-in customers additionally see their own completed
 // visits to rate, and their own reviews, at the top.

@@ -2,7 +2,7 @@
 import type { AdminReview } from '~/types/review'
 import { fetchAdminReviews, moderateReview, replyToReview } from '~/services/reviews'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: 'reviews' })
 
 const admin = useAdminStore()
 const ui = useUiStore()
