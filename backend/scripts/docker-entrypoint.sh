@@ -7,6 +7,9 @@ alembic upgrade head
 echo "Preparing the restricted database role (row-level security)..."
 python -m app.db.roles
 
+echo "Making sure the built-in roles and feature flags exist..."
+python -m app.db.bootstrap
+
 if [ "${RUN_SEED:-false}" = "true" ]; then
   echo "Seeding database..."
   python -m app.db.seed
