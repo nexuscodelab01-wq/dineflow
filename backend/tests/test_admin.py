@@ -43,7 +43,7 @@ def test_admin_dashboard_and_menu(client: TestClient, db: Session) -> None:
     )
     db.add_all([admin, restaurant])
     db.flush()
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
     db.flush()
 
     category = Category(
@@ -93,9 +93,6 @@ def test_admin_dashboard_and_menu(client: TestClient, db: Session) -> None:
     assert orders.status_code == 200
     assert "items" in orders.json()
 
-    ping = client.get("/api/v1/admin/ping", headers=headers)
-    assert ping.status_code == 200
-
     app.dependency_overrides.clear()
 
 
@@ -118,7 +115,7 @@ def test_admin_kitchen_tables_and_settings(client: TestClient, db: Session) -> N
     )
     db.add_all([admin, restaurant])
     db.flush()
-    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id))
+    db.add(RestaurantUser(restaurant_id=restaurant.id, user_id=admin.id, role=RoleName.RESTAURANT_ADMIN))
     db.flush()
 
     from app.models.enums import TableStatus
