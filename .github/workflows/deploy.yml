@@ -1,12 +1,14 @@
 name: Deploy
 
 # Deploys happen only when YOU start one: GitHub → Actions → Deploy → Run workflow, then pick where (qa or prod) and,
-# optionally, which version (a tag, branch or commit; blank = the latest main). Nothing deploys on a push or a merge.
+# optionally, which version (a tag, branch or commit). Nothing deploys on a push or a merge.
 #
-# - qa:   deploys that version to QA (the same server as production, separate containers and database).
-# - prod: deploys it to production, but only if that exact commit passed CI, and — once you add required reviewers to
-#         the "prod" environment in Settings → Environments — only after a second person (or you) clicks Approve.
-#         scripts/deploy.sh on the server takes a database backup first and stops if it fails.
+# Branches: `dev` is where changes are tried (it is what QA runs); `main` only ever holds versions that already worked on
+# QA, and it is what production runs.
+# - qa:   deploys that version to QA (blank = the latest `dev`). Any branch, tag or commit is allowed — it is the test bench.
+# - prod: deploys it to production (blank = the latest `main`), but only if that exact commit is ON `main` and passed CI,
+#         and — once you add required reviewers to the "prod" environment in Settings → Environments — only after
+#         an Approve click. scripts/deploy.sh on the server takes a database backup first and stops if it fails.
 #
 # Secrets (Settings → Secrets and variables → Actions): QA_HOST, QA_USER, QA_SSH_KEY, QA_PATH and
 # PROD_HOST, PROD_USER, PROD_SSH_KEY, PROD_PATH. QA runs on the production server, so the HOST values can be the same.
@@ -20,7 +22,7 @@ on:
         options: [qa, prod]
         default: qa
       ref:
-        description: Version to deploy — tag, branch or commit (blank = latest main)
+        description: Version to deploy — tag, branch or commit (blank = latest dev for qa, latest main for prod)
         required: false
 
 concurrency:
@@ -42,11 +44,25 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
-          REF: ${{ github.event.inputs.ref || 'main' }}
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+          REF: ${{ github.event.inputs.ref || (github.event.inputs.environment == 'prod' && 'main' || 'dev') }}
         run: |
           SHA=$(gh api "repos/${{ github.repository }}/commits/${REF}" --jq .sha) || { echo "::error::Could not find '${REF}' in this repository."; exit 1; }
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Deploying ${REF} = ${SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Require that the commit is on main (production only)
+        if: github.event.inputs.environment == 'prod'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+        run: |
+          # "behind" or "identical" = this commit is already part of main's history, i.e. it was merged there.
+          STATE=$(gh api "repos/${{ github.repository }}/compare/main...${SHA}" --jq .status)
+          case "$STATE" in
+            identical|behind) echo "Commit ${SHA} is on main." | tee -a "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "::error::Commit ${SHA} is not on main (it is ${STATE} main). Production only runs what has been merged into main — try it on QA first, then merge dev into main."; exit 1 ;;
+          esac
 
       - name: Require a passing CI run for this commit (production only)
         if: github.event.inputs.environment == 'prod'

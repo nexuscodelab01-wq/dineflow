@@ -64,11 +64,17 @@ Two stacks on the **same server**, sharing nothing but the machine and the proxy
 - `scripts/deploy.sh prod` takes a fresh database backup **before** changing anything and stops if the backup fails. The nightly job (see Backups) is the second safety net.
 
 ### The release flow
-Deploys are **manual**: nothing goes to QA or production just because you pushed or merged.
-1. Work lands on `main` → CI runs (lint, types, backend tests under both database roles, frontend tests and build, production image build). Wait for it to go green.
-2. When you're ready to try it: GitHub → **Actions → Deploy → Run workflow** → environment `qa` (version blank = latest `main`, or a tag/branch/commit). On the server the same thing is `scripts/deploy.sh qa`. Try the change at `*.qa.dineflow.io`; the run's summary and the script's last line show the database revision.
-3. When QA looks right, run the same workflow with environment `prod` and the **same commit or tag** you tested. The workflow refuses to deploy a commit whose CI run didn't pass. (Add yourself or a teammate as a required reviewer on the `prod` environment — Settings → Environments → prod — and it also waits for an Approve click.) The server takes a database backup before changing anything and stops if the backup fails.
-4. Tag what went out (`git tag v1.4.0 && git push --tags`) so there is always a named version to go back to.
+Two long-lived branches: **`dev`** is where changes are tried and what QA runs; **`main`** only ever holds versions that already worked on QA, and it is what production runs. If something is broken it shows up on QA, and `main` stays good. Deploys are **manual** — nothing goes anywhere just because you pushed or merged.
+
+1. **Build on `dev`** (directly for small things, or on a branch such as `feature/split-bills` merged into `dev` through a pull request). CI runs on every push and pull request (lint, types, backend tests under both database roles, frontend tests and build, production image build) — wait for it to go green.
+2. **Try it on QA**: GitHub → **Actions → Deploy → Run workflow** → environment `qa` (version blank = the latest `dev`; or any branch, tag or commit — QA is the test bench). On the server the same thing is `scripts/deploy.sh qa`. Test at `*.qa.dineflow.io`; the run summary and the script's last line show the database revision.
+3. **Promote**: when QA looks right, open a pull request **`dev` → `main`** (CI runs again on it) and merge it. Now `main` contains exactly what you tested.
+4. **Deploy to production**: Actions → Deploy → Run workflow → environment `prod` (blank = the latest `main`, or a tag you made). The workflow refuses a commit that isn't on `main` or whose CI run didn't pass. With required reviewers on the `prod` environment (Settings → Environments → prod) it also waits for an Approve click. The server takes a database backup first and stops if the backup fails.
+5. **Tag it**: `git tag v1.4.0 && git push --tags` (on `main`), so there is always a named version to go back to.
+
+A hotfix for a live problem: branch from `main`, fix, merge into `main` (CI must pass), deploy to prod, then merge `main` back into `dev` so the fix isn't lost.
+
+**Protect `main`** (GitHub → Settings → Branches → Add rule for `main`): require a pull request before merging, require the status checks *Backend tests*, *Frontend tests & build* and *Production Docker build* to pass, and block force-pushes and deletion. Then nothing untested can reach production's branch, even by accident.
 
 ### One-time setup (QA on the production server)
 1. **DNS (Cloudflare, "DNS only")**: A records for `qa`, `*.qa` and `api.qa` (under `dineflow.io`) → the same server IP as production. (`*.dineflow.io` does *not* cover `x.qa.dineflow.io` — a wildcard matches one label.) The Cloudflare token already in production's `.env` can issue the certificates.
