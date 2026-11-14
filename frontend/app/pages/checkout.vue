@@ -11,7 +11,7 @@ import { fetchMyReservations } from '~/services/reservations'
 import { getStripe } from '~/services/stripe'
 const { money } = useMoney()
 
-definePageMeta({ middleware: ['auth'] })
+definePageMeta({ middleware: ['auth'], feature: 'online_ordering' })
 
 const auth = useAuthStore()
 const cart = useCartStore()

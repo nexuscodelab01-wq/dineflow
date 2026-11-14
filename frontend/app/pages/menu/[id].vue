@@ -14,6 +14,7 @@ const itemId = computed(() => Number(route.params.id))
 const item = ref<MenuItemDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
+const onlineOrdering = useFeature('online_ordering')
 const quantity = ref(1)
 const specialInstructions = ref('')
 const selectedOptions = ref<Record<number, number[]>>({})
@@ -130,6 +131,8 @@ function addToCart() {
       </p>
       <p class="mt-4 text-2xl font-semibold text-brand-800">{{ money(unitPrice) }}</p>
 
+      <!-- Everything below is ordering: options, quantity, the cart. A menu-only restaurant shows just the dish. -->
+      <template v-if="onlineOrdering">
       <div v-for="modifier in item.modifiers" :key="modifier.id" class="mt-6 border-t border-brand-100 pt-6">
         <div class="mb-3 flex items-center justify-between">
           <h2 class="font-semibold text-ink">{{ modifier.name }}</h2>
@@ -177,6 +180,7 @@ function addToCart() {
       <AppButton class="mt-6 w-full sm:w-auto" :disabled="!item.is_available" @click="addToCart">
         Add to cart — {{ money(unitPrice * quantity) }}
       </AppButton>
+      </template>
       </div>
     </div>
   </div>

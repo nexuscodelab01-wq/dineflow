@@ -9,7 +9,7 @@ import { playDing, unlockSound } from '~/utils/beep'
 import { allDayCounts, newOrderIds, STATIONS, ticketsFor } from '~/utils/kitchen'
 import type { SseStatus } from '~/utils/sse'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: ['online_ordering', 'pos', 'qr_table_ordering'] })
 
 const admin = useAdminStore()
 const ui = useUiStore()

@@ -3,7 +3,7 @@ import type { Order } from '~/types/order'
 import { fetchOrders } from '~/services/orders'
 const { money } = useMoney()
 
-definePageMeta({ middleware: ['auth'] })
+definePageMeta({ middleware: ['auth'], feature: 'online_ordering' })
 
 const orders = ref<Order[]>([])
 const loading = ref(true)

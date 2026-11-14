@@ -62,4 +62,24 @@ describe('feature.global middleware', () => {
     await run('/reserve', 'reservations', { noRestaurant: true })
     expect(showError).not.toHaveBeenCalled()
   })
+
+  it('keeps a shared page (kitchen, orders) while ANY of its features is on', async () => {
+    await run('/admin/kitchen', ['online_ordering', 'pos', 'qr_table_ordering'] as never, { features: { online_ordering: false, pos: true } })
+    expect(navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('sends a shared page away only when ALL of its features are off', async () => {
+    await run('/admin/kitchen', ['online_ordering', 'pos', 'qr_table_ordering'] as never, { features: { online_ordering: false, pos: false, qr_table_ordering: false } })
+    expect(navigateTo).toHaveBeenCalledWith('/admin')
+  })
+
+  it('404s the cart and checkout when online ordering is off', async () => {
+    await run('/cart', 'online_ordering', { features: { online_ordering: false } })
+    expect(showError).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }))
+  })
+
+  it('404s the customer\'s past-orders pages when online ordering is off', async () => {
+    await run('/orders', 'online_ordering', { features: { online_ordering: false } })
+    expect(showError).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }))
+  })
 })

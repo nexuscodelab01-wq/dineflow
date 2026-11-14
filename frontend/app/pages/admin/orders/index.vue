@@ -3,7 +3,7 @@ import type { Order, OrderStatus } from '~/types/order'
 import { fetchAdminOrders } from '~/services/admin'
 const { money } = useMoney()
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: ['online_ordering', 'pos', 'qr_table_ordering'] })
 
 const admin = useAdminStore()
 const orders = ref<Order[]>([])

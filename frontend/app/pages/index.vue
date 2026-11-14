@@ -16,6 +16,12 @@ const { status: openStatus, todayLabel } = useOpeningStatus()
 const current = computed(() => restaurant.current)
 const reviewsEnabled = useFeature('reviews')
 const reservationsEnabled = useFeature('reservations')
+const onlineOrdering = useFeature('online_ordering')
+// What the hero and the closing banner invite people to do depends on what the restaurant offers.
+const welcomeLine = computed(() => onlineOrdering.value ? 'Order online, or book a table — we\'d love to have you.' : 'Have a look at the menu — we\'d love to have you.')
+const closingLine = computed(() => onlineOrdering.value
+  ? 'Order online for pickup or delivery, or book a table and let us take care of the rest.'
+  : (reservationsEnabled.value ? 'Have a look at the menu, or book a table and let us take care of the rest.' : 'Have a look at the menu and come and see us.'))
 
 // Structured data: the single highest-value SEO addition for a restaurant, and free given the data
 // already exists — a search engine can show hours, address and a "book a table" action directly.
@@ -189,7 +195,7 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
           </h1>
 
           <p class="mt-5 text-lg leading-relaxed" :class="heroSlides.length ? 'text-white/85' : 'text-ink-muted'">
-            {{ current?.description || 'Order online, or book a table — we\'d love to have you.' }}
+            {{ current?.description || welcomeLine }}
           </p>
 
           <p
@@ -431,7 +437,7 @@ onUnmounted(() => { if (heroTimer) clearInterval(heroTimer) })
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.14)_0%,_transparent_60%)]" aria-hidden="true" />
       <div class="relative mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 py-20 text-center sm:px-6">
         <h2 class="font-display text-3xl font-semibold text-white sm:text-4xl">Hungry yet?</h2>
-        <p class="max-w-md text-brand-100/90">Order online for pickup or delivery, or book a table and let us take care of the rest.</p>
+        <p class="max-w-md text-brand-100/90">{{ closingLine }}</p>
         <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
           <NuxtLink to="/menu" class="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-semibold text-brand-800 shadow-lg transition duration-300 hover:-translate-y-0.5 hover:shadow-xl">
             Browse menu

@@ -31,8 +31,8 @@ const loggingOut = ref(false)
 const allNav = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/menu', label: 'Menu' },
-  { to: '/admin/orders', label: 'Orders' },
-  { to: '/admin/kitchen', label: 'Kitchen' },
+  { to: '/admin/orders', label: 'Orders', feature: ORDERING_CHANNELS },
+  { to: '/admin/kitchen', label: 'Kitchen', feature: ORDERING_CHANNELS },
   { to: '/admin/tables', label: 'Tables' },
   { to: '/admin/floor-plan', label: 'Floor plan', adminOnly: true },
   { to: '/admin/reservations', label: 'Reservations', feature: 'reservations' },
@@ -61,7 +61,7 @@ onMounted(() => { ready.value = true })
 const nav = computed(() => allNav.filter((item) => {
   if (!ready.value) return true
   // Flags come from the site's own restaurant; only apply them when that is the restaurant being managed.
-  const flagOn = !item.feature || admin.restaurantId !== restaurantSite.id || isFeatureOn(restaurantSite.current?.features, item.feature)
+  const flagOn = !item.feature || admin.restaurantId !== restaurantSite.id || anyFeatureOn(restaurantSite.current?.features, item.feature)
   return (!item.adminOnly || auth.isAdmin) && flagOn
 }))
 

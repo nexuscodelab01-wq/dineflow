@@ -5,7 +5,7 @@ import { fetchOrder } from '~/services/orders'
 import { subscribeOrder } from '~/services/realtime'
 const { money } = useMoney()
 
-definePageMeta({ middleware: ['auth'] })
+definePageMeta({ middleware: ['auth'], feature: 'online_ordering' })
 
 const reviewsEnabled = useFeature('reviews')
 const route = useRoute()

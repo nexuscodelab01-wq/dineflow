@@ -32,7 +32,7 @@
           <NuxtLink to="/" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/') }" :aria-current="isActive('/') ? 'page' : undefined">Home</NuxtLink>
           <NuxtLink to="/menu" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/menu') }" :aria-current="isActive('/menu') ? 'page' : undefined">Menu</NuxtLink>
           <NuxtLink v-if="reservations" to="/reserve" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/reserve') }" :aria-current="isActive('/reserve') ? 'page' : undefined">Reserve</NuxtLink>
-          <NuxtLink to="/cart" class="relative hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined">
+          <NuxtLink v-if="onlineOrdering" to="/cart" class="relative hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined">
             Cart
             <span
               v-if="cartCount"
@@ -43,7 +43,7 @@
           </NuxtLink>
           <NuxtLink v-if="reviewsEnabled" to="/reviews" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined">Reviews</NuxtLink>
           <template v-if="signedIn">
-            <NuxtLink to="/orders" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined">Orders</NuxtLink>
+            <NuxtLink v-if="onlineOrdering" to="/orders" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined">Orders</NuxtLink>
             <NuxtLink v-if="loyaltyEnabled" to="/loyalty" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/loyalty') }" :aria-current="isActive('/loyalty') ? 'page' : undefined">Points</NuxtLink>
             <NuxtLink to="/profile" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined">Admin</NuxtLink>
@@ -70,12 +70,12 @@
           <NuxtLink to="/" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/') }" :aria-current="isActive('/') ? 'page' : undefined" @click="mobileOpen = false">Home</NuxtLink>
           <NuxtLink to="/menu" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/menu') }" :aria-current="isActive('/menu') ? 'page' : undefined" @click="mobileOpen = false">Menu</NuxtLink>
           <NuxtLink v-if="reservations" to="/reserve" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/reserve') }" :aria-current="isActive('/reserve') ? 'page' : undefined" @click="mobileOpen = false">Reserve</NuxtLink>
-          <NuxtLink to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined" @click="mobileOpen = false">
+          <NuxtLink v-if="onlineOrdering" to="/cart" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/cart') }" :aria-current="isActive('/cart') ? 'page' : undefined" @click="mobileOpen = false">
             Cart<span v-if="cartCount"> ({{ cartCount }})</span>
           </NuxtLink>
           <NuxtLink v-if="reviewsEnabled" to="/reviews" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/reviews') }" :aria-current="isActive('/reviews') ? 'page' : undefined" @click="mobileOpen = false">Reviews</NuxtLink>
           <template v-if="signedIn">
-            <NuxtLink to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined" @click="mobileOpen = false">Orders</NuxtLink>
+            <NuxtLink v-if="onlineOrdering" to="/orders" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/orders') }" :aria-current="isActive('/orders') ? 'page' : undefined" @click="mobileOpen = false">Orders</NuxtLink>
             <NuxtLink v-if="loyaltyEnabled" to="/loyalty" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/loyalty') }" :aria-current="isActive('/loyalty') ? 'page' : undefined" @click="mobileOpen = false">Points</NuxtLink>
             <NuxtLink to="/profile" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/profile') }" :aria-current="isActive('/profile') ? 'page' : undefined" @click="mobileOpen = false">Profile</NuxtLink>
             <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined" @click="mobileOpen = false">Admin</NuxtLink>
@@ -102,7 +102,7 @@
       </nav>
     </footer>
 
-    <FloatingCartBar />
+    <FloatingCartBar v-if="onlineOrdering" />
   </div>
 </template>
 
@@ -111,6 +111,7 @@ const year = new Date().getFullYear()
 const auth = useAuthStore()
 const cart = useCartStore()
 const reservations = useFeature('reservations')
+const onlineOrdering = useFeature('online_ordering')
 const reviewsEnabled = useFeature('reviews')
 const loyaltyEnabled = useFeature('loyalty')
 const branding = useBranding()
