@@ -12,6 +12,7 @@ from app.core.rate_limit import rate_limit
 from app.core.realtime import order_topic
 from app.db.session import get_db
 from app.dependencies.auth import CurrentUser
+from app.dependencies.features import requires_feature_if_customer
 from app.schemas.order import (
     OrderCreate,
     OrderListResponse,
@@ -22,6 +23,9 @@ from app.schemas.order import (
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders")
+
+# A menu-only restaurant has no customer orders to show: the list, an order and its live stream go with online ordering.
+ONLINE_GATE = [Depends(requires_feature_if_customer("online_ordering"))]
 
 
 def get_order_service(db: Annotated[Session, Depends(get_db)]) -> OrderService:
@@ -58,7 +62,7 @@ def quote_order(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.get("", response_model=OrderListResponse)
+@router.get("", response_model=OrderListResponse, dependencies=ONLINE_GATE)
 def list_orders(
     user: CurrentUser,
     service: Annotated[OrderService, Depends(get_order_service)],
@@ -68,7 +72,7 @@ def list_orders(
     return service.list_orders(user, page=page, page_size=page_size)
 
 
-@router.get("/{order_id}", response_model=OrderRead)
+@router.get("/{order_id}", response_model=OrderRead, dependencies=ONLINE_GATE)
 def get_order(
     order_id: int,
     user: CurrentUser,
@@ -80,7 +84,7 @@ def get_order(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.get("/{order_id}/stream", summary="Live updates for one of your orders (text/event-stream)")
+@router.get("/{order_id}/stream", summary="Live updates for one of your orders (text/event-stream)", dependencies=ONLINE_GATE)
 async def order_stream(
     order_id: int,
     request: Request,

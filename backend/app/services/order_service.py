@@ -82,6 +82,7 @@ class OrderService:
     def create_order(self, data: OrderCreate, user: User) -> OrderRead:
         ensure_customer_of(user, data.restaurant_id)  # first: another restaurant's rows are invisible to this customer
         restaurant = self.restaurants.get_by_id(data.restaurant_id)
+        self.features.require(data.restaurant_id, "online_ordering")
         if restaurant is None or not restaurant.is_active:
             raise NotFoundError("Restaurant not found")
         ensure_customer_of(user, restaurant.id)
@@ -369,6 +370,7 @@ class OrderService:
         restaurant = self.restaurants.get_by_id(data.restaurant_id)
         if restaurant is None:
             raise NotFoundError("Restaurant not found")
+        self.features.require(restaurant.id, "online_ordering")
         if data.order_type == OrderType.DELIVERY and data.delivery_address is None:
             raise AppError("Delivery address is required")
         item_ids = [line.menu_item_id for line in data.items]
