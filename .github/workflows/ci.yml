@@ -125,4 +125,6 @@ jobs:
       - name: Build production images
         env:
           POSTGRES_PASSWORD: dineflow_prod_ci_password
+          # The production compose file refuses to build without it; the value is never used by the build.
+          CLOUDFLARE_API_TOKEN: ci-placeholder
         run: docker compose -f docker-compose.prod.yml build
