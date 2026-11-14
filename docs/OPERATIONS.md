@@ -64,9 +64,10 @@ Two stacks on the **same server**, sharing nothing but the machine and the proxy
 - `scripts/deploy.sh prod` takes a fresh database backup **before** changing anything and stops if the backup fails. The nightly job (see Backups) is the second safety net.
 
 ### The release flow
-1. Work lands on `main` → CI runs (lint, types, backend tests under both database roles, frontend tests and build, production image build).
-2. A green CI on `main` **deploys to QA automatically** (`.github/workflows/deploy.yml`, or run `scripts/deploy.sh qa` on the server). Try the change there: log in, run the flows you touched, check the migration applied (`alembic current` is printed at the end of the deploy).
-3. When QA looks right, deploy **the same commit** to production: GitHub → Actions → Deploy → Run workflow → `prod` (set `ref` to a tag or commit you saw on QA), or on the server `scripts/deploy.sh prod <ref>`. Give the GitHub `prod` environment required reviewers so it needs a second approval.
+Deploys are **manual**: nothing goes to QA or production just because you pushed or merged.
+1. Work lands on `main` → CI runs (lint, types, backend tests under both database roles, frontend tests and build, production image build). Wait for it to go green.
+2. When you're ready to try it: GitHub → **Actions → Deploy → Run workflow** → environment `qa` (version blank = latest `main`, or a tag/branch/commit). On the server the same thing is `scripts/deploy.sh qa`. Try the change at `*.qa.dineflow.io`; the run's summary and the script's last line show the database revision.
+3. When QA looks right, run the same workflow with environment `prod` and the **same commit or tag** you tested. The workflow refuses to deploy a commit whose CI run didn't pass. (Add yourself or a teammate as a required reviewer on the `prod` environment — Settings → Environments → prod — and it also waits for an Approve click.) The server takes a database backup before changing anything and stops if the backup fails.
 4. Tag what went out (`git tag v1.4.0 && git push --tags`) so there is always a named version to go back to.
 
 ### One-time setup (QA on the production server)
@@ -74,7 +75,7 @@ Two stacks on the **same server**, sharing nothing but the machine and the proxy
 2. **Proxy**: the QA blocks are already at the bottom of `caddy/Caddyfile`. They only take effect when production's Caddy reloads: `docker compose -f docker-compose.prod.yml exec caddy caddy reload --config /etc/caddy/Caddyfile` (graceful — no downtime). Until QA is running those addresses answer 502; production is unaffected.
 3. **QA config**: `cp .env.qa.example .env.qa` and fill it in with **new** secrets (never production's), Stripe *test* keys, and `EDGE_NETWORK` set to production's Docker network (`docker network ls` — usually `dineflow_dineflow`).
 4. **Stripe test mode**: a separate webhook endpoint `https://api.qa.dineflow.io/api/v1/webhooks/stripe` (and the Connect one) with its own signing secrets in `.env.qa`.
-5. **First start**: `scripts/deploy.sh qa`. Then (optional) the GitHub secrets `QA_HOST`, `QA_USER`, `QA_SSH_KEY`, `QA_PATH` and the `PROD_*` equivalents so CI can deploy; until they exist the deploy jobs skip themselves.
+5. **First start**: `scripts/deploy.sh qa`. Then (optional) the GitHub secrets `QA_HOST`, `QA_USER`, `QA_SSH_KEY`, `QA_PATH` and the `PROD_*` equivalents so the Deploy workflow can reach the server; without them it fails with a message naming what's missing.
 
 ### Sharing one server safely
 - **Memory**: QA containers are capped (database 384 MB, API 640 MB, web 512 MB) so a runaway test can't starve production. A small server (4 GB) is enough for both, but add swap if it isn't already (`free -h`; `fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`). If memory is tight, simply stop QA when you're not testing: `docker compose -f docker-compose.qa.yml --env-file .env.qa stop`.
