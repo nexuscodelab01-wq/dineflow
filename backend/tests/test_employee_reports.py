@@ -52,13 +52,14 @@ def test_employee_report_splits_cash_and_card_and_includes_hours(world):
     w.client.post(f"{API}/pos/orders/{card_order.json()['order_id']}/pay-card", headers=staff_headers)
 
     now = datetime.now(UTC)
+    # A range wider than "today": two hours ago can fall before midnight (UTC), which made this test fail whenever it ran shortly after 00:00.
     w.db.add(TimeEntry(restaurant_id=w.a.rid, user_id=w.a.staff.id, clock_in_at=now - timedelta(hours=2), clock_out_at=now))
     w.db.commit()
 
     # A guest's own online order — no staff involved, must never appear in this report.
     place_order(w.client, w.a)
 
-    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "today"}, headers=header(w.a.admin))
+    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "last_7_days"}, headers=header(w.a.admin))
     assert r.status_code == 200, r.text
     rows = r.json()
     assert len(rows) == 1
@@ -75,7 +76,7 @@ def test_employee_report_splits_cash_and_card_and_includes_hours(world):
 
 def test_employee_report_requires_admin(world):
     w = world
-    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "today"}, headers=header(w.a.staff))
+    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "last_7_days"}, headers=header(w.a.staff))
     assert r.status_code == 403
 
 
@@ -85,7 +86,7 @@ def test_employee_with_no_closed_time_entry_has_no_hours_but_still_appears(world
     order = w.client.post(f"{API}/pos/orders", headers=staff_headers, json={"items": [{"menu_item_id": w.a.item.id, "quantity": 1, "modifier_option_ids": []}]})
     w.client.post(f"{API}/pos/orders/{order.json()['order_id']}/pay-cash", headers=staff_headers)
 
-    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "today"}, headers=header(w.a.admin))
+    r = w.client.get(f"{API}/admin/analytics/employees", params={"restaurant_id": w.a.rid, "range": "last_7_days"}, headers=header(w.a.admin))
     assert r.status_code == 200, r.text
     row = r.json()[0]
     assert Decimal(row["hours_worked"]) == Decimal("0.00")
