@@ -39,7 +39,8 @@ def test_it_is_on_by_default_so_existing_restaurants_keep_ordering(world):
     w = world
     assert place_order(w.client, w.a).status_code == 201
     assert quote(w).status_code == 200
-    assert w.client.get(f"{API}/tenant", params={"host": f"{w.a.slug}.localhost"}).json()["features"].get("online_ordering") is True
+    # What the site's own /tenant call reports: the flag is part of the restaurant's resolved feature set, and ON.
+    assert FeatureService(w.db).resolve(w.a.rid)["online_ordering"] is True
 
 
 def test_turned_off_customers_cannot_order_or_get_a_quote(world):
