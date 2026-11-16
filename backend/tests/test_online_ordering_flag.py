@@ -103,3 +103,33 @@ def test_turned_off_a_customers_past_orders_are_not_available_either(world):
     set_flag(w, "online_ordering", False)
     assert w.client.get(f"{API}/orders", headers=header(w.a.customer)).status_code == 403
     assert w.client.get(f"{API}/orders/{order_id}", headers=header(w.a.customer)).status_code == 403
+
+
+def register(w, email):
+    return w.client.post(f"{API}/auth/register", json={
+        "restaurant_id": w.a.rid, "email": email, "password": "Str0ng-Passw0rd!", "first_name": "Sam", "last_name": "Guest",
+    })
+
+
+def test_menu_only_site_takes_no_customer_sign_ups(world):
+    w = world
+    assert register(w, "ok1@example.com").status_code == 201  # defaults: ordering on
+    for key in ("online_ordering", "reservations", "loyalty", "reviews"):
+        set_flag(w, key, False)
+    assert register(w, "no@example.com").status_code == 403
+
+
+def test_a_site_with_only_reviews_still_takes_sign_ups(world):
+    w = world
+    for key in ("online_ordering", "reservations", "loyalty"):
+        set_flag(w, key, False)
+    set_flag(w, "reviews", True)
+    assert register(w, "rev@example.com").status_code == 201
+
+
+def test_staff_can_still_sign_in_on_a_menu_only_site(world):
+    w = world
+    for key in ("online_ordering", "reservations", "loyalty", "reviews"):
+        set_flag(w, key, False)
+    r = w.client.post(f"{API}/auth/login", json={"email": w.a.admin.email, "password": "Test1234!", "restaurant_id": w.a.rid})
+    assert r.status_code == 200

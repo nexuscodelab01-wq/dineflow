@@ -49,7 +49,7 @@
             <NuxtLink v-if="staffIn" to="/admin" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined">Platform</NuxtLink>
           </template>
-          <template v-else>
+          <template v-else-if="customerAccounts">
             <NuxtLink to="/login" class="hover:text-brand-700" :class="{ 'font-semibold text-brand-700': isActive('/login') }" :aria-current="isActive('/login') ? 'page' : undefined">Sign in</NuxtLink>
             <NuxtLink
               to="/register"
@@ -81,7 +81,7 @@
             <NuxtLink v-if="staffIn" to="/admin" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/admin') }" :aria-current="isActive('/admin') ? 'page' : undefined" @click="mobileOpen = false">Admin</NuxtLink>
             <NuxtLink v-if="platformIn" to="/platform" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/platform') }" :aria-current="isActive('/platform') ? 'page' : undefined" @click="mobileOpen = false">Platform</NuxtLink>
           </template>
-          <template v-else>
+          <template v-else-if="customerAccounts">
             <NuxtLink to="/login" class="rounded-lg px-3 py-2 hover:bg-brand-50" :class="{ 'bg-brand-50 font-semibold text-brand-700': isActive('/login') }" :aria-current="isActive('/login') ? 'page' : undefined" @click="mobileOpen = false">Sign in</NuxtLink>
             <NuxtLink to="/register" class="rounded-lg px-3 py-2 hover:bg-brand-50" @click="mobileOpen = false">Register</NuxtLink>
           </template>
@@ -99,6 +99,7 @@
         <NuxtLink to="/terms" class="hover:text-ink hover:underline">Terms</NuxtLink>
         <NuxtLink to="/privacy" class="hover:text-ink hover:underline">Privacy</NuxtLink>
         <NuxtLink to="/cookies" class="hover:text-ink hover:underline">Cookies</NuxtLink>
+        <NuxtLink v-if="!signedIn && !customerAccounts" to="/login" class="hover:text-ink hover:underline">Staff login</NuxtLink>
       </nav>
     </footer>
 
@@ -114,6 +115,10 @@ const reservations = useFeature('reservations')
 const onlineOrdering = useFeature('online_ordering')
 const reviewsEnabled = useFeature('reviews')
 const loyaltyEnabled = useFeature('loyalty')
+// Sign in / Register are for customers. A menu-only site has nothing for them to use an account for, so they are hidden;
+// staff reach /login through the footer link (or the URL).
+const restaurantStore = useRestaurantStore()
+const customerAccounts = computed(() => anyFeatureOn(restaurantStore.current?.features, CUSTOMER_ACCOUNT_FEATURES))
 const branding = useBranding()
 const mobileOpen = ref(false)
 const route = useRoute()

@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ middleware: ['guest'] })
+definePageMeta({ middleware: ['guest'], feature: ['online_ordering', 'reservations', 'loyalty', 'reviews'] })
 
 const auth = useAuthStore()
 const restaurant = useRestaurantStore()

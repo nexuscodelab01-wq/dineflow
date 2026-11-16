@@ -10,3 +10,6 @@ export function anyFeatureOn(features: Record<string, boolean> | null | undefine
 
 /** The ways a restaurant can take an order. The kitchen and the order list serve all of them. */
 export const ORDERING_CHANNELS = ['online_ordering', 'pos', 'qr_table_ordering']
+
+/** A customer account only has a purpose while one of these is on: they order, book a table, earn points or write a review. */
+export const CUSTOMER_ACCOUNT_FEATURES = ['online_ordering', 'reservations', 'loyalty', 'reviews']

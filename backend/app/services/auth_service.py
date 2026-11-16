@@ -4,7 +4,12 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    UnauthorizedError,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token_value,
@@ -19,6 +24,7 @@ from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.restaurant import RestaurantRepository
 from app.repositories.user import RoleRepository, UserRepository
 from app.schemas.auth import TokenResponse, UserLogin, UserRegister
+from app.services.feature_service import CUSTOMER_ACCOUNT_FEATURES, FeatureService
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,10 @@ class AuthService:
 
     def register(self, data: UserRegister) -> TokenResponse:
         self._active_restaurant(data.restaurant_id)
+        features = FeatureService(self.db)
+        if not any(features.is_enabled(data.restaurant_id, key) for key in CUSTOMER_ACCOUNT_FEATURES):
+            # A menu-only site has nothing a customer could use an account for. Staff are created by an admin, not here.
+            raise ForbiddenError("This restaurant does not take customer sign-ups")
         if self.users.email_taken(data.email, data.restaurant_id):
             raise ConflictError("Email already registered")
 

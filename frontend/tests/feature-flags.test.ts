@@ -20,3 +20,16 @@ describe('feature helpers', () => {
     expect(anyFeatureOn({ reservations: false }, 'reservations')).toBe(false)
   })
 })
+
+describe('CUSTOMER_ACCOUNT_FEATURES', () => {
+  it('lists exactly the features a customer account is for', async () => {
+    const { CUSTOMER_ACCOUNT_FEATURES } = await import('../app/utils/features')
+    expect([...CUSTOMER_ACCOUNT_FEATURES].sort()).toEqual(['loyalty', 'online_ordering', 'reservations', 'reviews'])
+  })
+
+  it('a menu-only site (all four off) has no use for customer accounts', async () => {
+    const { anyFeatureOn, CUSTOMER_ACCOUNT_FEATURES } = await import('../app/utils/features')
+    expect(anyFeatureOn({ online_ordering: false, reservations: false, loyalty: false, reviews: false }, CUSTOMER_ACCOUNT_FEATURES)).toBe(false)
+    expect(anyFeatureOn({ online_ordering: false, reviews: true }, CUSTOMER_ACCOUNT_FEATURES)).toBe(true)
+  })
+})

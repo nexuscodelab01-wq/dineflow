@@ -46,6 +46,10 @@ _DEFAULTS: dict[str, tuple[str, bool]] = {
 }
 
 
+# A customer account only has a purpose while one of these is on: they order, book a table, earn points or write a review.
+CUSTOMER_ACCOUNT_FEATURES = ("online_ordering", "reservations", "loyalty", "reviews")
+
+
 class FeatureService:
     def __init__(self, db: Session) -> None:
         self.db = db
