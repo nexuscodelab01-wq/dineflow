@@ -56,6 +56,7 @@ from app.schemas.admin import (
 from app.schemas.analytics import AnalyticsResponse
 from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
+from app.schemas.labels import LabelCreate, LabelKind, LabelRead, LabelUpdate
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.payments import StripeOnboardLink, StripeStatus, TaxCheckRead
@@ -271,6 +272,57 @@ def reorder_categories(
     service: Annotated[AdminService, Depends(get_admin_service)],
 ) -> list[CategoryRead]:
     return service.reorder_categories(data, restaurant_id)
+
+
+@router.get("/labels", response_model=list[LabelRead])
+def list_labels(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+    kind: LabelKind | None = None,
+) -> list[LabelRead]:
+    return service.list_labels(restaurant_id, kind)
+
+
+@router.post("/labels", response_model=LabelRead, status_code=status.HTTP_201_CREATED)
+def create_label(
+    data: LabelCreate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> LabelRead:
+    try:
+        return service.create_label(restaurant_id, data)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.put("/labels/{label_id}", response_model=LabelRead)
+def update_label(
+    label_id: int,
+    data: LabelUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> LabelRead:
+    try:
+        return service.update_label(label_id, data, restaurant_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.delete("/labels/{label_id}", response_model=dict)
+def delete_label(
+    label_id: int,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> dict:
+    """Delete the label and take it off every dish that had it; says how many dishes were changed."""
+    try:
+        return {"removed_from_items": service.delete_label(label_id, restaurant_id)}
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.get("/menu", response_model=list[MenuItemDetailRead])

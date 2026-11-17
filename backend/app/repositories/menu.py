@@ -35,6 +35,7 @@ class MenuRepository:
         price_min: Decimal | None = None,
         price_max: Decimal | None = None,
         exclude_allergens: list[str] | None = None,
+        tags: list[str] | None = None,
         sort: str = "popular",
         page: int = 1,
         page_size: int = 20,
@@ -64,6 +65,9 @@ class MenuRepository:
             # JSONB containment (@>): true when `allergens` includes this one element, so a dish
             # tagged with it is excluded. "Hide dishes containing X" for however many X are picked.
             stmt = stmt.where(not_(MenuItem.allergens.contains([allergen])))
+
+        for tag in tags or []:
+            stmt = stmt.where(MenuItem.tags.contains([tag]))  # dish must carry every chosen dish type
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = self.db.scalar(count_stmt) or 0

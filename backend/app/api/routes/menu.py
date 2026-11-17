@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, raise_http_for_app_error
 from app.db.session import get_db
+from app.schemas.labels import LabelKind, LabelRead
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuListResponse
+from app.services.label_service import LabelService
 from app.services.menu_service import MenuService
 
 router = APIRouter()
@@ -26,6 +28,16 @@ def list_categories(
     return service.list_categories(restaurant_id)
 
 
+@router.get("/menu/labels", response_model=list[LabelRead])
+def list_labels(
+    restaurant_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    kind: LabelKind | None = None,
+) -> list[LabelRead]:
+    """The restaurant's allergens and dish types — what the menu shows on dishes and offers as filters."""
+    return LabelService(db).list_labels(restaurant_id, kind)
+
+
 @router.get("/menu", response_model=MenuListResponse)
 def list_menu(
     restaurant_id: int,
@@ -39,6 +51,7 @@ def list_menu(
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
     exclude_allergens: list[str] = Query(default=[]),
+    tags: list[str] = Query(default=[]),
     sort: str = Query(default="popular", pattern="^(popular|name|price_asc|price_desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -54,6 +67,7 @@ def list_menu(
         price_min=price_min,
         price_max=price_max,
         exclude_allergens=exclude_allergens,
+        tags=tags,
         sort=sort,
         page=page,
         page_size=page_size,

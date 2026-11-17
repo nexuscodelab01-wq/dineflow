@@ -42,7 +42,7 @@ def two(client, db):
 PUBLIC = {
     ("GET", "/t/{token}"), ("POST", "/t/{token}/join"),
     ("GET", "/health"), ("GET", "/health/ready"),
-    ("GET", "/categories"), ("GET", "/menu"), ("GET", "/menu/{item_id}"),
+    ("GET", "/categories"), ("GET", "/menu"), ("GET", "/menu/labels"), ("GET", "/menu/{item_id}"),
     ("GET", "/restaurants/{identifier}"), ("GET", "/restaurants/{identifier}/tables"),
     ("GET", "/restaurants/{identifier}/reservations/availability"),
     ("GET", "/restaurants/{identifier}/reviews"),
@@ -273,6 +273,17 @@ def test_menu_items_are_only_served_within_their_own_restaurant(two):
     assert c.get(f"{API}/menu/{a.item.id}?restaurant_id={a.rid}").status_code == 200
     assert c.get(f"{API}/menu/{b.item.id}?restaurant_id={a.rid}").status_code == 404      # can't enumerate across tenants
     assert c.get(f"{API}/menu/{a.item.id}").status_code == 422                            # tenant context is mandatory
+
+
+def test_menu_labels_are_only_served_within_their_own_restaurant(two):
+    from app.models.menu_label import MenuLabel
+    c, a, b = two.client, two.a, two.b
+    two.db.add(MenuLabel(restaurant_id=a.rid, kind="dish_type", code="alpha_only", label="Alpha only", sort_order=0))
+    two.db.flush()
+    mine = [x["code"] for x in c.get(f"{API}/menu/labels?restaurant_id={a.rid}").json()]
+    theirs = [x["code"] for x in c.get(f"{API}/menu/labels?restaurant_id={b.rid}").json()]
+    assert "alpha_only" in mine and "alpha_only" not in theirs                            # Bravo never sees Alpha's own labels
+    assert c.get(f"{API}/menu/labels").status_code == 422                                 # tenant context is mandatory
 
 
 def test_the_restaurant_directory_is_platform_only(two):

@@ -165,15 +165,96 @@ def test_menu_item_crud_and_validation(world):
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "price": "0"}).status_code == 422
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "name": ""}).status_code == 422
     assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "category_id": 999999}).status_code == 404
-    assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "allergens": ["shellfish"]}).status_code == 422
+    assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "allergens": ["shellfish"]}).status_code == 400
 
     upd = w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"price": "15.00", "is_available": False, "allergens": ["milk", "cereals_gluten"]})
     assert upd.status_code == 200 and Decimal(upd.json()["price"]) == Decimal("15.00") and upd.json()["is_available"] is False
     assert upd.json()["allergens"] == ["milk", "cereals_gluten"]
-    assert w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"allergens": ["not-a-real-allergen"]}).status_code == 422
+    assert w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"allergens": ["not-a-real-allergen"]}).status_code == 400
     public = w.client.get(f"/api/v1/menu?restaurant_id={w.a.id}").json()
     assert all(i["id"] != iid for i in public["items"])                       # unavailable items are hidden from customers
     assert w.client.delete(url(w, f"/menu/{iid}"), headers=w.admin).status_code == 204
+
+
+# ---------------------------------------------------------------- allergens & dish types (restaurant-defined labels)
+
+def _labels(w, kind=None, restaurant=None, headers=None):
+    extra = {"kind": kind} if kind else {}
+    r = w.client.get(url(w, "/labels", restaurant, **extra), headers=headers or w.admin)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_a_restaurant_starts_with_the_14_standard_allergens_and_no_dish_types(world):
+    w = world
+    allergens = _labels(w, "allergen")
+    assert len(allergens) == 14 and {a["code"] for a in allergens} >= {"milk", "nuts", "cereals_gluten"}
+    assert _labels(w, "dish_type") == []
+    assert len(_labels(w, "allergen", headers=w.staff)) == 14                  # staff can read
+    public = w.client.get(f"/api/v1/menu/labels?restaurant_id={w.a.id}&kind=allergen").json()
+    assert len(public) == 14                                                    # customers see the same list
+
+
+def test_owner_can_add_rename_and_delete_their_own_allergens_and_dish_types(world):
+    w = world
+    made = w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "allergen", "label": "  Kiwi   fruit "})
+    assert made.status_code == 201, made.text
+    assert made.json()["label"] == "Kiwi fruit" and made.json()["code"] == "kiwi_fruit"
+    lid = made.json()["id"]
+    assert w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "allergen", "label": "kiwi FRUIT"}).status_code == 409
+    assert w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "allergen", "label": "  "}).status_code == 422
+    vegan = w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "dish_type", "label": "Vegan"})
+    assert vegan.status_code == 201 and vegan.json()["code"] == "vegan"
+    # The same name is fine in the other list.
+    assert w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "dish_type", "label": "Kiwi fruit"}).status_code == 201
+
+    renamed = w.client.put(url(w, f"/labels/{lid}"), headers=w.admin, json={"label": "Kiwifruit"})
+    assert renamed.status_code == 200 and renamed.json()["label"] == "Kiwifruit" and renamed.json()["code"] == "kiwi_fruit"
+
+    assert w.client.delete(url(w, f"/labels/{lid}"), headers=w.admin).json() == {"removed_from_items": 0}
+    assert all(a["code"] != "kiwi_fruit" for a in _labels(w, "allergen"))
+
+
+def test_even_a_standard_allergen_can_be_deleted_and_stays_deleted(world):
+    w = world
+    for label in _labels(w, "allergen"):
+        assert w.client.delete(url(w, f"/labels/{label['id']}"), headers=w.admin).status_code == 200
+    assert _labels(w, "allergen") == []                                          # the defaults do not come back
+
+
+def test_dishes_can_only_use_the_restaurants_own_labels_and_deleting_one_strips_it_from_dishes(world):
+    w = world
+    vegan = w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "dish_type", "label": "Vegan"}).json()
+    body = {"restaurant_id": w.a.id, "category_id": w.cat.id, "name": "Bowl", "price": "9.00",
+            "tags": ["vegan"], "allergens": ["milk", "milk", "nuts"]}
+    made = w.client.post(url(w, "/menu"), headers=w.admin, json=body)
+    assert made.status_code == 201, made.text
+    assert made.json()["tags"] == ["vegan"] and made.json()["allergens"] == ["milk", "nuts"]   # duplicate collapsed
+    iid = made.json()["id"]
+    assert w.client.post(url(w, "/menu"), headers=w.admin, json={**body, "tags": ["jain"]}).status_code == 400
+    assert w.client.put(url(w, f"/menu/{iid}"), headers=w.admin, json={"tags": ["nope"]}).status_code == 400
+
+    counts = {x["code"]: x["item_count"] for x in _labels(w)}
+    assert counts["vegan"] == 1 and counts["milk"] == 1 and counts["fish"] == 0
+
+    # A dish type is filterable by customers, and is gone from the dish once the label is deleted.
+    assert [i["id"] for i in w.client.get(f"/api/v1/menu?restaurant_id={w.a.id}&tags=vegan").json()["items"]] == [iid]
+    assert w.client.delete(url(w, f"/labels/{vegan['id']}"), headers=w.admin).json() == {"removed_from_items": 1}
+    assert w.client.get(url(w, "/menu"), headers=w.admin).json()  # still readable
+    again = next(i for i in w.client.get(url(w, "/menu"), headers=w.admin).json() if i["id"] == iid)
+    assert again["tags"] == [] and again["allergens"] == ["milk", "nuts"]
+
+
+def test_labels_are_admin_only_to_change_and_isolated_per_restaurant(world):
+    w = world
+    assert w.client.post(url(w, "/labels"), headers=w.staff, json={"kind": "allergen", "label": "X"}).status_code == 403
+    assert w.client.post(url(w, "/labels"), headers=w.customer, json={"kind": "allergen", "label": "X"}).status_code == 403
+    mine = w.client.post(url(w, "/labels"), headers=w.admin, json={"kind": "dish_type", "label": "Halal"}).json()
+    # Bravo's admin can neither see nor touch Alpha's labels, even by id.
+    assert w.client.get(url(w, "/labels"), headers=w.admin_b).status_code == 403
+    assert w.client.delete(url(w, f"/labels/{mine['id']}", w.b), headers=w.admin_b).status_code == 404
+    assert w.client.put(url(w, f"/labels/{mine['id']}", w.b), headers=w.admin_b, json={"label": "Hacked"}).status_code == 404
+    assert [x["code"] for x in _labels(w, "dish_type", w.b, w.admin_b)] == []   # Bravo has none of Alpha's
 
 
 def test_deleting_a_menu_item_that_was_ordered_is_refused_cleanly(world):

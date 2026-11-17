@@ -63,6 +63,7 @@ class MenuService:
             tax_code=item.tax_code,
             has_modifiers=bool(item.modifier_links),
             allergens=item.allergens,
+            tags=item.tags,
         )
 
     def _to_detail_item(self, item) -> MenuItemDetailRead:
