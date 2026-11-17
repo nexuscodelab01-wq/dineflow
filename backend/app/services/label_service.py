@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.allergens import ALLERGENS
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.models.menu_item import MenuItem
-from app.models.menu_label import LABEL_KINDS, MenuLabel
+from app.models.menu_label import MenuLabel
 from app.models.restaurant import Restaurant
 from app.schemas.labels import LabelCreate, LabelRead, LabelUpdate
 

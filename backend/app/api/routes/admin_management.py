@@ -55,8 +55,8 @@ from app.schemas.admin import (
 )
 from app.schemas.analytics import AnalyticsResponse
 from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
-from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.labels import LabelCreate, LabelKind, LabelRead, LabelUpdate
+from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.payments import StripeOnboardLink, StripeStatus, TaxCheckRead
