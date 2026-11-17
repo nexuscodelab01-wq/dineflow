@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Ticket } from '~/utils/kitchen'
 import { ageMs, formatTimer, urgency } from '~/utils/kitchen'
-import { allergenLabel } from '~/utils/allergens'
 
 /**
  * One ticket on the kitchen screen. The timer and its colour show how long the order has waited; each dish is a
@@ -10,6 +9,7 @@ import { allergenLabel } from '~/utils/allergens'
 const props = defineProps<{ ticket: Ticket, now: number, busy?: boolean, canComplete?: boolean }>()
 const emit = defineEmits<{ bumpItem: [id: number], recallItem: [id: number], bumpAll: [], complete: [] }>()
 
+const { allergenLabel } = useMenuLabels()
 const order = computed(() => props.ticket.order)
 const age = computed(() => ageMs(order.value.created_at, props.now))
 const level = computed(() => urgency(age.value))

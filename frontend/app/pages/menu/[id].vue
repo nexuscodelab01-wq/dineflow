@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { MenuItemDetail } from '~/types/menu'
 import { fetchMenuItem } from '~/services/menu'
-import { allergenLabel } from '~/utils/allergens'
 import { resolveMediaUrl } from '~/utils/media'
 const { money } = useMoney()
+const { allergenLabel, tagLabel, load: loadLabels } = useMenuLabels()
 
 const route = useRoute()
 const cart = useCartStore()
@@ -26,6 +26,7 @@ onMounted(async () => {
     const current = await restaurant.load()
     if (!current) throw new Error('Restaurant not found')
     item.value = await fetchMenuItem(itemId.value, current.id)
+    void loadLabels(current.id)
     for (const modifier of item.value.modifiers) {
       const defaults = modifier.options.filter(o => o.is_default).map(o => o.id)
       selectedOptions.value[modifier.id] = modifier.max_selections === 1
@@ -123,6 +124,7 @@ function addToCart() {
         <span v-if="item.is_popular" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">Popular</span>
         <span v-if="item.is_vegetarian" class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Vegetarian</span>
         <span v-if="item.is_spicy" class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Spicy</span>
+        <span v-for="t in item.tags" :key="t" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">{{ tagLabel(t) }}</span>
       </div>
       <h1 class="font-display mt-3 text-3xl font-semibold text-brand-900">{{ item.name }}</h1>
       <p v-if="item.description" class="mt-2 text-ink-muted">{{ item.description }}</p>
