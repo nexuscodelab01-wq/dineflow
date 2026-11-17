@@ -12,6 +12,7 @@ from app.models.job import Job
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.menu_item import MenuItem
 from app.models.menu_item_modifier import MenuItemModifier
+from app.models.menu_label import MenuLabel
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
 from app.models.order import Order
@@ -51,6 +52,7 @@ __all__ = [
     "LoyaltyTransaction",
     "MenuItem",
     "MenuItemModifier",
+    "MenuLabel",
     "MenuModifier",
     "MenuModifierOption",
     "Order",

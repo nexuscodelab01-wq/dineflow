@@ -90,6 +90,9 @@ class Restaurant(TimestampMixin, Base):
     online_ordering_paused: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    # True once the restaurant's allergen list has been created (from the standard 14). Lets an owner delete every
+    # allergen without the defaults coming back — see app/services/label_service.py.
+    labels_seeded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     ordering_pause_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     max_pending_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Scheduled ("order for later") collection slots, behind the `scheduled_orders` flag.
