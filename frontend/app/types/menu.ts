@@ -126,8 +126,22 @@ export type MenuItem = {
   station?: string
   /** Stripe Tax category; null = the restaurant default. */
   tax_code?: string | null
-  /** Codes from `~/utils/allergens`, e.g. ["milk", "nuts"]. */
+  /** Codes of this restaurant's allergens (see `MenuLabel`), e.g. ["milk", "nuts"]. */
   allergens?: string[]
+  /** Codes of this restaurant's own dish types, e.g. ["vegan", "gluten_free"]. */
+  tags?: string[]
+}
+
+/** An allergen or dish type a restaurant defines itself. Dishes store its `code`; renaming only changes `label`. */
+export type MenuLabelKind = 'allergen' | 'dish_type'
+export type MenuLabel = {
+  id: number
+  kind: MenuLabelKind
+  code: string
+  label: string
+  sort_order: number
+  /** Dishes carrying it — only filled in by the admin list. */
+  item_count?: number
 }
 
 export type MenuItemDetail = MenuItem & {
@@ -152,6 +166,8 @@ export type MenuFilters = {
   price_max?: number
   /** Hide dishes tagged with any of these allergen codes. */
   exclude_allergens?: string[]
+  /** Only dishes carrying every one of these dish-type codes. */
+  tags?: string[]
   sort?: 'popular' | 'name' | 'price_asc' | 'price_desc'
   page?: number
   page_size?: number

@@ -1,6 +1,6 @@
 import type { AnalyticsResponse, DateRangePreset } from '~/types/analytics'
 import type { CustomerDetail, CustomerProfileUpdate, CustomerSummary, DashboardStats, KitchenBoard } from '~/types/admin'
-import type { Category, MenuItemDetail, MenuModifier, Restaurant, RestaurantTable } from '~/types/menu'
+import type { Category, MenuItemDetail, MenuLabel, MenuLabelKind, MenuModifier, Restaurant, RestaurantTable } from '~/types/menu'
 import type { Order, OrderListResponse, OrderStatus } from '~/types/order'
 import { apiFetch, apiFetchBlob } from '~/services/http'
 
@@ -204,6 +204,38 @@ export function createCategory(restaurantId: number, payload: Record<string, unk
     method: 'POST',
     body: JSON.stringify({ ...payload, restaurant_id: restaurantId }),
   })
+}
+
+export function updateCategory(restaurantId: number, categoryId: number, payload: Record<string, unknown>) {
+  return apiFetch<Category>(q(restaurantId, `/categories/${categoryId}`), {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function reorderCategories(restaurantId: number, order: { id: number, sort_order: number }[]) {
+  return apiFetch<Category[]>(q(restaurantId, '/categories/reorder'), {
+    method: 'PATCH',
+    body: JSON.stringify({ items: order }),
+  })
+}
+
+/** Allergens and dish types with how many dishes carry each (staff can read, only admins can change). */
+export function fetchAdminLabels(restaurantId: number) {
+  return apiFetch<MenuLabel[]>(q(restaurantId, '/labels'))
+}
+
+export function createLabel(restaurantId: number, kind: MenuLabelKind, label: string) {
+  return apiFetch<MenuLabel>(q(restaurantId, '/labels'), { method: 'POST', body: JSON.stringify({ kind, label }) })
+}
+
+export function updateLabel(restaurantId: number, labelId: number, label: string) {
+  return apiFetch<MenuLabel>(q(restaurantId, `/labels/${labelId}`), { method: 'PUT', body: JSON.stringify({ label }) })
+}
+
+/** Deleting also takes it off every dish that had it. */
+export function deleteLabel(restaurantId: number, labelId: number) {
+  return apiFetch<{ removed_from_items: number }>(q(restaurantId, `/labels/${labelId}`), { method: 'DELETE' })
 }
 
 export function deleteCategory(restaurantId: number, categoryId: number) {
