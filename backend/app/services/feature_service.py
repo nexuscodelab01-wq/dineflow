@@ -28,6 +28,7 @@ KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 # idempotently so a fresh install (or an existing one) ends up with these even though nothing inserts
 # them via a migration. Ordinary catalog rows after that: editable and deletable like any other.
 _DEFAULTS: dict[str, tuple[str, bool]] = {
+    "online_ordering": ("Customers can order online: cart, checkout, pickup and delivery. Off = the site only shows the menu", True),
     "reservations": ("Guests can book tables; staff manage bookings", True),
     "qr_table_ordering": ("Guests order and pay from a QR code at their table", False),
     "pay_at_table": ("Guests split and pay the bill from their phone", False),
@@ -43,6 +44,10 @@ _DEFAULTS: dict[str, tuple[str, bool]] = {
     "tips": ("Card tips on the reader, cash-tip declaration, service charge and tip pooling", False),
     "stripe_tax": ("Sales tax by address through Stripe Tax (US/Canada); the flat rate stays as the fallback", False),
 }
+
+
+# A customer account only has a purpose while one of these is on: they order, book a table, earn points or write a review.
+CUSTOMER_ACCOUNT_FEATURES = ("online_ordering", "reservations", "loyalty", "reviews")
 
 
 class FeatureService:

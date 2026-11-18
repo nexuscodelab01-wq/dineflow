@@ -269,6 +269,14 @@ The customer enters it at checkout and sees what it is worth before paying. **Th
 
 **Retire** a code that has been used rather than deleting it — past orders keep their history. An unused code is deleted outright.
 
+## Online ordering (flag: `online_ordering`, on by default)
+For a restaurant that only wants its website to **show the menu**: switch `online_ordering` off for it in the platform console. Then, with nothing else to configure:
+- **Customer site**: the cart, the floating cart bar, checkout and "Orders" disappear from the navigation, a dish page shows the dish (price, description, allergens) without options, quantity or "Add to cart", `/cart` and `/checkout` return 404, and the home page wording stops inviting people to order.
+- **API**: placing an order, getting a quote and listing collection slots are refused (403); the menu itself stays public.
+- **Admin panel**: the *Order capacity*, delivery/pickup/dine-in and delivery-fee settings are hidden (currency and tax stay — the POS uses them). The **Orders** page and **Kitchen** screen are shared by every way of taking an order, so they stay available while the **POS** or **table QR ordering** is on, and go away only when *all three* ordering features are off.
+- Everything that doesn't depend on ordering keeps working: the menu, reservations, reviews, the POS, table ordering.
+- A new flag defaults **on** (its row is created by migration `0046`), so every existing restaurant keeps ordering until someone switches it off.
+
 ## Ordering ahead and order capacity
 **Settings → Order capacity** holds two things that work whether or not any flag is on:
 - **Pause online ordering** stops new customer orders and shows them the message you set ("we're extremely busy tonight"). Staff can still put an order in for a guest.

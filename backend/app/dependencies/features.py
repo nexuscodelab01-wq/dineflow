@@ -28,6 +28,33 @@ def requires_feature(key: str) -> Callable[..., None]:
     return dependency
 
 
+def requires_any_feature(*keys: str) -> Callable[..., None]:
+    """Route dependency for staff routes that serve more than one feature (the kitchen and order list are used by online
+    ordering, the POS and table ordering alike): 403 only when EVERY one of those channels is off."""
+
+    def dependency(restaurant_id: RestaurantId, db: Annotated[Session, Depends(get_db)]) -> None:
+        features = FeatureService(db)
+        if not any(features.is_enabled(restaurant_id, key) for key in keys):
+            raise ForbiddenError("This feature is not available for this restaurant")
+
+    return dependency
+
+
+ORDERING_CHANNELS = ("online_ordering", "pos", "qr_table_ordering")
+
+
+def requires_feature_if_customer(key: str) -> Callable[..., None]:
+    """Like requires_feature_for_user, but only judges customers (who belong to one restaurant). A staff or platform identity has
+    no restaurant of its own here, so it is left to the route's own rules — which, for these customer-only routes, already
+    answer "not found" — instead of getting a different answer from the flag check."""
+
+    def dependency(user: CurrentUser, db: Annotated[Session, Depends(get_db)]) -> None:
+        if user.restaurant_id is not None:
+            FeatureService(db).require(user.restaurant_id, key)
+
+    return dependency
+
+
 def requires_feature_for_user(key: str) -> Callable[..., None]:
     """Route dependency for signed-in customer routes: 403 when the flag is off for the caller's own restaurant."""
 

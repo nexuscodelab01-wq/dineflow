@@ -9,12 +9,13 @@ import { playDing, unlockSound } from '~/utils/beep'
 import { allDayCounts, newOrderIds, STATIONS, ticketsFor } from '~/utils/kitchen'
 import type { SseStatus } from '~/utils/sse'
 
-definePageMeta({ layout: 'admin', middleware: ['staff'] })
+definePageMeta({ layout: 'admin', middleware: ['staff'], feature: ['online_ordering', 'pos', 'qr_table_ordering'] })
 
 const admin = useAdminStore()
 const ui = useUiStore()
 const board = ref<KitchenBoard | null>(null)
 const soldOut = ref<MenuItemDetail[]>([])
+const { load: loadLabels } = useMenuLabels()
 const loading = ref(true)
 const busy = ref(false)
 const connection = ref<SseStatus>('connecting')
@@ -95,6 +96,7 @@ onMounted(async () => {
   clock = setInterval(() => { now.value = Date.now() }, 1000)
   await load()
   if (!admin.restaurantId) return
+  void loadLabels(admin.restaurantId) // custom allergen names on the tickets
   stream = subscribeKitchen(admin.restaurantId, { onChange: refreshSoon, onStatus: (s) => { connection.value = s } })
   // Safety net: rarely while the live stream is healthy, often when it is not.
   poll = setInterval(load, 15000)

@@ -12,6 +12,7 @@ definePageMeta({ layout: 'admin', middleware: ['admin'] })
 const admin = useAdminStore()
 const loyaltyEnabled = useFeature('loyalty')
 const scheduledOrdersEnabled = useFeature('scheduled_orders')
+const onlineOrdering = useFeature('online_ordering')
 const settings = ref<Restaurant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -529,7 +530,7 @@ async function save() {
         </label>
       </section>
 
-      <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
+      <section v-if="onlineOrdering" class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-4">
         <div>
           <h2 class="font-semibold">Order capacity</h2>
           <p class="mt-1 text-xs text-ink-subtle">Turn online orders off when you're slammed, or let them pause themselves. Staff can always add an order for a guest.</p>
@@ -565,10 +566,12 @@ async function save() {
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6 space-y-3">
-        <h2 class="font-semibold">Ordering</h2>
-        <label class="flex items-center gap-2 text-sm"><input v-model="form.delivery_enabled" type="checkbox"> Delivery enabled</label>
-        <label class="flex items-center gap-2 text-sm"><input v-model="form.pickup_enabled" type="checkbox"> Pickup enabled</label>
-        <label class="flex items-center gap-2 text-sm"><input v-model="form.dine_in_enabled" type="checkbox"> Dine-in enabled</label>
+        <h2 class="font-semibold">{{ onlineOrdering ? 'Ordering' : 'Currency & tax' }}</h2>
+        <template v-if="onlineOrdering">
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.delivery_enabled" type="checkbox"> Delivery enabled</label>
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.pickup_enabled" type="checkbox"> Pickup enabled</label>
+          <label class="flex items-center gap-2 text-sm"><input v-model="form.dine_in_enabled" type="checkbox"> Dine-in enabled</label>
+        </template>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="block text-sm">
             <span class="text-ink-muted">Country</span>
@@ -610,7 +613,7 @@ async function save() {
             <p class="text-xs text-ink-subtle">Stripe only charges tax where you've added a registration in your Stripe Dashboard. The flat rate below is used if Stripe can't be reached.</p>
           </div>
           <input v-model="form.tax_rate" type="number" step="0.0001" min="0" max="1" class="rounded-lg border px-3 py-2 text-sm" placeholder="Flat tax rate (0.0875) — the fallback">
-          <input v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
+          <input v-if="onlineOrdering" v-model="form.delivery_fee" type="number" step="0.01" min="0" class="rounded-lg border px-3 py-2 text-sm" placeholder="Delivery fee">
         </div>
       </section>
 

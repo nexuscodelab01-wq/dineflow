@@ -10,10 +10,10 @@ import {
   uploadMenuImage,
 } from '~/services/admin'
 import { STATIONS } from '~/utils/kitchen'
-import { ALLERGENS, allergenLabel } from '~/utils/allergens'
 import { resolveMediaUrl } from '~/utils/media'
 import { TAX_CODES } from '~/utils/taxCodes'
 const { money } = useMoney()
+const { allergens: allergenOptions, dishTypes, allergenLabel, tagLabel, load: loadLabels } = useMenuLabels()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'] })
 
@@ -30,6 +30,7 @@ const error = ref('')
 const uploading = ref(false)
 const savingCategory = ref(false)
 const showNewCategory = ref(false)
+const showSetup = ref(false)
 const newCategoryName = ref('')
 
 const form = reactive({
@@ -45,6 +46,7 @@ const form = reactive({
   is_spicy: false,
   is_popular: false,
   allergens: [] as string[],
+  tags: [] as string[],
 })
 
 const taxModeStripe = computed(() => admin.restaurant?.tax_mode === 'STRIPE')
@@ -60,6 +62,7 @@ async function load() {
       fetchAdminMenu(admin.restaurantId),
       fetchAdminCategories(admin.restaurantId),
     ])
+    await loadLabels(admin.restaurantId, true)
   }
   finally {
     loading.value = false
@@ -67,6 +70,14 @@ async function load() {
 }
 
 onMounted(load)
+
+// A label deleted in the manager can't stay ticked on a dish that's being edited — the server would refuse it.
+watch([allergenOptions, dishTypes], () => {
+  const allergenCodes = new Set(allergenOptions.value.map(l => l.code))
+  const tagCodes = new Set(dishTypes.value.map(l => l.code))
+  form.allergens = form.allergens.filter(c => allergenCodes.has(c))
+  form.tags = form.tags.filter(c => tagCodes.has(c))
+})
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -88,6 +99,7 @@ function resetFormDefaults() {
     is_spicy: false,
     is_popular: false,
     allergens: [],
+    tags: [],
   })
   showNewCategory.value = false
   newCategoryName.value = ''
@@ -115,6 +127,7 @@ function openEdit(item: MenuItemDetail) {
     is_spicy: item.is_spicy,
     is_popular: item.is_popular,
     allergens: [...(item.allergens || [])],
+    tags: [...(item.tags || [])],
   })
   showNewCategory.value = false
   newCategoryName.value = ''
@@ -204,6 +217,7 @@ async function saveItem() {
       is_spicy: form.is_spicy,
       is_popular: form.is_popular,
       allergens: form.allergens,
+      tags: form.tags,
     }
     const wasEditing = Boolean(editing.value)
     if (editing.value) {
@@ -249,7 +263,12 @@ async function removeItem(item: MenuItemDetail) {
         <h1 class="font-display text-2xl font-semibold text-brand-900">Menu</h1>
         <p class="text-sm text-ink-muted">Manage menu items, categories, and photos</p>
       </div>
-      <AppButton v-if="auth.isAdmin" @click="openCreate">Add item</AppButton>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-800 hover:bg-brand-50" @click="showSetup = true">
+          Categories, allergens &amp; dish types
+        </button>
+        <AppButton v-if="auth.isAdmin" @click="openCreate">Add item</AppButton>
+      </div>
     </div>
 
     <input v-model="search" type="search" placeholder="Search menu…" class="mt-4 w-full max-w-md rounded-lg border border-brand-200 px-3 py-2 text-sm">
@@ -289,6 +308,7 @@ async function removeItem(item: MenuItemDetail) {
                 </div>
                 <div>
                   <span class="font-medium">{{ item.name }}</span>
+                  <p v-if="item.tags?.length" class="text-xs text-brand-700">{{ item.tags.map(tagLabel).join(' · ') }}</p>
                   <p v-if="item.allergens?.length" class="text-xs text-ink-subtle">Contains: {{ item.allergens.map(allergenLabel).join(', ') }}</p>
                 </div>
               </div>
@@ -411,14 +431,33 @@ async function removeItem(item: MenuItemDetail) {
           </div>
 
           <div>
-            <span class="block text-sm font-medium text-ink">Allergens</span>
+            <div class="flex items-center justify-between">
+              <span class="block text-sm font-medium text-ink">Dish types</span>
+              <button type="button" class="text-xs font-medium text-brand-700 hover:underline" @click="showSetup = true">Add or edit dish types</button>
+            </div>
+            <p class="mt-0.5 text-xs text-ink-subtle">Badges guests see on this dish and can filter by, like Vegan or Gluten-free.</p>
+            <div v-if="dishTypes.length" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
+              <label v-for="t in dishTypes" :key="t.code" class="flex items-center gap-2">
+                <input v-model="form.tags" type="checkbox" :value="t.code">
+                {{ t.label }}
+              </label>
+            </div>
+            <p v-else class="mt-2 text-xs text-ink-subtle">None yet — use “Add or edit dish types” to create your own.</p>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="block text-sm font-medium text-ink">Allergens</span>
+              <button type="button" class="text-xs font-medium text-brand-700 hover:underline" @click="showSetup = true">Add or edit allergens</button>
+            </div>
             <p class="mt-0.5 text-xs text-ink-subtle">What this dish contains, so guests with allergies can avoid it.</p>
-            <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
-              <label v-for="a in ALLERGENS" :key="a.code" class="flex items-center gap-2">
+            <div v-if="allergenOptions.length" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
+              <label v-for="a in allergenOptions" :key="a.code" class="flex items-center gap-2">
                 <input v-model="form.allergens" type="checkbox" :value="a.code">
                 {{ a.label }}
               </label>
             </div>
+            <p v-else class="mt-2 text-xs text-ink-subtle">None yet — use “Add or edit allergens” to create your own.</p>
           </div>
           <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
           <div class="flex gap-2 pt-2">
@@ -428,5 +467,14 @@ async function removeItem(item: MenuItemDetail) {
         </form>
       </div>
     </div>
+
+    <MenuSetup
+      v-if="showSetup && admin.restaurantId"
+      :restaurant-id="admin.restaurantId"
+      :items="items"
+      :can-edit="auth.isAdmin"
+      @close="showSetup = false"
+      @changed="load"
+    />
   </div>
 </template>

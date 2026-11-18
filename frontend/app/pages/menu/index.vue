@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Category, MenuItem, MenuFilters } from '~/types/menu'
 import { fetchCategories, fetchMenu } from '~/services/menu'
-import { ALLERGENS } from '~/utils/allergens'
 import { useDebounceFn } from '@vueuse/core'
 
 const restaurant = useRestaurantStore()
@@ -9,6 +8,8 @@ const router = useRouter()
 const { status: openStatus, todayLabel } = useOpeningStatus()
 
 await restaurant.load()
+const { allergens: allergenOptions, dishTypes, load: loadLabels } = useMenuLabels()
+if (restaurant.current) await loadLabels(restaurant.current.id)
 
 const categories = ref<Category[]>([])
 const items = ref<MenuItem[]>([])
@@ -24,6 +25,7 @@ const filters = reactive<MenuFilters>({
   is_spicy: undefined,
   is_popular: undefined,
   exclude_allergens: [],
+  tags: [],
   sort: 'popular',
   page: 1,
   page_size: 12,
@@ -62,7 +64,7 @@ const debouncedSearch = useDebounceFn(() => {
 
 watch(() => filters.search, () => debouncedSearch())
 watch(
-  () => [filters.category_id, filters.is_vegetarian, filters.is_spicy, filters.is_popular, filters.exclude_allergens, filters.sort, filters.page],
+  () => [filters.category_id, filters.is_vegetarian, filters.is_spicy, filters.is_popular, filters.exclude_allergens, filters.tags, filters.sort, filters.page],
   () => loadMenu(),
   { deep: true },
 )
@@ -142,7 +144,14 @@ function goToItem(id: number) {
       <label class="flex items-center gap-2"><input v-model="filters.is_popular" type="checkbox" :true-value="true" :false-value="undefined"> Popular</label>
     </div>
 
-    <div class="mb-6">
+    <div v-if="dishTypes.length" class="mb-4 flex flex-wrap gap-4 text-sm">
+      <label v-for="t in dishTypes" :key="t.code" class="flex items-center gap-2">
+        <input v-model="filters.tags" type="checkbox" :value="t.code">
+        {{ t.label }}
+      </label>
+    </div>
+
+    <div v-if="allergenOptions.length" class="mb-6">
       <button
         type="button"
         class="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
@@ -159,7 +168,7 @@ function goToItem(id: number) {
         id="allergen-filter-panel"
         class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-brand-100 bg-brand-50/40 p-3 text-sm sm:grid-cols-3"
       >
-        <label v-for="a in ALLERGENS" :key="a.code" class="flex items-center gap-2">
+        <label v-for="a in allergenOptions" :key="a.code" class="flex items-center gap-2">
           <input v-model="filters.exclude_allergens" type="checkbox" :value="a.code">
           {{ a.label }}
         </label>
@@ -191,6 +200,7 @@ function goToItem(id: number) {
           isPopular: item.is_popular,
           unavailable: !item.is_available,
           allergens: item.allergens,
+          tags: item.tags,
         }"
         @click="goToItem(item.id)"
       />

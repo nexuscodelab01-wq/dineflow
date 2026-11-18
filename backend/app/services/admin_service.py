@@ -55,11 +55,13 @@ from app.schemas.admin import (
     TableStatusUpdate,
     TableUpdate,
 )
+from app.schemas.labels import LabelCreate, LabelRead, LabelUpdate
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
 from app.schemas.payments import TaxCheckRead
 from app.schemas.restaurant import RestaurantRead
 from app.services.feature_service import FeatureService
+from app.services.label_service import LabelService
 from app.services.loyalty_service import LoyaltyService
 from app.services.menu_service import MenuService
 from app.services.order_service import OrderService
@@ -97,6 +99,7 @@ class AdminService:
         self.reservations = ReservationService(db)
         self.features = FeatureService(db)
         self.loyalty = LoyaltyService(db)
+        self.labels = LabelService(db)
 
     def dashboard_stats(self, restaurant_id: int) -> DashboardStats:
         data = self.dashboard.stats(restaurant_id)
@@ -141,6 +144,19 @@ class AdminService:
         self.db.commit()
         return self.list_categories(restaurant_id)
 
+    # Allergens and dish types
+    def list_labels(self, restaurant_id: int, kind: str | None = None) -> list[LabelRead]:
+        return self.labels.list_labels(restaurant_id, kind, with_counts=True)
+
+    def create_label(self, restaurant_id: int, data: LabelCreate) -> LabelRead:
+        return self.labels.create(restaurant_id, data)
+
+    def update_label(self, label_id: int, data: LabelUpdate, restaurant_id: int) -> LabelRead:
+        return self.labels.update(label_id, data, restaurant_id)
+
+    def delete_label(self, label_id: int, restaurant_id: int) -> int:
+        return self.labels.delete(label_id, restaurant_id)
+
     # Menu items
     def list_menu_items(self, restaurant_id: int) -> list[MenuItemDetailRead]:
         items = self.menu.list_items(restaurant_id)
@@ -148,7 +164,10 @@ class AdminService:
 
     def create_menu_item(self, data: MenuItemCreate) -> MenuItemDetailRead:
         self._get_category(data.category_id, data.restaurant_id)
-        item = MenuItem(**data.model_dump(exclude={"modifier_ids"}))
+        payload = data.model_dump(exclude={"modifier_ids"})
+        payload["allergens"] = self.labels.check_codes(data.restaurant_id, "allergen", data.allergens)
+        payload["tags"] = self.labels.check_codes(data.restaurant_id, "dish_type", data.tags)
+        item = MenuItem(**payload)
         self.menu.create_item(item)
         if data.modifier_ids:
             self._validate_modifiers(data.restaurant_id, data.modifier_ids)
@@ -162,6 +181,9 @@ class AdminService:
         old_image = item.image_url
         if "category_id" in payload:
             self._get_category(payload["category_id"], restaurant_id)
+        for field, kind in (("allergens", "allergen"), ("tags", "dish_type")):
+            if field in payload:
+                payload[field] = self.labels.check_codes(restaurant_id, kind, payload[field] or [])
         for key, value in payload.items():
             setattr(item, key, value)
         if data.modifier_ids is not None:

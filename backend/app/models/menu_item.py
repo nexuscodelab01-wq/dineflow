@@ -43,6 +43,8 @@ class MenuItem(TimestampMixin, Base):
     # Codes from app.core.allergens.ALLERGENS, e.g. ["milk", "nuts"]. Follows the same JSONB-list
     # pattern as Restaurant.gallery — no join table, since the set of allergens is fixed by regulation.
     allergens: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
+    # Restaurant-defined dish types (codes of `menu_labels` rows of kind "dish_type"), e.g. ["vegan", "gluten_free"].
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="'[]'::jsonb", nullable=False)
 
     restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="menu_items")
     category: Mapped["Category"] = relationship("Category", back_populates="menu_items")

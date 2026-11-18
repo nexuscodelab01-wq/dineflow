@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.core.allergens import ALLERGENS
 from app.core.config import settings
 from app.core.hours import (
     InvalidHours,
@@ -77,7 +76,9 @@ class MenuItemCreate(BaseModel):
     is_popular: bool = False
     sort_order: int = 0
     modifier_ids: list[int] = Field(default_factory=list)
+    # Codes of this restaurant's own labels (see LabelService.check_codes, which rejects unknown ones).
     allergens: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
     @field_validator("station")
     @classmethod
@@ -89,11 +90,6 @@ class MenuItemCreate(BaseModel):
     def _tax_code(cls, value: str | None) -> str | None:
         return _check_tax_code(value)
 
-    @field_validator("allergens")
-    @classmethod
-    def _allergens(cls, value: list[str]) -> list[str]:
-        return _check_allergens(value)
-
 
 def _check_tax_code(value):
     if value is not None and value not in TAX_CODES:
@@ -104,13 +100,6 @@ def _check_tax_code(value):
 def _check_station(value):
     if value is not None and value not in STATIONS:
         raise ValueError(f"Station must be one of: {', '.join(STATIONS)}")
-    return value
-
-
-def _check_allergens(value: list[str]) -> list[str]:
-    unknown = sorted(set(value) - ALLERGENS.keys())
-    if unknown:
-        raise ValueError(f"Unknown allergen code(s): {', '.join(unknown)}")
     return value
 
 
@@ -135,6 +124,7 @@ class MenuItemUpdate(BaseModel):
     sort_order: int | None = None
     modifier_ids: list[int] | None = None
     allergens: list[str] | None = None
+    tags: list[str] | None = None
 
     @field_validator("station")
     @classmethod
@@ -145,11 +135,6 @@ class MenuItemUpdate(BaseModel):
     @classmethod
     def _tax_code(cls, value: str | None) -> str | None:
         return _check_tax_code(value)
-
-    @field_validator("allergens")
-    @classmethod
-    def _allergens(cls, value: list[str] | None) -> list[str] | None:
-        return value if value is None else _check_allergens(value)
 
 
 class ModifierOptionCreate(BaseModel):

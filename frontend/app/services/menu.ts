@@ -1,4 +1,4 @@
-import type { Category, MenuFilters, MenuItemDetail, MenuListResponse, Restaurant, RestaurantTable } from '~/types/menu'
+import type { Category, MenuFilters, MenuItemDetail, MenuLabel, MenuListResponse, Restaurant, RestaurantTable } from '~/types/menu'
 import { apiFetch } from '~/services/http'
 
 /** The restaurant whose site is at this address (host, e.g. "pizza.dineflow.app"). */
@@ -29,6 +29,7 @@ export function fetchMenu(restaurantId: number, filters: MenuFilters = {}) {
   if (filters.price_min != null) params.set('price_min', String(filters.price_min))
   if (filters.price_max != null) params.set('price_max', String(filters.price_max))
   for (const code of filters.exclude_allergens || []) params.append('exclude_allergens', code)
+  for (const code of filters.tags || []) params.append('tags', code)
   if (filters.sort) params.set('sort', filters.sort)
   if (filters.page) params.set('page', String(filters.page))
   if (filters.page_size) params.set('page_size', String(filters.page_size))
@@ -42,4 +43,9 @@ export function fetchMenuItem(itemId: number, restaurantId: number) {
 export function fetchRestaurantTables(identifier: string, availableOnly = true) {
   const params = availableOnly ? '?available_only=true' : '?available_only=false'
   return apiFetch<RestaurantTable[]>(`/api/v1/restaurants/${identifier}/tables${params}`, { auth: false })
+}
+
+/** The restaurant's own allergens and dish types (public: what the menu shows on dishes and offers as filters). */
+export function fetchMenuLabels(restaurantId: number) {
+  return apiFetch<MenuLabel[]>(`/api/v1/menu/labels?restaurant_id=${restaurantId}`, { auth: false })
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { allergenLabel } from '~/utils/allergens'
 import { resolveMediaUrl, thumbnailUrl } from '~/utils/media'
 const { money } = useMoney()
+const { allergenLabel, tagLabel } = useMenuLabels()
 
 const props = defineProps<{
   name: string
@@ -14,6 +14,7 @@ const props = defineProps<{
   isPopular?: boolean
   unavailable?: boolean
   allergens?: string[]
+  tags?: string[]
 }>()
 
 defineEmits<{ click: [] }>()
@@ -49,6 +50,7 @@ const resolvedImage = computed(() =>
         <span v-if="isPopular" class="rounded-full bg-accent-100 px-2 py-0.5 text-xs font-medium text-accent-900">Popular</span>
         <span v-if="isVegetarian" class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Vegetarian</span>
         <span v-if="isSpicy" class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Spicy</span>
+        <span v-for="t in tags" :key="t" class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">{{ tagLabel(t) }}</span>
         <span v-if="unavailable" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Unavailable</span>
       </div>
       <h3 class="font-semibold text-ink group-hover:text-brand-800">

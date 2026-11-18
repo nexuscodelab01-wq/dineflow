@@ -1,4 +1,4 @@
-import { isFeatureOn } from '~/utils/features'
+import { anyFeatureOn } from '~/utils/features'
 
 // A page that belongs to a feature flag (`definePageMeta({ feature: 'reservations' })`) simply doesn't exist while that
 // flag is off for the restaurant: a 404 for the public site, back to the dashboard for the admin. The API refuses the
@@ -15,11 +15,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const admin = useAdminStore()
     // A platform admin managing some other restaurant: this site's flags say nothing about it (the nav does the same).
     if (admin.restaurantId && admin.restaurantId !== site.current.id) return
-    if (!isFeatureOn(site.current.features, feature)) return navigateTo('/admin')
+    if (!anyFeatureOn(site.current.features, feature)) return navigateTo('/admin')
     return
   }
 
-  if (!isFeatureOn(site.current.features, feature)) {
+  if (!anyFeatureOn(site.current.features, feature)) {
     return showError(createError({ statusCode: 404, statusMessage: 'This page isn\'t available', fatal: true }))
   }
 })

@@ -90,6 +90,8 @@ def list_pickup_slots(
     restaurant = RestaurantRepository(db).get_by_id_or_slug(identifier)
     if restaurant is None or not restaurant.is_active:
         raise raise_http_for_app_error(NotFoundError("Restaurant not found"))
+    if not FeatureService(db).is_enabled(restaurant.id, "online_ordering"):
+        raise raise_http_for_app_error(ForbiddenError("Online ordering is not available for this restaurant"))
     if not FeatureService(db).is_enabled(restaurant.id, "scheduled_orders"):
         raise raise_http_for_app_error(ForbiddenError("Ordering ahead is not available for this restaurant"))
 

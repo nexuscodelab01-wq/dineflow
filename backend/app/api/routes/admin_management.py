@@ -22,7 +22,11 @@ from app.core.exceptions import AppError, NotFoundError, raise_http_for_app_erro
 from app.core.images import THUMB_SIDE, InvalidImage, process_image
 from app.core.storage import get_storage, tenant_prefix, thumb_key
 from app.db.session import get_db
-from app.dependencies.features import requires_feature
+from app.dependencies.features import (
+    ORDERING_CHANNELS,
+    requires_any_feature,
+    requires_feature,
+)
 from app.dependencies.restaurant import AdminUser, RestaurantId, StaffUser
 from app.models.enums import OrderStatus, OrderType, ReservationStatus
 from app.schemas.admin import (
@@ -51,6 +55,7 @@ from app.schemas.admin import (
 )
 from app.schemas.analytics import AnalyticsResponse
 from app.schemas.coupon import CouponCreate, CouponRead, CouponUpdate
+from app.schemas.labels import LabelCreate, LabelKind, LabelRead, LabelUpdate
 from app.schemas.loyalty import AdminLoyaltyAccountRead, LoyaltyAdjust
 from app.schemas.menu import CategoryRead, MenuItemDetailRead, MenuModifierRead
 from app.schemas.order import OrderListResponse, OrderRead
@@ -93,6 +98,9 @@ from app.services.waitlist_service import WaitlistService
 from app.utils.date_ranges import DateRangePreset
 
 router = APIRouter(prefix="/admin")
+
+# Orders and the kitchen serve every ordering channel; they're only unavailable when ALL of them are switched off.
+ORDERING_GATE = [Depends(requires_any_feature(*ORDERING_CHANNELS))]
 
 
 def get_table_session_service(db: Annotated[Session, Depends(get_db)]) -> TableSessionService:
@@ -264,6 +272,57 @@ def reorder_categories(
     service: Annotated[AdminService, Depends(get_admin_service)],
 ) -> list[CategoryRead]:
     return service.reorder_categories(data, restaurant_id)
+
+
+@router.get("/labels", response_model=list[LabelRead])
+def list_labels(
+    _: StaffUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+    kind: LabelKind | None = None,
+) -> list[LabelRead]:
+    return service.list_labels(restaurant_id, kind)
+
+
+@router.post("/labels", response_model=LabelRead, status_code=status.HTTP_201_CREATED)
+def create_label(
+    data: LabelCreate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> LabelRead:
+    try:
+        return service.create_label(restaurant_id, data)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.put("/labels/{label_id}", response_model=LabelRead)
+def update_label(
+    label_id: int,
+    data: LabelUpdate,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> LabelRead:
+    try:
+        return service.update_label(label_id, data, restaurant_id)
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
+
+
+@router.delete("/labels/{label_id}", response_model=dict)
+def delete_label(
+    label_id: int,
+    _: AdminUser,
+    restaurant_id: RestaurantId,
+    service: Annotated[AdminService, Depends(get_admin_service)],
+) -> dict:
+    """Delete the label and take it off every dish that had it; says how many dishes were changed."""
+    try:
+        return {"removed_from_items": service.delete_label(label_id, restaurant_id)}
+    except (AppError, NotFoundError) as exc:
+        raise raise_http_for_app_error(exc) from exc
 
 
 @router.get("/menu", response_model=list[MenuItemDetailRead])
@@ -461,7 +520,7 @@ def delete_modifier_option(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.get("/orders", response_model=OrderListResponse)
+@router.get("/orders", response_model=OrderListResponse, dependencies=ORDERING_GATE)
 def admin_list_orders(
     _: StaffUser,
     restaurant_id: RestaurantId,
@@ -482,7 +541,7 @@ def admin_list_orders(
     )
 
 
-@router.get("/orders/{order_id}", response_model=OrderRead)
+@router.get("/orders/{order_id}", response_model=OrderRead, dependencies=ORDERING_GATE)
 def admin_get_order(
     order_id: int,
     _: StaffUser,
@@ -495,7 +554,7 @@ def admin_get_order(
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.patch("/orders/{order_id}/status", response_model=OrderRead)
+@router.patch("/orders/{order_id}/status", response_model=OrderRead, dependencies=ORDERING_GATE)
 def update_order_status(
     order_id: int,
     data: OrderStatusUpdate,
@@ -516,7 +575,7 @@ def get_kitchen_service(db: Annotated[Session, Depends(get_db)]) -> KitchenServi
 KitchenActions = Annotated[KitchenService, Depends(get_kitchen_service)]
 
 
-@router.post("/kitchen/items/{item_id}/bump", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/kitchen/items/{item_id}/bump", status_code=status.HTTP_204_NO_CONTENT, dependencies=ORDERING_GATE)
 def bump_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions) -> None:
     """One dish is done. The order turns READY when all its dishes are."""
     try:
@@ -525,7 +584,7 @@ def bump_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, servic
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.post("/kitchen/items/{item_id}/recall", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/kitchen/items/{item_id}/recall", status_code=status.HTTP_204_NO_CONTENT, dependencies=ORDERING_GATE)
 def recall_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions) -> None:
     try:
         service.recall_item(item_id, restaurant_id, user.id)
@@ -533,7 +592,7 @@ def recall_item(item_id: int, user: StaffUser, restaurant_id: RestaurantId, serv
         raise raise_http_for_app_error(exc) from exc
 
 
-@router.post("/kitchen/orders/{order_id}/bump", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/kitchen/orders/{order_id}/bump", status_code=status.HTTP_204_NO_CONTENT, dependencies=ORDERING_GATE)
 def bump_ticket(order_id: int, user: StaffUser, restaurant_id: RestaurantId, service: KitchenActions, station: str | None = None) -> None:
     """Bump every open dish on a ticket (or only one station's dishes with ?station=BAR)."""
     try:
@@ -552,7 +611,7 @@ def set_sold_out(item_id: int, data: SoldOutUpdate, _: StaffUser, restaurant_id:
     return {"id": item.id, "is_available": item.is_available}
 
 
-@router.get("/kitchen", response_model=KitchenBoard)
+@router.get("/kitchen", response_model=KitchenBoard, dependencies=ORDERING_GATE)
 def kitchen_board(
     _: StaffUser,
     restaurant_id: RestaurantId,
@@ -634,7 +693,6 @@ def update_table_status(
 
 
 QR_GATE = [Depends(requires_feature("qr_table_ordering"))]
-
 
 @router.get("/qr/tables", response_model=list[QrTableRead], dependencies=QR_GATE)
 def list_qr_tables(_: AdminUser, restaurant_id: RestaurantId, service: Annotated[TableSessionService, Depends(get_table_session_service)]) -> list[QrTableRead]:

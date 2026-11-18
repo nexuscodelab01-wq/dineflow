@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ feature: 'online_ordering' })
+
 const { money } = useMoney()
 
 const cart = useCartStore()
