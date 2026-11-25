@@ -3,10 +3,11 @@ import { useDebounceFn } from '@vueuse/core'
 import type { KitchenBoard } from '~/types/admin'
 import type { MenuItemDetail } from '~/types/menu'
 import type { Order } from '~/types/order'
-import { bumpItem, bumpTicket, fetchAdminMenu, fetchKitchenBoard, recallItem, setSoldOut, updateOrderStatus } from '~/services/admin'
+import { bumpItem, bumpTicket, fetchAdminMenu, fetchKitchenBoard, recallItem, setReadyTime, setSoldOut, updateOrderStatus } from '~/services/admin'
 import { subscribeKitchen } from '~/services/realtime'
 import { playDing, unlockSound } from '~/utils/beep'
 import { allDayCounts, newOrderIds, STATIONS, ticketsFor } from '~/utils/kitchen'
+import { formatMinutes } from '~/utils/readyTime'
 import type { SseStatus } from '~/utils/sse'
 
 definePageMeta({ layout: 'admin', middleware: ['staff'], feature: ['online_ordering', 'pos', 'qr_table_ordering'] })
@@ -136,6 +137,10 @@ async function run(action: () => Promise<unknown>, failure: string) {
 const bump = (id: number) => run(() => bumpItem(admin.restaurantId!, id), 'Could not bump that dish')
 const recall = (id: number) => run(() => recallItem(admin.restaurantId!, id), 'Could not recall that dish')
 const bumpAll = (order: Order) => run(() => bumpTicket(admin.restaurantId!, order.id, station.value), 'Could not bump that ticket')
+const setReady = (order: Order, minutes: number) => run(async () => {
+  await setReadyTime(admin.restaurantId!, order.id, order.status, minutes)
+  ui.success(`Customer told: ${formatMinutes(minutes)}`)
+}, 'Could not set the ready time')
 const complete = (order: Order) => run(() => updateOrderStatus(admin.restaurantId!, order.id, 'COMPLETED'), 'Could not clear that order')
 
 function eightySix(menuItemId: number, name: string) {
@@ -215,9 +220,11 @@ function fullscreen() {
             :ticket="t"
             :now="now"
             :busy="busy"
+            :can-set-ready="station === null"
             @bump-item="bump"
             @recall-item="recall"
             @bump-all="bumpAll(t.order)"
+            @set-ready="setReady(t.order, $event)"
           />
         </div>
 

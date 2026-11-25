@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Order, OrderStatus } from '~/types/order'
-import { fetchAdminOrder, markOrderPaid, updateOrderStatus } from '~/services/admin'
+import { fetchAdminOrder, markOrderPaid, setReadyTime, updateOrderStatus } from '~/services/admin'
+import { canSetReadyTime, formatMinutes } from '~/utils/readyTime'
 const { money } = useMoney()
 
 definePageMeta({ layout: 'admin', middleware: ['staff'], feature: ['online_ordering', 'pos', 'qr_table_ordering'] })
@@ -37,6 +38,22 @@ onMounted(load)
 async function setStatus(status: OrderStatus) {
   if (!admin.restaurantId || !order.value) return
   order.value = await updateOrderStatus(admin.restaurantId, order.value.id, status)
+}
+
+const settingReady = ref(false)
+async function setReady(minutes: number) {
+  if (!admin.restaurantId || !order.value) return
+  settingReady.value = true
+  try {
+    order.value = await setReadyTime(admin.restaurantId, order.value.id, order.value.status, minutes)
+    ui.success(`Customer told: ${formatMinutes(minutes)}`)
+  }
+  catch (err) {
+    ui.error(err instanceof Error ? err.message : 'Could not set the ready time')
+  }
+  finally {
+    settingReady.value = false
+  }
 }
 
 const unpaidLater = computed(() => !!order.value?.pay_later && order.value.status !== 'CANCELLED' && !order.value.payments.some((p: { status: string }) => p.status === 'COMPLETED'))
@@ -103,6 +120,7 @@ async function cancelOrder() {
           </div>
           <span class="rounded-full bg-brand-100 px-3 py-1 text-sm font-medium">{{ order.status.replace('_', ' ') }}</span>
         </div>
+        <ReadyTimePicker v-if="canSetReadyTime(order)" class="mt-4" :order="order" :busy="settingReady" @pick="setReady" />
         <div class="mt-4 flex flex-wrap gap-2">
           <AppButton v-if="order.status === 'CONFIRMED'" @click="setStatus('PREPARING')">Start preparing</AppButton>
           <AppButton v-if="order.status === 'PREPARING'" @click="setStatus('READY')">Mark ready</AppButton>

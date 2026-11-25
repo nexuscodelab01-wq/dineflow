@@ -74,6 +74,14 @@ export function updateOrderStatus(restaurantId: number, orderId: number, status:
   })
 }
 
+/** Tell the customer the order will be ready in `minutes` from now (or move that promise), keeping its status. */
+export function setReadyTime(restaurantId: number, orderId: number, status: OrderStatus, minutes: number) {
+  return apiFetch<Order>(q(restaurantId, `/orders/${orderId}/status`), {
+    method: 'PATCH',
+    body: JSON.stringify({ status, ready_in_minutes: minutes }),
+  })
+}
+
 /** Cash taken for a pay-at-pickup / cash-on-delivery order, without a till. */
 export function markOrderPaid(restaurantId: number, orderId: number) {
   return apiFetch<void>(q(restaurantId, `/orders/${orderId}/mark-paid`), { method: 'POST' })

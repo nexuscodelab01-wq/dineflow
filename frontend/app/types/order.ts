@@ -65,6 +65,8 @@ export type Order = {
   notes?: string | null
   /** Set when the customer ordered ahead for a later collection slot. */
   scheduled_for?: string | null
+  /** When staff expect it to be ready (pickup) or arrive (delivery); null until they say. */
+  estimated_ready_at?: string | null
   created_at: string
   updated_at: string
   items: OrderItem[]

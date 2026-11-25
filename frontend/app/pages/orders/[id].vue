@@ -3,6 +3,7 @@ import { useIntervalFn } from '@vueuse/core'
 import type { Order } from '~/types/order'
 import { fetchOrder } from '~/services/orders'
 import { subscribeOrder } from '~/services/realtime'
+import { readyLabel } from '~/utils/readyTime'
 const { money } = useMoney()
 
 definePageMeta({ middleware: ['auth'], feature: 'online_ordering' })
@@ -13,6 +14,7 @@ const orderId = computed(() => Number(route.params.id))
 const order = ref<Order | null>(null)
 const loading = ref(true)
 const error = ref('')
+const promise = computed(() => (order.value ? readyLabel(order.value) : null))
 const isDone = computed(() => order.value?.status === 'COMPLETED' || order.value?.status === 'DELIVERED')
 
 async function loadOrder() {
@@ -79,6 +81,11 @@ onUnmounted(() => {
         >
           Leave a review
         </NuxtLink>
+      </section>
+
+      <section v-if="promise" class="rounded-2xl border border-brand-200 bg-brand-50 p-5" data-testid="ready-promise">
+        <p class="text-lg font-semibold text-brand-900">{{ promise }}</p>
+        <p class="mt-0.5 text-sm text-ink-muted">The restaurant will update this if it changes.</p>
       </section>
 
       <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-6">

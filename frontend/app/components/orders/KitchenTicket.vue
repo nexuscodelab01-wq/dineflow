@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { Ticket } from '~/utils/kitchen'
 import { ageMs, formatTimer, urgency } from '~/utils/kitchen'
+import { canSetReadyTime } from '~/utils/readyTime'
 
 /**
  * One ticket on the kitchen screen. The timer and its colour show how long the order has waited; each dish is a
  * big button so it can be bumped with a thumb, and tapping a bumped dish recalls it.
  */
-const props = defineProps<{ ticket: Ticket, now: number, busy?: boolean, canComplete?: boolean }>()
-const emit = defineEmits<{ bumpItem: [id: number], recallItem: [id: number], bumpAll: [], complete: [] }>()
+const props = defineProps<{ ticket: Ticket, now: number, busy?: boolean, canComplete?: boolean, canSetReady?: boolean }>()
+const emit = defineEmits<{ bumpItem: [id: number], recallItem: [id: number], bumpAll: [], complete: [], setReady: [minutes: number] }>()
 
 const { allergenLabel } = useMenuLabels()
 const order = computed(() => props.ticket.order)
@@ -70,6 +71,15 @@ const openCount = computed(() => props.ticket.items.filter(i => i.status !== 'RE
     <p v-if="order.notes" class="mt-3 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-sm font-bold text-amber-950" data-testid="order-note">
       <span class="mr-1 uppercase tracking-wide">Order note:</span>{{ order.notes }}
     </p>
+
+    <ReadyTimePicker
+      v-if="canSetReady && !done && canSetReadyTime(order)"
+      class="mt-3 rounded-xl border border-brand-100 bg-white/70 p-2.5"
+      :order="order"
+      :busy="busy"
+      compact
+      @pick="emit('setReady', $event)"
+    />
 
     <footer class="mt-3 flex gap-2">
       <AppButton v-if="!done" class="flex-1 py-3 text-base" :disabled="busy" @click="emit('bumpAll')">Bump all ({{ openCount }})</AppButton>
