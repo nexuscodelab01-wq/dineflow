@@ -79,8 +79,9 @@ onMounted(async () => {
 const scheduledOrdersEnabled = useFeature('scheduled_orders')
 // Eating in online means ordering against a booked table, so it only exists while reservations are on.
 const reservationsEnabled = useFeature('reservations')
-const orderTypes = computed<OrderType[]>(() => (reservationsEnabled.value ? ['PICKUP', 'DELIVERY', 'DINE_IN'] : ['PICKUP', 'DELIVERY']))
-watch(orderTypes, (types) => { if (!types.includes(orderType.value)) orderType.value = 'PICKUP' })
+// Only what this restaurant actually offers: a pickup-only place has no Delivery button, and vice versa.
+const orderTypes = computed<OrderType[]>(() => availableOrderTypes(restaurant.current, reservationsEnabled.value))
+watch(orderTypes, (types) => { if (types.length && !types.includes(orderType.value)) orderType.value = types[0]! }, { immediate: true })
 const WHEN_MODES = [
   { value: 'asap', label: 'As soon as possible' },
   { value: 'later', label: 'Order ahead' },
@@ -392,7 +393,9 @@ async function payNow() {
       <div class="space-y-6 lg:col-span-3">
         <section class="rounded-2xl border border-brand-100 bg-surface-elevated p-5">
           <h2 class="font-semibold text-ink">Order type</h2>
-          <div class="mt-3 flex flex-wrap gap-2">
+          <p v-if="!orderTypes.length" class="mt-3 text-sm text-ink-muted">This restaurant isn’t taking online orders right now.</p>
+          <p v-else-if="orderTypes.length === 1" class="mt-3 text-sm font-medium text-brand-800">{{ orderTypes[0]!.replace('_', ' ') }} only</p>
+          <div v-else class="mt-3 flex flex-wrap gap-2">
             <button
               v-for="type in orderTypes"
               :key="type"
@@ -570,7 +573,7 @@ async function payNow() {
             <div class="flex justify-between font-semibold text-brand-900"><span>Total</span><span>{{ money(totals.total + tipAmount) }}</span></div>
           </div>
           <p v-if="error" class="mt-4 text-sm text-red-600">{{ error }}</p>
-          <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting" @click="submitOrder">
+          <AppButton v-if="!pendingOrderId" class="mt-4 w-full" :disabled="submitting || !orderTypes.length" @click="submitOrder">
             {{ submitting ? 'Placing order…' : payLater ? 'Place order — pay later' : 'Place order' }}
           </AppButton>
           <p v-else class="mt-4 text-center text-sm text-ink-subtle">Enter your card details on the left to finish.</p>
