@@ -84,6 +84,8 @@ class Order(TimestampMixin, Base):
     # Set when the customer chose a later collection slot instead of "as soon as possible". The kitchen
     # only sees the ticket once it is within the restaurant's lead time (see kitchen_orders).
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    # What staff told the customer: "ready around this time". Set (and moved) from the kitchen / order screen.
+    estimated_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delivery_instructions: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

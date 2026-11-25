@@ -178,6 +178,8 @@ class SoldOutUpdate(BaseModel):
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
     notes: str | None = Field(default=None, max_length=500)
+    # "Ready in N minutes" from now, up to 8 hours. Only while the order is being made; send the order's current status to just move it.
+    ready_in_minutes: int | None = Field(default=None, ge=1, le=480)
 
 
 class AdminOrderFilters(BaseModel):

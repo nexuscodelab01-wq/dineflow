@@ -137,6 +137,7 @@ class OrderRead(BaseModel):
     delivery_instructions: str | None = None
     notes: str | None = None
     scheduled_for: datetime | None = None
+    estimated_ready_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemRead] = Field(default_factory=list)

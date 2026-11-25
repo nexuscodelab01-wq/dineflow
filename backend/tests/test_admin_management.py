@@ -13,6 +13,7 @@ from app.main import app
 from app.models.category import Category
 from app.models.enums import PaymentStatus, ReservationStatus, RoleName, TableStatus
 from app.models.menu_item import MenuItem
+from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
@@ -335,6 +336,45 @@ def test_order_status_flow_and_history(world):
     assert done.status_code == 200
     assert [h["new_status"] for h in done.json()["status_history"]][-3:] == ["PREPARING", "READY", "COMPLETED"]
     assert move("PREPARING").status_code == 400                  # finished orders are frozen
+
+
+def test_staff_can_tell_the_customer_when_the_order_will_be_ready_and_move_it(world):
+    from datetime import UTC, datetime
+
+    w = world
+    oid = place_order(w).json()["id"]
+
+    def patch(body):
+        return w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json=body)
+
+    assert w.client.get(url(w, f"/orders/{oid}"), headers=w.staff).json()["estimated_ready_at"] is None
+    first = patch({"status": "CONFIRMED", "ready_in_minutes": 90})          # same status: just sets the time
+    assert first.status_code == 200 and first.json()["status"] == "CONFIRMED"
+    ready = datetime.fromisoformat(first.json()["estimated_ready_at"])
+    assert 89 * 60 < (ready - datetime.now(UTC)).total_seconds() <= 90 * 60
+
+    moved = patch({"status": "PREPARING", "ready_in_minutes": 20})          # busy kitchen / quicker than thought
+    assert moved.json()["status"] == "PREPARING"
+    assert (datetime.fromisoformat(moved.json()["estimated_ready_at"]) - datetime.now(UTC)).total_seconds() < 21 * 60
+    assert w.db.query(OrderStatusHistory).filter_by(order_id=oid).order_by(OrderStatusHistory.id.desc()).first().notes == "Ready in 20 min"
+
+    # the customer sees it on their own order
+    mine = w.client.get(f"/api/v1/orders/{oid}", headers=w.customer)
+    assert mine.status_code == 200 and mine.json()["estimated_ready_at"] is not None
+
+
+def test_a_ready_time_is_refused_where_it_makes_no_sense(world):
+    w = world
+    oid = place_order(w).json()["id"]
+
+    def patch(body):
+        return w.client.patch(url(w, f"/orders/{oid}/status"), headers=w.staff, json=body)
+
+    assert patch({"status": "PREPARING", "ready_in_minutes": 0}).status_code == 422
+    assert patch({"status": "PREPARING", "ready_in_minutes": 481}).status_code == 422
+    assert patch({"status": "PREPARING"}).status_code == 200
+    assert patch({"status": "READY", "ready_in_minutes": 10}).status_code == 400   # already made
+    assert patch({"status": "READY"}).json()["estimated_ready_at"] is None
 
 
 def test_cancelled_orders_cannot_be_reopened_and_other_restaurants_cannot_touch_orders(world):

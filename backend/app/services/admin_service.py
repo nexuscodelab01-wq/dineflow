@@ -1,7 +1,7 @@
 """Admin business logic services."""
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -12,7 +12,13 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.realtime import kitchen_topic, publish, publish_order_change
 from app.core.storage import delete_owned_url
 from app.models.category import Category
-from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus, TableStatus
+from app.models.enums import (
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+    PaymentStatus,
+    TableStatus,
+)
 from app.models.menu_item import MenuItem
 from app.models.menu_modifier import MenuModifier
 from app.models.menu_modifier_option import MenuModifierOption
@@ -307,6 +313,11 @@ class AdminService:
         if data.status not in allowed and data.status != order.status:
             raise AppError(f"Cannot transition from {order.status.value} to {data.status.value}")
 
+        if data.ready_in_minutes is not None:
+            if data.status not in (OrderStatus.CONFIRMED, OrderStatus.PREPARING) or order.order_type == OrderType.DINE_IN:
+                raise AppError("A ready time can only be set while a pickup or delivery order is being prepared")
+            order.estimated_ready_at = datetime.now(UTC) + timedelta(minutes=data.ready_in_minutes)
+
         previous = order.status
         order.status = data.status
         if data.status in (OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COMPLETED):
@@ -318,7 +329,7 @@ class AdminService:
             previous=previous,
             new=data.status,
             user_id=user.id,
-            notes=data.notes,
+            notes=data.notes or (f"Ready in {data.ready_in_minutes} min" if data.ready_in_minutes else None),
         )
         publish(self.db, kitchen_topic(restaurant_id), "order.status", {"order_id": order.id, "status": data.status.value})
         publish_order_change(self.db, order, "order.status", {"status": data.status.value})
